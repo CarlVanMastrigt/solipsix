@@ -33,6 +33,8 @@ void sol_lockfree_stack_initialise(struct sol_lockfree_stack* stack, struct sol_
 void sol_lockfree_stack_terminate(struct sol_lockfree_stack* stack)
 {
     assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & SOL_LOCKFREE_POOL_ENTRY_MASK) == SOL_LOCKFREE_POOL_INVALID_ENTRY);/// stack should be empty upon termination
+    *stack = (struct sol_lockfree_stack){};
+    #warning use this when destroying everywhere
 }
 
 

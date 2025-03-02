@@ -35,7 +35,7 @@ void sol_gui_container_render(struct sol_gui_object* obj, vec2_s16 offset, struc
 		sol_gui_object_render(child, offset, batch);
 	}
 }
-struct sol_gui_object* sol_gui_container_search(struct sol_gui_object* obj, vec2_s16 location)
+struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
@@ -44,7 +44,7 @@ struct sol_gui_object* sol_gui_container_search(struct sol_gui_object* obj, vec2
 	// search front to back
 	for(child = container->first_child; child; child = child->next)
 	{
-		result = sol_gui_object_search(child, location);
+		result = sol_gui_object_hit_scan(child, location);
 		if(result)
 		{
 			return result;
@@ -144,7 +144,7 @@ void sol_gui_container_destroy(struct sol_gui_object* obj)
 static const struct sol_gui_object_structure_functions sol_gui_container_structure_functions =
 {
 	.render        = &sol_gui_container_render,
-	.search        = &sol_gui_container_search,
+	.hit_scan      = &sol_gui_container_hit_scan,
 	.min_size      = &sol_gui_container_min_size,
 	.place_content = &sol_gui_container_place_content,
 	.add_child     = &sol_gui_container_add_child,

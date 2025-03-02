@@ -30,8 +30,11 @@ void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context
 	*obj = (struct sol_gui_object)
 	{
 		.context = context,
+		// .structure_functions = NULL,
+		// .input_action = NULL,
 		.reference_count = 1,// existing is a reference, MUST call delete
-		.status_flags = SOL_GUI_OBJECT_STATUS_REGISTERED | SOL_GUI_OBJECT_STATUS_ACTIVE,
+		.flags = SOL_GUI_OBJECT_STATUS_FLAG_REGISTERED | SOL_GUI_OBJECT_STATUS_FLAG_ENABLED,
+		// .property_flags = 0,
 	};
 
 	context->registered_object_count++;
@@ -88,14 +91,14 @@ void sol_gui_object_render(struct sol_gui_object* obj, vec2_s16 offset, struct c
 	}
 }
 
-struct sol_gui_object* sol_gui_object_search(struct sol_gui_object* obj, vec2_s16 location)
+struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
 {
 	assert(obj);
 
-	if(obj->structure_functions && obj->structure_functions->search)
+	if(obj->structure_functions && obj->structure_functions->hit_scan)
 	{
 		location = vec2_s16_sub(location, obj->position.start);
-		return obj->structure_functions->search(obj, location);
+		return obj->structure_functions->hit_scan(obj, location);
 	}
 
 	return NULL;
@@ -168,7 +171,7 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 
 
 // perhaps handle active widget if necessary? also searches for
-bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_gui_input* input)
+bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	return obj->input_action(obj, input);
 }

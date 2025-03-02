@@ -44,7 +44,7 @@ void main()
         default: p=data0.zw;
     }
 
-    gl_Position=vec4(p*inv_screen_size_doubled-1.0,0.0,1.0);
+    gl_Position=vec4(p*inv_screen_size_doubled-1.0, 0.0, 1.0);
 
     d0=data0;
     d1=data1;

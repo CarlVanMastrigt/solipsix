@@ -17,16 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <ft2build.h>
-#include <freetype/freetype.h>
+#pragma once
 
-#warning massively dislike having to include freetype here, have custom wrapper if possible?
-/// ^ sol_gui_text_library ???
-
+struct sol_font_library;
 struct sol_gui_theme;
 
-void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, const FT_Library * freetype_library);
-void sol_gui_theme_simple_terminate(struct sol_gui_theme* theme);
+void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_font_library* font_library, int size);
+void sol_gui_theme_simple_terminate (struct sol_gui_theme* theme);
 
-struct sol_gui_theme* sol_gui_theme_simple_create(const FT_Library * freetype_library);
+struct sol_gui_theme* sol_gui_theme_simple_create(struct sol_font_library* font_library, int size);
 void sol_gui_theme_simple_destroy(struct sol_gui_theme* theme);

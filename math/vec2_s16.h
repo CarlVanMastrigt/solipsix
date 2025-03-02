@@ -22,6 +22,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stdbool.h>
 
+#include "math/vec2_m16.h"
+
 typedef struct vec2_s16
 {
     int16_t x;
@@ -42,6 +44,18 @@ static inline vec2_s16 vec2_s16_sub(vec2_s16 lhs, vec2_s16 rhs)
 {
     return (vec2_s16){.x=lhs.x-rhs.x, .y=lhs.y-rhs.y};
 }
+static inline vec2_s16 vec2_s16_mul(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return (vec2_s16){.x=lhs.x*rhs.x, .y=lhs.y*rhs.y};
+}
+static inline vec2_s16 vec2_s16_mul_scalar(vec2_s16 v, int16_t s)
+{
+    return (vec2_s16){.x=v.x*s, .y=v.y*s};
+}
+static inline vec2_s16 vec2_s16_mask(vec2_s16 v, vec2_m16 m)
+{
+    return (vec2_s16){.x=v.x&m.x, .y=v.y&m.y};
+}
 static inline vec2_s16 vec2_s16_min(vec2_s16 lhs, vec2_s16 rhs)
 {
     return (vec2_s16)
@@ -58,45 +72,44 @@ static inline vec2_s16 vec2_s16_max(vec2_s16 lhs, vec2_s16 rhs)
         .y = lhs.y>rhs.y ? lhs.y : rhs.y,
     };
 }
-static inline bool vec2_s16_cmp_all_eq(vec2_s16 lhs, vec2_s16 rhs)
+static inline vec2_m16 vec2_s16_cmp_eq(vec2_s16 lhs, vec2_s16 rhs)
 {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
+    return (vec2_m16)
+    {
+        .x = (lhs.x == rhs.x) ? 0xFFFF : 0,
+        .y = (lhs.y == rhs.y) ? 0xFFFF : 0,
+    };
 }
-static inline bool vec2_s16_cmp_all_lt(vec2_s16 lhs, vec2_s16 rhs)
+static inline vec2_m16 vec2_s16_cmp_lt(vec2_s16 lhs, vec2_s16 rhs)
 {
-    return lhs.x < rhs.x && lhs.y < rhs.y;
+    return (vec2_m16)
+    {
+        .x = (lhs.x < rhs.x) ? 0xFFFF : 0,
+        .y = (lhs.y < rhs.y) ? 0xFFFF : 0,
+    };
 }
-static inline bool vec2_s16_cmp_all_lte(vec2_s16 lhs, vec2_s16 rhs)
+static inline vec2_m16 vec2_s16_cmp_lte(vec2_s16 lhs, vec2_s16 rhs)
 {
-    return lhs.x <= rhs.x && lhs.y <= rhs.y;
+    return (vec2_m16)
+    {
+        .x = (lhs.x <= rhs.x) ? 0xFFFF : 0,
+        .y = (lhs.y <= rhs.y) ? 0xFFFF : 0,
+    };
 }
-static inline bool vec2_s16_cmp_all_gt(vec2_s16 lhs, vec2_s16 rhs)
+static inline vec2_m16 vec2_s16_cmp_gt(vec2_s16 lhs, vec2_s16 rhs)
 {
-    return lhs.x > rhs.x && lhs.y > rhs.y;
+    return (vec2_m16)
+    {
+        .x = (lhs.x > rhs.x) ? 0xFFFF : 0,
+        .y = (lhs.y > rhs.y) ? 0xFFFF : 0,
+    };
 }
-static inline bool vec2_s16_cmp_all_gte(vec2_s16 lhs, vec2_s16 rhs)
+static inline vec2_m16 vec2_s16_cmp_gte(vec2_s16 lhs, vec2_s16 rhs)
 {
-    return lhs.x >= rhs.x && lhs.y >= rhs.y;
+    return (vec2_m16)
+    {
+        .x = (lhs.x >= rhs.x) ? 0xFFFF : 0,
+        .y = (lhs.y >= rhs.y) ? 0xFFFF : 0,
+    };
 }
-static inline bool vec2_s16_cmp_any_eq(vec2_s16 lhs, vec2_s16 rhs)
-{
-    return lhs.x == rhs.x || lhs.y == rhs.y;
-}
-static inline bool vec2_s16_cmp_any_lt(vec2_s16 lhs, vec2_s16 rhs)
-{
-    return lhs.x < rhs.x || lhs.y < rhs.y;
-}
-static inline bool vec2_s16_cmp_any_lte(vec2_s16 lhs, vec2_s16 rhs)
-{
-    return lhs.x <= rhs.x || lhs.y <= rhs.y;
-}
-static inline bool vec2_s16_cmp_any_gt(vec2_s16 lhs, vec2_s16 rhs)
-{
-    return lhs.x > rhs.x || lhs.y > rhs.y;
-}
-static inline bool vec2_s16_cmp_any_gte(vec2_s16 lhs, vec2_s16 rhs)
-{
-    return lhs.x >= rhs.x || lhs.y >= rhs.y;
-}
-
 

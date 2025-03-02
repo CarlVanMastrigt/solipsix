@@ -50,6 +50,18 @@ static inline rect_s16 rect_s16_sub_offset(rect_s16 r, vec2_s16 o)
 {
     return (rect_s16){.start.x=r.start.x-o.x, .start.y=r.start.y-o.y,.end.x=r.end.x-o.x, .end.y=r.end.y-o.y};
 }
+static inline rect_s16 rect_s16_dilate(rect_s16 r, int32_t d)
+{
+    return (rect_s16){.start.x=r.start.x-d, .start.y=r.start.y-d,.end.x=r.end.x+d, .end.y=r.end.y+d};
+}
+static inline rect_s16 rect_s16_add_border(rect_s16 r, vec2_s16 b)
+{
+    return (rect_s16){.start = vec2_s16_sub(r.start, b),.end = vec2_s16_add(r.start, b)};
+}
+static inline rect_s16 rect_s16_sub_border(rect_s16 r, vec2_s16 b)
+{
+    return (rect_s16){.start = vec2_s16_add(r.start, b),.end = vec2_s16_sub(r.start, b)};
+}
 static inline bool rect_s16_contains_point(rect_s16 r, vec2_s16 p)
 {
     return ((r.start.x <= p.x)&&(r.start.y <= p.y)&&(r.end.x > p.x)&&(r.end.y> p.y));

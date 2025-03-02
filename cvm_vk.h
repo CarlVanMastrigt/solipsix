@@ -214,6 +214,7 @@ struct cvm_vk_device
 
     uint32_t fallback_present_queue_family_index;
     #warning remove present, this should be per swapchain image
+    #warning add image backing blocks per heap type (start with 0 blocks, used for small, non-dedicated allocations)
 
     struct cvm_vk_pipeline_cache pipeline_cache;
 
@@ -297,11 +298,26 @@ void cvm_vk_destroy_sampler(VkSampler sampler);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
+
+struct sol_vk_image
+{
+    // VkImageCreateInfo image_create_info; // may want to keep properties around
+    VkImage image;
+    VkImageView default_view;
+    VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by
+};
+
+VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* device, const VkImageCreateInfo* image_create_info, bool create_default_view);
+void sol_vk_image_destroy(struct sol_vk_image* image, const cvm_vk_device* device);
+
+
+
+
+// buffers can probably be handled better
 void cvm_vk_create_buffer(VkBuffer* buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
-
 
 VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage);
 

@@ -24,19 +24,21 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_gui_input* input)
+bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 
-	switch(input->type)
-	{
-		case SOL_GUI_INPUT_SELECT_BEGIN:
-			button->select_action(button->data);
-			return true;
+	// should activate only on release?
 
-		default:
-			return false;
-	}
+	// switch(input->type)
+	// {
+	// 	case SOL_GUI_INPUT_SELECT_BEGIN:
+	// 		button->select_action(button->data);
+	// 		return true;
+
+	// 	default:
+	// 		return false;
+	// }
 }
 
 void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void* data)
@@ -44,6 +46,8 @@ void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_cont
 	sol_gui_object_construct(&button->base, context);
 
 	button->base.input_action = &sol_gui_button_default_input_action;
+	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE;
+	#warning focusable is questionable property, but useful when taking action on release &c.
 
 	button->select_action = select_action;
 	button->data = data;
@@ -74,7 +78,7 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, vec2_s16 offs
 	char* text = sol_gui_button_get_buffer(button);
 	exit('!');
 }
-static struct sol_gui_object* sol_gui_text_button_search(struct sol_gui_object* obj, vec2_s16 location)
+static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
 {
 	exit('!');
 	return obj;
@@ -87,7 +91,7 @@ static vec2_s16 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 static const struct sol_gui_object_structure_functions sol_gui_text_button_structure_functions =
 {
 	.render   = &sol_gui_text_button_render,
-	.search   = &sol_gui_text_button_search,
+	.hit_scan = &sol_gui_text_button_hit_scan,
 	.min_size = &sol_gui_text_button_min_size,
 };
 struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
@@ -97,6 +101,7 @@ struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* contex
 	void* text_buf = sol_gui_button_get_buffer(button);
 
 	sol_gui_button_construct(button, context, select_action, data);
+	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 
 	button->base.structure_functions = &sol_gui_text_button_structure_functions;
 
@@ -113,7 +118,7 @@ static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, vec2_s16
 	char* utf8_icon = sol_gui_button_get_buffer(button);
 	exit('!');
 }
-static struct sol_gui_object* sol_gui_utf8_icon_button_search(struct sol_gui_object* obj, vec2_s16 location)
+static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
 {
 	exit('!');
 	return obj;
@@ -126,7 +131,7 @@ static vec2_s16 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_structure_functions =
 {
 	.render   = &sol_gui_utf8_icon_button_render,
-	.search   = &sol_gui_utf8_icon_button_search,
+	.hit_scan = &sol_gui_utf8_icon_button_hit_scan,
 	.min_size = &sol_gui_utf8_icon_button_min_size,
 };
 struct sol_gui_object* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
@@ -136,6 +141,7 @@ struct sol_gui_object* sol_gui_utf8_icon_button_create(struct sol_gui_context* c
 	void* utf8_icon_buf = sol_gui_button_get_buffer(button);
 
 	sol_gui_button_construct(button, context, select_action, data);
+	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 
 	button->base.structure_functions = &sol_gui_utf8_icon_button_structure_functions;
 

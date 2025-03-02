@@ -19,17 +19,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-/**
- * for now just a wrapper over SDL
- * can change this to handle it manually in the future, and/or move SDL support to a separate file (ideally with a different licence)
-*/
+#include <inttypes.h>
 
-#include <SDL2/SDL_events.h>
+// this is to FULLY contain freetype
 
+struct sol_font_library;
+struct sol_font;
 
+struct sol_font_library* sol_font_library_create(void);// requires image atlas?
+void sol_font_library_destroy(struct sol_font_library* font_library);
 
-struct sol_input
-{
-	SDL_Event sdl_event;
-};
-
+struct sol_font* sol_font_create(const struct sol_font_library* font_library, char* ttf_filename, int pixel_size);
+void sol_font_destroy(struct sol_font* font);

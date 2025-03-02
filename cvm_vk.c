@@ -1264,22 +1264,7 @@ void cvm_vk_destroy_image(VkImage image)
     vkDestroyImage(cvm_vk_.device,image,NULL);
 }
 
-static inline bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_mask,VkMemoryPropertyFlags required_properties,uint32_t * index)
-{
-    #warning remove this after it has been replaced with cvm_vk_find_appropriate_memory_type_
-    uint32_t i;
-    for(i=0;i<cvm_vk_.memory_properties.memoryTypeCount;i++)
-    {
-        if(( (supported_type_mask>>i) & 1) && ((cvm_vk_.memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
-        {
-            *index=i;
-            return true;
-        }
-    }
-    return false;
-}
-
-static uint32_t cvm_vk_find_appropriate_memory_type_(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
+static uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
 {
     uint32_t i;
     for(i=0;i<device->memory_properties.memoryTypeCount;i++)
@@ -1372,9 +1357,26 @@ void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* 
 
 VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
+    #warning REMOVE THIS FUNCTION
     VkDeviceSize offsets[image_count];
     VkDeviceSize current_offset;
-    VkMemoryRequirements requirements;
+
+    VkMemoryDedicatedRequirements dedicated_requirements =
+    {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
+        .pNext = NULL,
+    };
+    VkMemoryRequirements2 memory_requirements =
+    {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+        .pNext = &dedicated_requirements,
+    };
+    VkImageMemoryRequirementsInfo2 image_requirements_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+        .pNext = NULL,
+        // .image = image
+    };
     uint32_t i,memory_type_index,supported_type_bits;
     VkResult result = VK_SUCCESS;
 
@@ -1384,10 +1386,16 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
     supported_type_bits = 0xFFFFFFFF;
     for(i=0;i<image_count;i++)
     {
-        vkGetImageMemoryRequirements(cvm_vk_.device,images[i], &requirements);
-        offsets[i] = (current_offset+requirements.alignment-1) & ~(requirements.alignment-1);
-        current_offset = offsets[i] + requirements.size;
-        supported_type_bits &= requirements.memoryTypeBits;
+        image_requirements_info.image = images[i];
+        vkGetImageMemoryRequirements2(cvm_vk_.device, &image_requirements_info, &memory_requirements);
+        printf("==== %d : %d @ %lu\n", dedicated_requirements.prefersDedicatedAllocation, dedicated_requirements.requiresDedicatedAllocation,  memory_requirements.memoryRequirements.size);
+        #warning probably want to consider dedicated allocations as above, possibly worthwhile to allocate images singularly, or use a memory stack to handle images!
+        #warning instead probably best to change strategy, have general image allocator (from heap) and image struct that can hold memory in cases where that is best
+        #warning possibly device based image memory set?
+
+        offsets[i] = cvm_vk_align(current_offset, memory_requirements.memoryRequirements.alignment);
+        current_offset = offsets[i] + memory_requirements.memoryRequirements.size;
+        supported_type_bits &= memory_requirements.memoryRequirements.memoryTypeBits;
     }
 
     if(!supported_type_bits)
@@ -1398,11 +1406,11 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
 
     if(result == VK_SUCCESS)
     {
-        memory_type_index = cvm_vk_find_appropriate_memory_type_(&cvm_vk_, supported_type_bits, desired_properties|required_properties);
+        memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, supported_type_bits, desired_properties|required_properties);
 
         if(memory_type_index == CVM_INVALID_U32_INDEX)
         {
-            memory_type_index = cvm_vk_find_appropriate_memory_type_(&cvm_vk_, supported_type_bits, required_properties);
+            memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, supported_type_bits, required_properties);
         }
 
         if(memory_type_index == CVM_INVALID_U32_INDEX)
@@ -1444,6 +1452,7 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
 #warning unify the approach used here and in buffer creation, either pass in all variables or pass in struct(s) for in/out
 VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory* memory,VkImage* images, VkImageView* default_image_views)
 {
+    #warning REMOVE THIS FUNCTION
     uint32_t i;
     VkResult result = VK_SUCCESS;
     VkImageViewCreateInfo view_create_info;
@@ -1513,6 +1522,110 @@ VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateIn
     return result;
 }
 
+
+VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* device, const VkImageCreateInfo* image_create_info, bool create_default_view)
+{
+    VkResult result;
+    uint32_t memory_type_index;
+
+    VkImageViewCreateInfo view_create_info;
+    VkMemoryDedicatedRequirements dedicated_requirements =
+    {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
+        .pNext = NULL,
+    };
+    VkMemoryRequirements2 memory_requirements =
+    {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+        .pNext = &dedicated_requirements,
+    };
+
+
+
+    *image = (struct sol_vk_image)
+    {
+        .image        = VK_NULL_HANDLE,
+        .default_view = VK_NULL_HANDLE,
+        .memory       = VK_NULL_HANDLE,
+    };
+
+
+
+    result = vkCreateImage(device->device, image_create_info, device->host_allocator, &image->image);
+
+    if(result == VK_SUCCESS)
+    {
+        VkImageMemoryRequirementsInfo2 image_requirements_info =
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+            .pNext = NULL,
+            .image = image->image,
+        };
+
+        vkGetImageMemoryRequirements2(device->device, &image_requirements_info, &memory_requirements);
+
+        printf("sol_vk_image_create: %d : %d @ %lu\n", dedicated_requirements.prefersDedicatedAllocation, dedicated_requirements.requiresDedicatedAllocation,  memory_requirements.memoryRequirements.size);
+
+        memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        {
+            memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, 0);
+        }
+
+        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        {
+            result = VK_ERROR_UNKNOWN;
+        }
+    }
+
+    if(result == VK_SUCCESS)
+    {
+        VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext=NULL,
+            .allocationSize = memory_requirements.memoryRequirements.size,
+            .memoryTypeIndex = memory_type_index
+        };
+
+        result = vkAllocateMemory(device->device, &memory_allocate_info, device->host_allocator, &image->memory);
+    }
+
+    if(result == VK_SUCCESS && create_default_view)
+    {
+        cvm_vk_set_view_create_info_using_image_create_info(&view_create_info, image_create_info, image->image);
+        result = vkCreateImageView(device->device, &view_create_info, device->host_allocator, &image->default_view);
+    }
+
+    if(result != VK_SUCCESS)
+    {
+        sol_vk_image_destroy(image, device);
+    }
+
+    return result;
+}
+
+void sol_vk_image_destroy(struct sol_vk_image* image, const cvm_vk_device* device)
+{
+    if(image->image != VK_NULL_HANDLE)
+    {
+        vkDestroyImage(device->device, image->image, device->host_allocator);
+        image->image = VK_NULL_HANDLE;
+    }
+    if(image->default_view != VK_NULL_HANDLE)
+    {
+        vkDestroyImageView(device->device, image->default_view, device->host_allocator);
+        image->default_view = VK_NULL_HANDLE;
+    }
+    if(image->memory != VK_NULL_HANDLE)
+    {
+        vkFreeMemory(device->device, image->memory, device->host_allocator);
+        image->memory = VK_NULL_HANDLE;
+    }
+}
+
+
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info)
 {
     CVM_VK_CHECK(vkCreateImageView(cvm_vk_.device,info,NULL,image_view));
@@ -1543,7 +1656,6 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
 {
     #warning remove
     uint32_t memory_type_index,supported_type_bits;
-    bool type_found;
 
     VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
     {
@@ -1562,14 +1674,14 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
     VkMemoryRequirements buffer_memory_requirements;
     vkGetBufferMemoryRequirements(cvm_vk_.device,*buffer,&buffer_memory_requirements);
 
-    type_found=cvm_vk_find_appropriate_memory_type(buffer_memory_requirements.memoryTypeBits,desired_properties|required_properties,&memory_type_index);
+    memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, buffer_memory_requirements.memoryTypeBits, desired_properties|required_properties);
 
-    if(!type_found)
+    if(memory_type_index == CVM_INVALID_U32_INDEX)
     {
-        type_found=cvm_vk_find_appropriate_memory_type(buffer_memory_requirements.memoryTypeBits,required_properties,&memory_type_index);
+        memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, buffer_memory_requirements.memoryTypeBits, required_properties);
+        assert(memory_type_index != CVM_INVALID_U32_INDEX);
     }
 
-    assert(type_found);
 
     VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
     {
@@ -1711,12 +1823,12 @@ VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_b
     {
         vkGetBufferMemoryRequirements(device->device, setup->buffer, &memory_requirements);
 
-        memory_type_index = cvm_vk_find_appropriate_memory_type_(device, memory_requirements.memoryTypeBits, desired_properties);
+        memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, desired_properties);
 
         if(memory_type_index == CVM_INVALID_U32_INDEX)
         {
             ///try again with only required properties
-            memory_type_index = cvm_vk_find_appropriate_memory_type_(device, memory_requirements.memoryTypeBits, required_properties);
+            memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, required_properties);
         }
 
         if(memory_type_index == CVM_INVALID_U32_INDEX)

@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "math/vec2_s16.h"
 
-struct sol_gui_input;
+struct sol_input;
 struct sol_gui_object;
 
 /** context
@@ -42,12 +42,17 @@ struct sol_gui_context
 
     /// put settings here?? make it a pointer!?
 
+
+
     uint32_t registered_object_count;//for debug
     bool content_fit;
 
     // uint32_t double_click_time;//move to settings
 
-    struct sol_gui_object* prominent_object;// highlighted when using directional (arrows/joystick) navigation, can/should probably change with mouse motion?
+    // if true, prominent object was set via GUI navigation (arrow keys not mouse) and so cannot be set to null with mouse
+    bool highlighted_object_navigated;// this needs a better name
+
+    struct sol_gui_object* highlighted_object;// highlighted when using directional (arrows/joystick) navigation, can/should probably change with mouse motion?
     struct sol_gui_object* focused_object;// limit interaction to only this object and its children, click away/cancel called when defocused?
 
     /// used for double click detection
@@ -55,6 +60,14 @@ struct sol_gui_context
     uint32_t previously_clicked_time;
 
     struct sol_gui_object* root_container;// this should not change
+
+
+
+    // event used for interoperability with SDL and usage in gui object input
+    uint32_t SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN;
+    uint32_t SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END;
+    uint32_t SOL_GUI_EVENT_OBJECT_FOCUS_BEGIN;
+    uint32_t SOL_GUI_EVENT_OBJECT_FOCUS_END;
 };
 
 // also creates and returns the root object
@@ -62,8 +75,8 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
 // actually not sure how to handle these, they WILL retain objects though
-void sol_gui_context_set_prominent_object(struct sol_gui_context* context, struct sol_gui_object* obj);
-void sol_gui_context_set_focused_object  (struct sol_gui_context* context, struct sol_gui_object* obj);
+void sol_gui_context_set_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool navigated);
+void sol_gui_context_set_focused_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
 
 
 /**
@@ -75,6 +88,6 @@ bool sol_gui_context_update_window(struct sol_gui_context* context, vec2_s16 win
 // call this when contents of all widgets may have changed, e.g. at crteation time, after theme change, if a single widget in root has changed, instead try to be more precise
 bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
 
-bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_gui_input* input);
+bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input);
 
 

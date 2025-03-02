@@ -32,47 +32,41 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 struct cvm_overlay_render_batch;
-
-enum overlay_colour;
-#warning remove above, include necessary header to get colour
+enum sol_gui_colour;
+struct sol_font;
 
 struct sol_gui_theme
 {
-    struct cvm_overlay_font* font;
+    struct sol_font* font;
     #warning would like a way to handle multiple fonts, perhaps an array and index into them? enum? should probably do same as colours!
 
-    // vec2_s16 box_base_size;
-    // vec2_s16 box_offset;
-    // vec2_s16 panel_base_size;
-    // vec2_s16 panel_offset;
-    // could/should size things using functions
-
+    void* other_data;/// theme specific data
 
 
     int16_t parallel_fade_range;
     int16_t perpendicular_fade_range;
+    #warning ^ instead have functions for this?
 
-    void * other_data;/// theme specific data
 
     /**
      * render: appends the data necessary to render into the render batch
      * select: returns true if the box/panel covers the origin (0,0) of the rectangles coordinate system (rectangle's position should be adjusted to offset actual pixel to assess)
      * place_content: returns a rectangle that fits inside the box/panel that has correct offsets to render content to
-     * size: given some content, how big does the box/panel need to be
+     * size: given some content, how big does the box/panel need to be (paired with place_content)
     */
 
     // should this even use bounds? limited render should be managed with constrained renders
-    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, struct cvm_overlay_render_batch * restrict render_batch, enum overlay_colour colour);
-    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box);
-    rect_s16 (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, bool border);
-    vec2_s16 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size, bool border);
+    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_gui_colour colour);
+    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);/// box should be offset should be such that the origin is the selection point to be queried
+    rect_s16 (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
+    vec2_s16 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size);
 
     // box render with scroll information ?? (for localised scroll, can be extra)
 
-    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, struct cvm_overlay_render_batch * restrict render_batch, enum overlay_colour colour);
-    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box);
-    rect_s16 (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, bool border);
-    vec2_s16 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size, bool border);
+    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_gui_colour colour);
+    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
+    rect_s16 (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
+    vec2_s16 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size);
 
     #warning call function clip against box (subset of clip generic which acts on any shaded/mask element)
 

@@ -19,17 +19,21 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-/**
- * for now just a wrapper over SDL
- * can change this to handle it manually in the future, and/or move SDL support to a separate file (ideally with a different licence)
-*/
+#include <inttypes.h>
+#include <stdbool.h>
 
-#include <SDL2/SDL_events.h>
-
-
-
-struct sol_input
+typedef struct vec2_m16
 {
-	SDL_Event sdl_event;
-};
+    uint16_t x;
+    uint16_t y;
+}
+vec2_m16;
 
+static inline bool vec2_m16_any(vec2_m16 v)
+{
+    return v.x || v.y;
+}
+static inline bool vec2_m16_all(vec2_m16 v)
+{
+    return v.x && v.y;
+}

@@ -28,7 +28,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/enums.h"
 #include "gui/context.h"
 #include "gui/theme.h"
-#include "gui/input.h"
 
 /** some rules:
  * interaction MAY cause sizes to change and require a single "layout" pass of an ancestor (possibly the root object if interaction causes theme to change)
@@ -55,7 +54,7 @@ struct sol_gui_object_structure_functions
     void (*const render) (struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
 
     // used to recursively find the gui_object under the pixel location provided
-    struct sol_gui_object* (*const search) (struct sol_gui_object* obj, vec2_s16 location);
+    struct sol_gui_object* (*const hit_scan) (struct sol_gui_object* obj, vec2_s16 location);// hit_scan, scan
 
     // sets the min_size of the gui_object to inform parents of their minimum size
     vec2_s16 (*const min_size) (struct sol_gui_object* obj);
@@ -77,11 +76,11 @@ struct sol_gui_object
 	const struct sol_gui_object_structure_functions* structure_functions;
 
 	// may need enumerator for return type?
-	bool (*input_action)(struct sol_gui_object* obj, const struct sol_gui_input* input);
+	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input);
 
+	#warning combine status and position flags; pass into rendering and allow them to inform nature of rendering (e.g. if colour passed is DEFAULT then pick correct one from status)
 	uint32_t reference_count : SOL_GUI_REFERENCE_BIT_COUNT;
-	uint32_t status_flags    : SOL_GUI_OBJECT_STATUS_BIT_COUNT;
-	uint32_t position_flags  : SOL_GUI_PLACEMENT_BIT_COUNT;
+	uint32_t flags           : SOL_GUI_OBJECT_FLAGS_BIT_COUNT;
 
 	vec2_s16 min_size;
 	rect_s16 position;/// this is relative to parent
@@ -110,7 +109,7 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 
 // these perform any meta operations on objects and call their internal functions if present
 void                   sol_gui_object_render       (struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_object_search       (struct sol_gui_object* obj, vec2_s16 location);
+struct sol_gui_object* sol_gui_object_hit_scan     (struct sol_gui_object* obj, vec2_s16 location);
 vec2_s16               sol_gui_object_min_size     (struct sol_gui_object* obj);
 void                   sol_gui_object_place_content(struct sol_gui_object* obj, rect_s16 content_rect);
 void                   sol_gui_object_add_child    (struct sol_gui_object* obj, struct sol_gui_object* child);
@@ -119,7 +118,7 @@ void                   sol_gui_object_remove_child (struct sol_gui_object* obj, 
 
 
 // perhaps handle active widget if necessary? also searches for
-bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_gui_input* input);
+bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_input* input);
 
 
 
