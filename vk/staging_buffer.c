@@ -17,9 +17,11 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "solipsix.h"
+#include "cvm_vk.h"
 
-VkResult cvm_vk_staging_buffer_initialise(struct cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
+#include "vk/staging_buffer.h"
+
+VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
 {
     VkResult result;
     const VkDeviceSize alignment = cvm_vk_buffer_alignment_requirements(device, usage);
@@ -61,21 +63,21 @@ VkResult cvm_vk_staging_buffer_initialise(struct cvm_vk_staging_buffer_ * stagin
         mtx_init(&staging_buffer->access_mutex, mtx_plain);
         cnd_init(&staging_buffer->setup_stall_condition);
 
-        cvm_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue);
+        sol_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue);
     }
 
     return result;
 }
 
 /// cannot acquire allocations after this has been called
-void cvm_vk_staging_buffer_terminate(struct cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device)
+void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
 {
-    struct cvm_vk_staging_buffer_segment * oldest_active_segment;
+    struct sol_vk_staging_buffer_segment * oldest_active_segment;
 
     mtx_lock(&staging_buffer->access_mutex);
     staging_buffer->terminating = true;
     /// wait for all memory uses to complete, must be externally synchronised to ensure buffer is not in use elsewhere
-    while((oldest_active_segment = cvm_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue)))
+    while((oldest_active_segment = sol_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue)))
     {
         /// this allows cleanup to be initiated while dangling allocations have been made
         if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
@@ -102,18 +104,18 @@ void cvm_vk_staging_buffer_terminate(struct cvm_vk_staging_buffer_ * staging_buf
 
     mtx_destroy(&staging_buffer->access_mutex);
     cnd_destroy(&staging_buffer->setup_stall_condition);
-    cvm_vk_staging_buffer_segment_queue_terminate(&staging_buffer->segment_queue);
+    sol_vk_staging_buffer_segment_queue_terminate(&staging_buffer->segment_queue);
 
     cvm_vk_buffer_memory_pair_destroy(device, staging_buffer->buffer, staging_buffer->memory, true);
 }
 
 
 #warning consider moving this back into the main function?
-static inline void cvm_vk_staging_buffer_query_allocations(struct cvm_vk_staging_buffer_ * staging_buffer, const cvm_vk_device * device)
+static inline void sol_vk_staging_buffer_query_allocations(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
 {
-    struct cvm_vk_staging_buffer_segment * oldest_active_segment;
+    struct sol_vk_staging_buffer_segment * oldest_active_segment;
 
-    while((oldest_active_segment = cvm_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue)))
+    while((oldest_active_segment = sol_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue)))
     {
         if(oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE) return; /// oldest segment has not been "completed"
 
@@ -126,7 +128,7 @@ static inline void cvm_vk_staging_buffer_query_allocations(struct cvm_vk_staging
 
         staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
 
-        cvm_vk_staging_buffer_segment_queue_dequeue(&staging_buffer->segment_queue, NULL);/// remove oldest_active_segment from the queue
+        sol_vk_staging_buffer_segment_queue_dequeue(&staging_buffer->segment_queue, NULL);/// remove oldest_active_segment from the queue
 
         if(staging_buffer->remaining_space == staging_buffer->buffer_size)
         {
@@ -137,11 +139,11 @@ static inline void cvm_vk_staging_buffer_query_allocations(struct cvm_vk_staging
     }
 }
 
-struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire(struct cvm_vk_staging_buffer_ * staging_buffer, const cvm_vk_device * device, VkDeviceSize requested_space, bool high_priority)
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device * device, VkDeviceSize requested_space, bool high_priority)
 {
     VkDeviceSize required_space;
     bool wrap;
-    struct cvm_vk_staging_buffer_segment* oldest_active_segment;
+    struct sol_vk_staging_buffer_segment* oldest_active_segment;
     cvm_vk_timeline_semaphore_moment oldest_moment;
     uint32_t segment_index,segment_count,masked_first_segment_index;
     VkDeviceSize acquired_offset;
@@ -158,7 +160,7 @@ struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire
     {
         assert(!staging_buffer->terminating);
         /// try to free up space
-        cvm_vk_staging_buffer_query_allocations(staging_buffer,device);
+        sol_vk_staging_buffer_query_allocations(staging_buffer,device);
 
         wrap = staging_buffer->current_offset+requested_space > staging_buffer->buffer_size;
 
@@ -176,7 +178,7 @@ struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire
         /// otherwise; more space required
         assert(staging_buffer->segment_queue.count > 0);///should not need more space if there are no active segments
 
-        oldest_active_segment = cvm_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue);
+        oldest_active_segment = sol_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue);
 
         if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
         {
@@ -203,7 +205,7 @@ struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire
     }
 
     /// note active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid
-    segment_index = cvm_vk_staging_buffer_segment_queue_enqueue(&staging_buffer->segment_queue, (struct cvm_vk_staging_buffer_segment)
+    segment_index = sol_vk_staging_buffer_segment_queue_enqueue(&staging_buffer->segment_queue, (struct sol_vk_staging_buffer_segment)
     {
         .moment_of_last_use = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL,
         .offset = staging_buffer->current_offset,
@@ -224,7 +226,7 @@ struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire
 
     mtx_unlock(&staging_buffer->access_mutex);
 
-    return (struct cvm_vk_staging_buffer_allocation)
+    return (struct sol_vk_staging_buffer_allocation)
     {
         .parent = staging_buffer,
         .acquired_offset = acquired_offset,
@@ -234,7 +236,7 @@ struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire
     };
 }
 
-void cvm_vk_staging_buffer_allocation_flush_range(const struct cvm_vk_staging_buffer_ * staging_buffer, const cvm_vk_device * device, struct cvm_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size)
+void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size)
 {
     VkResult flush_result;
 
@@ -249,20 +251,20 @@ void cvm_vk_staging_buffer_allocation_flush_range(const struct cvm_vk_staging_bu
             .size = size,
         };
 
-        flush_result=vkFlushMappedMemoryRanges(device->device, 1, &flush_range);
+        flush_result = vkFlushMappedMemoryRanges(device->device, 1, &flush_range);
     }
 
     assert(!allocation->flushed);/// only want to flush once
     allocation->flushed = true;
 }
 
-void cvm_vk_staging_buffer_allocation_release(struct cvm_vk_staging_buffer_allocation* allocation, cvm_vk_timeline_semaphore_moment moment_of_last_use)
+void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_allocation* allocation, struct cvm_vk_timeline_semaphore_moment moment_of_last_use)
 {
-    struct cvm_vk_staging_buffer_ * staging_buffer = allocation->parent;
+    struct sol_vk_staging_buffer * staging_buffer = allocation->parent;
     assert(allocation->flushed);
     mtx_lock(&staging_buffer->access_mutex);
 
-    cvm_vk_staging_buffer_segment_queue_get_ptr(&staging_buffer->segment_queue, allocation->segment_index)->moment_of_last_use = moment_of_last_use;
+    sol_vk_staging_buffer_segment_queue_get_ptr(&staging_buffer->segment_queue, allocation->segment_index)->moment_of_last_use = moment_of_last_use;
 
     if(staging_buffer->threads_waiting_on_semaphore_setup)
     {
@@ -273,7 +275,7 @@ void cvm_vk_staging_buffer_allocation_release(struct cvm_vk_staging_buffer_alloc
     mtx_unlock(&staging_buffer->access_mutex);
 }
 
-VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(const struct cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize offset)
+VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_staging_buffer* staging_buffer, VkDeviceSize offset)
 {
     return cvm_vk_align(offset, staging_buffer->alignment);
 }

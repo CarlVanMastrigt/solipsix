@@ -24,6 +24,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_OVERLAY_H
 #define CVM_OVERLAY_H
 
+#include "vk/shunt_buffer.h"
+#include "vk/staging_buffer.h"
+
 #define CVM_OVERLAY_ELEMENT_FILL        0x00000000
 #define CVM_OVERLAY_ELEMENT_SHADED      0x10000000
 #define CVM_OVERLAY_ELEMENT_COLOURED    0x20000000
@@ -258,7 +261,7 @@ struct cvm_overlay_render_batch
     /// preparation resources
     struct cvm_overlay_element_render_data_stack render_elements;// essentailly overlay element instances
 
-    struct cvm_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
+    struct sol_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
 
     /// the atlases can be used for other purposes, but the shunt buffer and copy list must be kept in sync (ergo them going together here)
 
@@ -277,7 +280,7 @@ struct cvm_overlay_render_batch
 
     /// following are copies or transient data used only within the stages of overlay batch rendering
 
-    struct cvm_vk_staging_buffer_allocation staging_buffer_allocation;
+    struct sol_vk_staging_buffer_allocation staging_buffer_allocation;
 
     /// also record staging buffer itself here?
     VkDeviceSize element_offset;
@@ -313,7 +316,8 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch);
 void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget* root_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
 
 /// `descriptor_set` must have been fetched with `cvm_overlay_descriptor_set_fetch`
-void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
+
+void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
 
 /// copies staged data into atlases used by rendering
 void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);

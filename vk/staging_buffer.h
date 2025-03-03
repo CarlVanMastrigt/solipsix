@@ -17,36 +17,40 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef solipsix_H
-#include "solipsix.h"
-#endif
+#pragma once
 
+#include <stdbool.h>
+#include <inttypes.h>
+#include <threads.h>
+#include <vulkan/vulkan.h>
 
-#ifndef CVM_VK_STAGING_BUFFER_H
-#define CVM_VK_STAGING_BUFFER_H
+#include "data_structures/queue.h"
+#include "vk/timeline_semaphore.h"
 
+struct sol_vk_staging_buffer;
+struct cvm_vk_device;
 
 /// for when its desirable to support a simple staging buffer or a more complex staging manager backing
-struct cvm_vk_staging_buffer_allocation
+struct sol_vk_staging_buffer_allocation
 {
-    struct cvm_vk_staging_buffer_* parent;
+    struct sol_vk_staging_buffer* parent;
     VkDeviceSize acquired_offset;/// offset of the above location
     char * mapping;/// has already been offset
     uint32_t segment_index;
     bool flushed;
 };
 
-struct cvm_vk_staging_buffer_segment
+struct sol_vk_staging_buffer_segment
 {
     ///fuck, what happens if multiple queues require this moment!? (worry about it later)
-    cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
+    struct cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
     VkDeviceSize offset;
     VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
 };
 
-SOL_QUEUE(struct cvm_vk_staging_buffer_segment, cvm_vk_staging_buffer_segment, 16)
+SOL_QUEUE(struct sol_vk_staging_buffer_segment, sol_vk_staging_buffer_segment, 16)
 
-struct cvm_vk_staging_buffer_
+struct sol_vk_staging_buffer
 {
     VkBuffer buffer;
     VkDeviceMemory memory;
@@ -71,22 +75,19 @@ struct cvm_vk_staging_buffer_
     mtx_t access_mutex;
     cnd_t setup_stall_condition;
 
-    cvm_vk_staging_buffer_segment_queue segment_queue;
+    struct sol_vk_staging_buffer_segment_queue segment_queue;
 };
 
-VkResult cvm_vk_staging_buffer_initialise(struct cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space);
-void cvm_vk_staging_buffer_terminate(struct cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device);
+VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space);
+void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device);
 
-struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire(struct cvm_vk_staging_buffer_ * staging_buffer, const cvm_vk_device * device, VkDeviceSize requested_space, bool high_priority);/// offset, link to index, void pointer to copy
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkDeviceSize requested_space, bool high_priority);/// offset, link to index, void pointer to copy
 /// need to be able to stall on this being completed...
 
-void cvm_vk_staging_buffer_allocation_flush_range(const struct cvm_vk_staging_buffer_ * staging_buffer, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
+void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
 
-/// allocation index is the index param of struct reurned by `cvm_vk_staging_buffer_reserve_allocation`
-void cvm_vk_staging_buffer_allocation_release(struct cvm_vk_staging_buffer_allocation* allocation, cvm_vk_timeline_semaphore_moment moment_of_last_use);
+/// allocation index is the index param of struct reurned by `sol_vk_staging_buffer_reserve_allocation`
+void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_allocation* allocation, struct cvm_vk_timeline_semaphore_moment moment_of_last_use);
 
-VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(const struct cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize offset);
-
-#endif
-
+VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_staging_buffer* staging_buffer, VkDeviceSize offset);
 

@@ -26,12 +26,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_MEMORY_H
 
 
-
-#include "memory/staging_buffer.h"
-#include "memory/shunt_buffer.h"
-
-
-
 typedef struct cvm_vk_staging_buffer_region
 {
     uint32_t start;

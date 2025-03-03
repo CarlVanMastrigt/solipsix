@@ -81,7 +81,7 @@ SOL_QUEUE(struct cvm_overlay_transient_resources*,cvm_overlay_transient_resource
 struct cvm_overlay_renderer
 {
     /// for uploading to images, is NOT locally owned
-    struct cvm_vk_staging_buffer_ * staging_buffer;
+    struct sol_vk_staging_buffer* staging_buffer;
 
 
     uint32_t transient_count;
@@ -447,7 +447,7 @@ static inline void cvm_overlay_transient_resources_release(cvm_overlay_renderer 
 
 
 
-struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device * device, struct cvm_vk_staging_buffer_ * staging_buffer, uint32_t active_render_count)
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count)
 {
     cvm_overlay_renderer * renderer;
     renderer = malloc(sizeof(struct cvm_overlay_renderer));
@@ -468,7 +468,7 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device * 
     return renderer;
 }
 
-void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer * renderer, struct cvm_vk_device * device)
+void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, const struct cvm_vk_device* device)
 {
     struct cvm_overlay_target_resources * target_resources;
     struct cvm_overlay_transient_resources* transient_resources;
@@ -503,10 +503,10 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 {
     cvm_vk_command_buffer cb;
     cvm_vk_timeline_semaphore_moment completion_moment;
-//    cvm_vk_staging_buffer_allocation staging_buffer_allocation;
+//    sol_vk_staging_buffer_allocation staging_buffer_allocation;
 //    VkDeviceSize upload_offset,instance_offset,uniform_offset,staging_space;
     struct cvm_overlay_render_batch* render_batch;
-    struct cvm_vk_staging_buffer_ * staging_buffer;
+    struct sol_vk_staging_buffer* staging_buffer;
     struct cvm_overlay_target_resources* target_resources;
     struct cvm_overlay_frame_resources* frame_resources;
     struct cvm_overlay_transient_resources* transient_resources;

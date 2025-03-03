@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -17,14 +17,19 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "solipsix.h"
+#include <assert.h>
 
-void cvm_vk_shunt_buffer_initialise(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded)
+#include "vk/shunt_buffer.h"
+#include "sol_utils.h"
+#include "vk/utils.h"
+
+
+void sol_vk_shunt_buffer_initialise(struct sol_vk_shunt_buffer* buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded)
 {
     assert((alignment & (alignment-1)) == 0);///alignment must be a power of 2
     buffer->alignment = alignment;
     buffer->multithreaded = multithreaded;
-    buffer->max_size = cvm_vk_align(max_size, alignment);
+    buffer->max_size = sol_vk_align(max_size, alignment);
     if(multithreaded)
     {
         atomic_init(&buffer->atomic_offset, 0);
@@ -33,19 +38,19 @@ void cvm_vk_shunt_buffer_initialise(struct cvm_vk_shunt_buffer * buffer, VkDevic
     else
     {
         buffer->offset=0;
-        buffer->size = CVM_MAX(16384, alignment * 4);
+        buffer->size = SOL_MAX(16384, alignment * 4);
         assert(buffer->size <= buffer->max_size);/// specified size too small
     }
     buffer->backing = malloc(buffer->size);
 }
 
-void cvm_vk_shunt_buffer_terminate(struct cvm_vk_shunt_buffer * buffer)
+void sol_vk_shunt_buffer_terminate(struct sol_vk_shunt_buffer* buffer)
 {
     free(buffer->backing);
 }
 
 
-void cvm_vk_shunt_buffer_reset(struct cvm_vk_shunt_buffer * buffer)
+void sol_vk_shunt_buffer_reset(struct sol_vk_shunt_buffer* buffer)
 {
     if(buffer->multithreaded)
     {
@@ -57,10 +62,10 @@ void cvm_vk_shunt_buffer_reset(struct cvm_vk_shunt_buffer * buffer)
     }
 }
 
-void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset)
+void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize * offset)
 {
     uint_fast64_t current_offset;
-    byte_count = cvm_vk_align(byte_count, buffer->alignment);
+    byte_count = sol_vk_align(byte_count, buffer->alignment);
 
     if(buffer->multithreaded)
     {
@@ -86,7 +91,7 @@ void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, Vk
             do buffer->size *= 2;
             while(buffer->offset > buffer->size);
 
-            buffer->size = CVM_MIN(buffer->size, buffer->max_size);
+            buffer->size = SOL_MIN(buffer->size, buffer->max_size);
 
             if(buffer->offset > buffer->size)
             {
@@ -102,7 +107,7 @@ void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, Vk
     return buffer->backing + *offset;
 }
 
-VkDeviceSize cvm_vk_shunt_buffer_get_space_used(struct cvm_vk_shunt_buffer * buffer)
+VkDeviceSize sol_vk_shunt_buffer_get_space_used(struct sol_vk_shunt_buffer* buffer)
 {
     if(buffer->multithreaded)
     {
@@ -114,9 +119,9 @@ VkDeviceSize cvm_vk_shunt_buffer_get_space_used(struct cvm_vk_shunt_buffer * buf
     }
 }
 
-void cvm_vk_shunt_buffer_copy(struct cvm_vk_shunt_buffer * buffer, void * dst)
+void sol_vk_shunt_buffer_copy(struct sol_vk_shunt_buffer* buffer, void* dst)
 {
-    memcpy(dst, buffer->backing, cvm_vk_shunt_buffer_get_space_used(buffer));
+    memcpy(dst, buffer->backing, sol_vk_shunt_buffer_get_space_used(buffer));
 }
 
 

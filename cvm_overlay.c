@@ -471,7 +471,7 @@ void cvm_overlay_render_batch_initialise(struct cvm_overlay_render_batch* batch,
     VkDeviceSize shunt_buffer_alignment = cvm_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     cvm_overlay_element_render_data_stack_initialise(&batch->render_elements);
-    cvm_vk_shunt_buffer_initialise(&batch->upload_shunt_buffer, shunt_buffer_alignment, shunt_buffer_max_size, false);///256k, plenty for per frame
+    sol_vk_shunt_buffer_initialise(&batch->upload_shunt_buffer, shunt_buffer_alignment, shunt_buffer_max_size, false);///256k, plenty for per frame
 
     cvm_vk_buffer_image_copy_stack_initialise(&batch->alpha_atlas_copy_actions);
     cvm_vk_buffer_image_copy_stack_initialise(&batch->colour_atlas_copy_actions);
@@ -482,7 +482,7 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)
     cvm_vk_buffer_image_copy_stack_terminate(&batch->alpha_atlas_copy_actions);
     cvm_vk_buffer_image_copy_stack_terminate(&batch->colour_atlas_copy_actions);
 
-    cvm_vk_shunt_buffer_terminate(&batch->upload_shunt_buffer);
+    sol_vk_shunt_buffer_terminate(&batch->upload_shunt_buffer);
     cvm_overlay_element_render_data_stack_terminate(&batch->render_elements);
 }
 
@@ -496,7 +496,7 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     assert(batch->alpha_atlas_copy_actions.count == 0);
     assert(batch->colour_atlas_copy_actions.count == 0);
 
-    cvm_vk_shunt_buffer_reset(&batch->upload_shunt_buffer);
+    sol_vk_shunt_buffer_reset(&batch->upload_shunt_buffer);
     cvm_overlay_element_render_data_stack_reset(&batch->render_elements);
 
     batch->colour_atlas = &image_atlases->colour_atlas;
@@ -521,17 +521,17 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     render_widget_overlay(batch, root_widget);
 }
 
-void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)
+void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)
 {
     VkDeviceSize upload_offset, elements_offset, uniform_offset, staging_space;
 
     /// upload all staged resources needed by this frame (uniforms, uploaded data, elements)
     uniform_offset  = 0;
-    upload_offset   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset + sizeof(float)*4*OVERLAY_NUM_COLOURS);
-    elements_offset = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + cvm_vk_shunt_buffer_get_space_used(&batch->upload_shunt_buffer));
-    staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, elements_offset + cvm_overlay_element_render_data_stack_size(&batch->render_elements));
+    upload_offset   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset + sizeof(float)*4*OVERLAY_NUM_COLOURS);
+    elements_offset = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + sol_vk_shunt_buffer_get_space_used(&batch->upload_shunt_buffer));
+    staging_space   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, elements_offset + cvm_overlay_element_render_data_stack_size(&batch->render_elements));
 
-    batch->staging_buffer_allocation = cvm_vk_staging_buffer_allocation_acquire(staging_buffer, device, staging_space, true);
+    batch->staging_buffer_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, staging_space, true);
 
     char* const staging_mapping = batch->staging_buffer_allocation.mapping;
     const VkDeviceSize staging_offset = batch->staging_buffer_allocation.acquired_offset;
@@ -540,11 +540,11 @@ void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, cons
     batch->upload_offset  = staging_offset + upload_offset;
 
     memcpy(staging_mapping + uniform_offset, colour_array, sizeof(float)*4*OVERLAY_NUM_COLOURS);
-    cvm_vk_shunt_buffer_copy(&batch->upload_shunt_buffer, staging_mapping + upload_offset);
+    sol_vk_shunt_buffer_copy(&batch->upload_shunt_buffer, staging_mapping + upload_offset);
     cvm_overlay_element_render_data_stack_copy(&batch->render_elements, staging_mapping + elements_offset);
 
     ///flush all uploads
-    cvm_vk_staging_buffer_allocation_flush_range(staging_buffer, device, &batch->staging_buffer_allocation, 0, staging_space);
+    sol_vk_staging_buffer_allocation_flush_range(staging_buffer, device, &batch->staging_buffer_allocation, 0, staging_space);
 
     cvm_overlay_descriptor_set_write(device, descriptor_set, batch->colour_atlas->supervised_image.view, batch->alpha_atlas->supervised_image.view, staging_buffer->buffer, staging_offset+uniform_offset);
     batch->descriptor_set = descriptor_set;
@@ -594,7 +594,7 @@ void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, str
 
 void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment)
 {
-    cvm_vk_staging_buffer_allocation_release(&batch->staging_buffer_allocation, completion_moment);
+    sol_vk_staging_buffer_allocation_release(&batch->staging_buffer_allocation, completion_moment);
 }
 
 

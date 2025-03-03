@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -17,20 +17,17 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef solipsix_H
-#include "solipsix.h"
-#endif
+#pragma once
 
+#include <stdatomic.h>
+#include <stdbool.h>
+#include <vulkan/vulkan.h>
 
-#ifndef CVM_VK_SHUNT_BUFFER_H
-#define CVM_VK_SHUNT_BUFFER_H
-
-struct cvm_vk_shunt_buffer
+struct sol_vk_shunt_buffer
 {
     /// multithreaded variant is WAY more complicated, harsher restrictions on memory usage &c.
     bool multithreaded;
-//    mtx_t access_mutex;
-    char * backing;
+    char* backing;
     VkDeviceSize alignment;
     VkDeviceSize size;
     VkDeviceSize max_size;
@@ -43,18 +40,14 @@ struct cvm_vk_shunt_buffer
     /// add check to make sure nothing added after buffer gets copied?
 };
 
-void cvm_vk_shunt_buffer_initialise(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded);
-void cvm_vk_shunt_buffer_terminate(struct cvm_vk_shunt_buffer * buffer);
+void sol_vk_shunt_buffer_initialise(struct sol_vk_shunt_buffer* buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded);
+void sol_vk_shunt_buffer_terminate(struct sol_vk_shunt_buffer* buffer);
 
 
-void cvm_vk_shunt_buffer_reset(struct cvm_vk_shunt_buffer * buffer);
+void sol_vk_shunt_buffer_reset(struct sol_vk_shunt_buffer* buffer);
 /// returns pointer to location which can be written, this pointer is only valid until next use, unless mltithreaded in which case it will return a persistently valid pointer or NULL
-void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset);
+void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize * offset);
 
-VkDeviceSize cvm_vk_shunt_buffer_get_space_used(struct cvm_vk_shunt_buffer * buffer);
-void cvm_vk_shunt_buffer_copy(struct cvm_vk_shunt_buffer * buffer, void * dst);
-
-#endif
-
-
+VkDeviceSize sol_vk_shunt_buffer_get_space_used(struct sol_vk_shunt_buffer* buffer);
+void sol_vk_shunt_buffer_copy(struct sol_vk_shunt_buffer* buffer, void* dst);
 
