@@ -1267,7 +1267,7 @@ void cvm_vk_destroy_image(VkImage image)
 static uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
 {
     uint32_t i;
-    for(i=0;i<device->memory_properties.memoryTypeCount;i++)
+    for(i=0; i<device->memory_properties.memoryTypeCount; i++)
     {
         if(( supported_type_bits & 1<<i ) && ((device->memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
         {
@@ -1297,6 +1297,7 @@ void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* 
         view_type = VK_IMAGE_VIEW_TYPE_3D;
         break;
     default:
+        assert(false);// this is unhandled
         view_type = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
     }
 
@@ -1304,11 +1305,7 @@ void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* 
     switch(image_create_info->format)
     {
     case VK_FORMAT_D16_UNORM:
-        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-        break;
     case VK_FORMAT_X8_D24_UNORM_PACK32:
-        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-        break;
     case VK_FORMAT_D32_SFLOAT:
         aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
         break;
@@ -1316,11 +1313,7 @@ void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* 
         aspect = VK_IMAGE_ASPECT_STENCIL_BIT;
         break;
     case VK_FORMAT_D16_UNORM_S8_UINT:
-        aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-        break;
     case VK_FORMAT_D24_UNORM_S8_UINT:
-        aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-        break;
     case VK_FORMAT_D32_SFLOAT_S8_UINT:
         aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
         break;
@@ -1555,7 +1548,7 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* de
 
     if(result == VK_SUCCESS)
     {
-        VkImageMemoryRequirementsInfo2 image_requirements_info =
+        const VkImageMemoryRequirementsInfo2 image_requirements_info =
         {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
             .pNext = NULL,
@@ -1581,7 +1574,9 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* de
 
     if(result == VK_SUCCESS)
     {
-        VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+        #warning unless dedicated allocation is required; can probably use an existing memory allocation with some offset (same w/ binding)
+        #warning VkMemoryDedicatedAllocateInfo in next!
+        const VkMemoryAllocateInfo memory_allocate_info =
         {
             .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             .pNext=NULL,
@@ -1590,6 +1585,11 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* de
         };
 
         result = vkAllocateMemory(device->device, &memory_allocate_info, device->host_allocator, &image->memory);
+    }
+
+    if(result == VK_SUCCESS)
+    {
+        result = vkBindImageMemory(cvm_vk_.device, image->image, image->memory, 0);
     }
 
     if(result == VK_SUCCESS && create_default_view)

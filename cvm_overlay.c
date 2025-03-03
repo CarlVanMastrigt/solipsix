@@ -379,91 +379,87 @@ static void cvm_overlay_descriptor_set_write(const cvm_vk_device * device, VkDes
 VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded)
 {
     VkResult result;
-    VkImage images[2];
-    VkImageView views[2];
+
     /// images must be powers of 2
     assert((alpha_w  & (alpha_w  -1)) == 0);
     assert((alpha_h  & (alpha_h  -1)) == 0);
     assert((colour_w & (colour_w -1)) == 0);
     assert((colour_h & (colour_h -1)) == 0);
 
-    VkImageCreateInfo image_creation_info[2]=
+    const VkImageCreateInfo alpha_image_create_info =
     {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .imageType=VK_IMAGE_TYPE_2D,
+        .format=VK_FORMAT_R8_UNORM,
+        .extent=(VkExtent3D)
         {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .imageType=VK_IMAGE_TYPE_2D,
-            .format=VK_FORMAT_R8_UNORM,
-            .extent=(VkExtent3D)
-            {
-                .width  = alpha_w,
-                .height = alpha_h,
-                .depth  = 1
-            },
-            .mipLevels=1,
-            .arrayLayers=1,
-            .samples=1,
-            .tiling=VK_IMAGE_TILING_OPTIMAL,
-            .usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount=0,
-            .pQueueFamilyIndices=NULL,
-            .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+            .width  = alpha_w,
+            .height = alpha_h,
+            .depth  = 1
         },
+        .mipLevels=1,
+        .arrayLayers=1,
+        .samples=1,
+        .tiling=VK_IMAGE_TILING_OPTIMAL,
+        .usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    const VkImageCreateInfo colour_image_create_info =
+    {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .imageType=VK_IMAGE_TYPE_2D,
+        .format=VK_FORMAT_R8G8B8A8_UNORM,
+        .extent=(VkExtent3D)
         {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .imageType=VK_IMAGE_TYPE_2D,
-            .format=VK_FORMAT_R8G8B8A8_UNORM,
-            .extent=(VkExtent3D)
-            {
-                .width  = colour_w,
-                .height = colour_h,
-                .depth  = 1
-            },
-            .mipLevels=1,
-            .arrayLayers=1,
-            .samples=1,
-            .tiling=VK_IMAGE_TILING_OPTIMAL,
-            .usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount=0,
-            .pQueueFamilyIndices=NULL,
-            .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-        }
+            .width  = colour_w,
+            .height = colour_h,
+            .depth  = 1
+        },
+        .mipLevels=1,
+        .arrayLayers=1,
+        .samples=1,
+        .tiling=VK_IMAGE_TILING_OPTIMAL,
+        .usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
-    result = cvm_vk_create_images(device, image_creation_info, 2, &image_atlases->memory, images, views);
+    result = sol_vk_image_create(&image_atlases->alpha_image, device, &alpha_image_create_info, true);
     if(result != VK_SUCCESS)
     {
         return result;
     }
+    result = sol_vk_image_create(&image_atlases->colour_image, device, &colour_image_create_info, true);
+    if(result != VK_SUCCESS)
+    {
+        sol_vk_image_destroy(&image_atlases->alpha_image, device);
+        return result;
+    }
 
-    cvm_vk_create_image_atlas(&image_atlases->alpha_atlas, images[0], views[0], sizeof(uint8_t), alpha_w, alpha_h, multithreaded);
-    image_atlases->alpha_image = images[0];
-    image_atlases->alpha_view = views[0];
+    cvm_vk_create_image_atlas(&image_atlases->alpha_atlas, image_atlases->alpha_image.image, image_atlases->alpha_image.default_view, sizeof(uint8_t), alpha_w, alpha_h, multithreaded);
 
-    cvm_vk_create_image_atlas(&image_atlases->colour_atlas, images[1], views[1], sizeof(uint8_t)*4, colour_w, colour_h, multithreaded);
-    image_atlases->colour_image = images[1];
-    image_atlases->colour_view = views[1];
+    cvm_vk_create_image_atlas(&image_atlases->colour_atlas, image_atlases->colour_image.image, image_atlases->colour_image.default_view, sizeof(uint8_t)*4, colour_w, colour_h, multithreaded);
 
     return result;
 }
 
 void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device)
 {
+    #warning move sol image into atlas??
     cvm_vk_destroy_image_atlas(&image_atlases->alpha_atlas);
     cvm_vk_destroy_image_atlas(&image_atlases->colour_atlas);
 
-    vkDestroyImageView(device->device, image_atlases->alpha_view, device->host_allocator);
-    vkDestroyImageView(device->device, image_atlases->colour_view, device->host_allocator);
-
-    vkDestroyImage(device->device, image_atlases->alpha_image, device->host_allocator);
-    vkDestroyImage(device->device, image_atlases->colour_image, device->host_allocator);
-
-    vkFreeMemory(device->device, image_atlases->memory, device->host_allocator);
+    sol_vk_image_destroy(&image_atlases->alpha_image, device);
+    sol_vk_image_destroy(&image_atlases->colour_image, device);
 }
 
 

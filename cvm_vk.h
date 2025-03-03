@@ -287,9 +287,6 @@ void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* 
 
 VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
 
-/// default_image_views is optional
-VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory* memory,VkImage* images, VkImageView* default_image_views);
-
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
 

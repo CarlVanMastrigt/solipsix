@@ -217,15 +217,10 @@ struct overlay_theme
 
 struct cvm_overlay_image_atlases
 {
-    /// shared by colour atlas and
-    VkDeviceMemory memory;
-
-    VkImage alpha_image;
-    VkImageView alpha_view;
+    struct sol_vk_image alpha_image;
     cvm_vk_image_atlas alpha_atlas;
 
-    VkImage colour_image;
-    VkImageView colour_view;
+    struct sol_vk_image colour_image;
     cvm_vk_image_atlas colour_atlas;
 };
 
