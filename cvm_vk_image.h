@@ -163,5 +163,8 @@ void * cvm_vk_stage_image_atlas_upload(struct cvm_vk_shunt_buffer* shunt_buffer,
 void cvm_vk_image_atlas_submit_all_pending_copy_actions(struct cvm_vk_image_atlas* atlas,VkCommandBuffer transfer_cb, VkBuffer staging_buffer, VkDeviceSize staging_base_offset, struct cvm_vk_buffer_image_copy_stack* pending_copy_actions);
 /// transfer_cb MUST be submitted to queue from same queue family to where the graphics commands that will use the image atlas will be used, assuming usage paradigm is correct this can even be the graphics queue itself
 
+
+
+
 #endif
 

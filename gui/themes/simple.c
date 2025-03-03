@@ -20,8 +20,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 
 #include "gui/theme.h"
-
 #include "gui/enums.h"
+#include "overlay/enums.h"
+// probably need/want more includes from overlay
 #include "sol_font.h"
 
 struct sol_gui_theme_simple_data
@@ -36,7 +37,7 @@ struct sol_gui_theme_simple_data
 
 
 
-static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_gui_colour colour)
+static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
 {
 }
 
@@ -81,7 +82,7 @@ static vec2_s16 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint3
 	return size;
 }
 
-static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_gui_colour colour)
+static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
 {
 }
 

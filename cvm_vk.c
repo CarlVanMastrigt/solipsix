@@ -1534,7 +1534,7 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* de
     };
 
 
-
+    #warning merge this concept with managed image?
     *image = (struct sol_vk_image)
     {
         .image        = VK_NULL_HANDLE,

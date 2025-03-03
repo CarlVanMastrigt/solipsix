@@ -32,7 +32,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 struct cvm_overlay_render_batch;
-enum sol_gui_colour;
+enum sol_overlay_colour;
 struct sol_font;
 
 struct sol_gui_theme
@@ -56,14 +56,14 @@ struct sol_gui_theme
     */
 
     // should this even use bounds? limited render should be managed with constrained renders
-    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_gui_colour colour);
+    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
     bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);/// box should be offset should be such that the origin is the selection point to be queried
     rect_s16 (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
     vec2_s16 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size);
 
     // box render with scroll information ?? (for localised scroll, can be extra)
 
-    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_gui_colour colour);
+    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
     bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
     rect_s16 (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
     vec2_s16 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size);

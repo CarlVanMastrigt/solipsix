@@ -74,18 +74,3 @@ enum sol_gui_alignment
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x00800000
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x00400000
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED      0x00200000 /** the object should have a border (size defined by the theme) applied to it */
-
-
-
-enum sol_gui_colour
-{
-    SOL_GUI_COLOUR_ERROR=0,
-    SOL_GUI_COLOUR_DEFAULT=0,// use default for whatever is being rendered, as it MUST be replaced will render as error colour
-    SOL_GUI_COLOUR_BACKGROUND,
-    SOL_GUI_COLOUR_MAIN,
-    SOL_GUI_COLOUR_HIGHLIGHTED,
-    SOL_GUI_COLOUR_FOCUSED,
-    SOL_GUI_COLOUR_STANDARD_TEXT,
-    SOL_GUI_COLOUR_COMPOSITION_TEXT,
-    SOL_GUI_COLOUR_COUNT,
-};
