@@ -43,7 +43,7 @@ struct sol_vk_staging_buffer_allocation
 struct sol_vk_staging_buffer_segment
 {
     ///fuck, what happens if multiple queues require this moment!? (worry about it later)
-    struct cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
+    struct sol_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
     VkDeviceSize offset;
     VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
 };
@@ -87,7 +87,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
 
 /// allocation index is the index param of struct reurned by `sol_vk_staging_buffer_reserve_allocation`
-void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_allocation* allocation, struct cvm_vk_timeline_semaphore_moment moment_of_last_use);
+void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment moment_of_last_use);
 
 VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_staging_buffer* staging_buffer, VkDeviceSize offset);
 

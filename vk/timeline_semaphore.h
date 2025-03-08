@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -17,38 +17,34 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_VK_H
-#include "cvm_vk.h"
-#endif
+#pragma once
 
+#include <stdbool.h>
+#include <vulkan/vulkan.h>
 
-#ifndef CVM_VK_TIMELINE_SEMAPHORE_H
-#define CVM_VK_TIMELINE_SEMAPHORE_H
+struct cvm_vk_device;
 
-typedef struct cvm_vk_timeline_semaphore
+struct sol_vk_timeline_semaphore
 {
     VkSemaphore semaphore;
     uint64_t value;
-}
-cvm_vk_timeline_semaphore;
+};
 
-typedef struct cvm_vk_timeline_semaphore_moment
+struct sol_vk_timeline_semaphore_moment
 {
     VkSemaphore semaphore;
     uint64_t value;
-}
-cvm_vk_timeline_semaphore_moment;
-#define CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL ((cvm_vk_timeline_semaphore_moment){.semaphore=VK_NULL_HANDLE,.value=0})
+};
 
+#define SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL ((struct sol_vk_timeline_semaphore_moment){.semaphore=VK_NULL_HANDLE,.value=0})
 
-void cvm_vk_timeline_semaphore_initialise(const cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
-void cvm_vk_timeline_semaphore_terminate(const cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
+void sol_vk_timeline_semaphore_initialise(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device);
+void sol_vk_timeline_semaphore_terminate(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device);
 
-VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_signal_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages, cvm_vk_timeline_semaphore_moment * created_moment);
-VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cvm_vk_timeline_semaphore_moment * moment,VkPipelineStageFlags2 stages);
+struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_generate_moment(struct sol_vk_timeline_semaphore* timeline_semaphore);
 
-void cvm_vk_timeline_semaphore_moment_wait(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment);
-bool cvm_vk_timeline_semaphore_moment_query(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment);///returns true if this moment has elapsed
+VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct sol_vk_timeline_semaphore_moment* moment, VkPipelineStageFlags2 stages);
 
-#endif
-
+void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
+bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
+/// ^ returns true if this moment has elapsed

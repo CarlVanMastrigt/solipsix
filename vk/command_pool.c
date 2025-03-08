@@ -109,9 +109,9 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
     CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer->buffer, &command_buffer_begin_info));
 }
 
-struct cvm_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages)
+struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages)
 {
-    cvm_vk_timeline_semaphore_moment completion_moment;
+    struct sol_vk_timeline_semaphore_moment completion_moment;
     const cvm_vk_device_queue_family * queue_family;
     cvm_vk_device_queue * queue;
 
@@ -122,7 +122,8 @@ struct cvm_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
     CVM_VK_CHECK(vkEndCommandBuffer(command_buffer->buffer));
 
     assert(command_buffer->signal_count<4);
-    command_buffer->signal_info[command_buffer->signal_count++] = cvm_vk_timeline_semaphore_signal_submit_info(&queue->timeline,completion_signal_stages, &completion_moment);
+    completion_moment = sol_vk_timeline_semaphore_generate_moment(&queue->timeline);
+    command_buffer->signal_info[command_buffer->signal_count++] = sol_vk_timeline_semaphore_moment_submit_info(&completion_moment, completion_signal_stages);
 
     VkSubmitInfo2 submit_info=
     {
@@ -153,11 +154,11 @@ struct cvm_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
 }
 
 
-void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const cvm_vk_timeline_semaphore_moment * moment, VkPipelineStageFlags2 wait_stages)
+void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const struct sol_vk_timeline_semaphore_moment * moment, VkPipelineStageFlags2 wait_stages)
 {
     assert(command_buffer->wait_count<11);
 
-    command_buffer->wait_info[command_buffer->wait_count++]=cvm_vk_timeline_semaphore_moment_wait_submit_info(moment,wait_stages);
+    command_buffer->wait_info[command_buffer->wait_count++]=sol_vk_timeline_semaphore_moment_submit_info(moment,wait_stages);
 }
 
 void cvm_vk_command_buffer_add_wait_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count)

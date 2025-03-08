@@ -329,7 +329,7 @@ void cvm_overlay_render_batch_ready(struct cvm_overlay_render_batch* batch, VkCo
 void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
 
 /// used to schedule the release of resources used/held by this batch, must ensure completion moment occurs after `render` has completed
-void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment);
+void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment);
 
 /// stage, upload and ready could reasonably be combined if all the contents of the atlases are uploaded rather than rendered
 

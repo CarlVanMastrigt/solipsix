@@ -53,14 +53,14 @@ typedef struct cvm_vk_command_buffer
 }
 cvm_vk_command_buffer;
 
-void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_device * device, uint32_t device_queue_family_index, uint32_t device_queue_index);
-void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_device * device);
-void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device * device);
+void cvm_vk_command_pool_initialise(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, uint32_t device_queue_family_index, uint32_t device_queue_index);
+void cvm_vk_command_pool_terminate(cvm_vk_command_pool* pool, const struct cvm_vk_device* device);
+void cvm_vk_command_pool_reset(cvm_vk_command_pool* pool, const struct cvm_vk_device* device);
 
-void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer);
-struct cvm_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages);
+void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer);
+struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages);
 
-void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const cvm_vk_timeline_semaphore_moment * moment, VkPipelineStageFlags2 wait_stages);
+void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const struct sol_vk_timeline_semaphore_moment* moment, VkPipelineStageFlags2 wait_stages);
 
 void cvm_vk_command_buffer_add_wait_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count);
 void cvm_vk_command_buffer_add_signal_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count);

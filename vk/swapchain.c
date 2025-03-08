@@ -21,7 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, VkImage image, uint16_t index, cvm_vk_swapchain_instance * parent_swapchain_instance)
+static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, VkImage image, uint32_t index, cvm_vk_swapchain_instance * parent_swapchain_instance)
 {
     uint32_t i;
 
@@ -36,7 +36,7 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
     presentable_image->state=CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
 
     presentable_image->last_use_queue_family = CVM_INVALID_U32_INDEX;
-    presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+    presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
 
     presentable_image->present_acquire_command_buffers = malloc(sizeof(VkCommandBuffer) * device->queue_family_count);
     for(i=0;i<device->queue_family_count;i++)
@@ -261,7 +261,7 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
 
 
 
-int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup)
+void cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup)
 {
     swapchain->setup_info = *setup;
 
@@ -274,8 +274,6 @@ int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swap
     }
 
     cvm_vk_swapchain_instance_queue_initialise(&swapchain->swapchain_queue);
-
-    return 0;
 }
 
 void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain)
@@ -309,11 +307,11 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
                 assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);/// probs wrong!
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
 
-                cvm_vk_timeline_semaphore_moment_wait(device, &presentable_image->last_use_moment);
+                sol_vk_timeline_semaphore_moment_wait(&presentable_image->last_use_moment, device);
 
                 assert(instance->acquired_image_count > 0);
                 instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
-                presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+                presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                 presentable_image->acquire_semaphore = VK_NULL_HANDLE;
                 presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
             }
@@ -350,11 +348,11 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
                 assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
 
-                if(cvm_vk_timeline_semaphore_moment_query(device, &presentable_image->last_use_moment))
+                if(sol_vk_timeline_semaphore_moment_query(&presentable_image->last_use_moment, device))
                 {
                     assert(instance->acquired_image_count > 0);
                     instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
-                    presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+                    presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                     presentable_image->acquire_semaphore = VK_NULL_HANDLE;
                     presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
                 }
@@ -392,7 +390,7 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
         if(instance==NULL || instance->out_of_date)
         {
             new_instance_index = cvm_vk_swapchain_instance_queue_new_index(&swapchain->swapchain_queue);
-            new_instance = cvm_vk_swapchain_instance_queue_get_ptr(&swapchain->swapchain_queue, new_instance_index);
+            new_instance = cvm_vk_swapchain_instance_queue_access(&swapchain->swapchain_queue, new_instance_index);
 
             cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, new_instance_index, instance ? instance->swapchain : VK_NULL_HANDLE);
             instance = new_instance;
@@ -427,7 +425,7 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
                 instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
             }
 
-            presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+            presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
             presentable_image->acquire_semaphore = acquire_semaphore;
             presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_ACQUIRED;
             presentable_image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -553,9 +551,11 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         ///fixed count and layout of wait and signal semaphores here
         wait_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
+        presentable_image->last_use_moment = sol_vk_timeline_semaphore_generate_moment(&present_queue->timeline);
         /// presentable_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
         signal_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-        signal_semaphores[1]=cvm_vk_timeline_semaphore_signal_submit_info(&present_queue->timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presentable_image->last_use_moment);///REMOVE THIS
+        signal_semaphores[1]=sol_vk_timeline_semaphore_moment_submit_info(&presentable_image->last_use_moment, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        #warning REMOVE THIS ^^
 
         VkSubmitInfo2 submit_info=(VkSubmitInfo2)
         {

@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -17,11 +17,11 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "solipsix.h"
+#include "vk/timeline_semaphore.h"
+#include "cvm_vk.h"
 
 
-
-void cvm_vk_timeline_semaphore_initialise(const cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore)
+void sol_vk_timeline_semaphore_initialise(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device)
 {
     VkSemaphoreCreateInfo timeline_semaphore_create_info=(VkSemaphoreCreateInfo)
     {
@@ -38,37 +38,28 @@ void cvm_vk_timeline_semaphore_initialise(const cvm_vk_device * device,cvm_vk_ti
         .flags=0
     };
 
-    CVM_VK_CHECK(vkCreateSemaphore(device->device,&timeline_semaphore_create_info,NULL,&timeline_semaphore->semaphore));
-    timeline_semaphore->value=0;
+    VkResult result = vkCreateSemaphore(device->device, &timeline_semaphore_create_info, NULL, &timeline_semaphore->semaphore);
+    assert(result == VK_SUCCESS);
+    timeline_semaphore->value = 0;
 }
 
-void cvm_vk_timeline_semaphore_terminate(const cvm_vk_device * device, cvm_vk_timeline_semaphore * timeline_semaphore)
+void sol_vk_timeline_semaphore_terminate(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device)
 {
-    vkDestroySemaphore(device->device,timeline_semaphore->semaphore,NULL);
+    vkDestroySemaphore(device->device, timeline_semaphore->semaphore, NULL);
 }
 
-VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_signal_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages, cvm_vk_timeline_semaphore_moment * created_moment)
+struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_generate_moment(struct sol_vk_timeline_semaphore* timeline_semaphore)
 {
-    ts->value++;
+    timeline_semaphore->value++;
 
-    if(created_moment)
+    return (struct sol_vk_timeline_semaphore_moment)
     {
-        created_moment->semaphore=ts->semaphore;
-        created_moment->value=ts->value;
-    }
-
-    return (VkSemaphoreSubmitInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .pNext=NULL,
-        .semaphore=ts->semaphore,
-        .value= ts->value,
-        .stageMask=stages,
-        .deviceIndex=0
+        .semaphore = timeline_semaphore->semaphore,
+        .value = timeline_semaphore->value,
     };
 }
 
-VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cvm_vk_timeline_semaphore_moment * moment,VkPipelineStageFlags2 stages)
+VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct sol_vk_timeline_semaphore_moment* moment, VkPipelineStageFlags2 stages)
 {
     return (VkSemaphoreSubmitInfo)
     {
@@ -81,10 +72,11 @@ VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cv
     };
 }
 
-void cvm_vk_timeline_semaphore_moment_wait(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
+void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
 {
+    VkResult result;
     /// should this check non-null?
-    VkSemaphoreWaitInfo wait=
+    VkSemaphoreWaitInfo wait =
     {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .pNext=NULL,
@@ -93,21 +85,34 @@ void cvm_vk_timeline_semaphore_moment_wait(const cvm_vk_device * device,const cv
         .pSemaphores=&moment->semaphore,
         .pValues=&moment->value,
     };
-    CVM_VK_CHECK(vkWaitSemaphores(device->device,&wait,CVM_VK_DEFAULT_TIMEOUT));
+
+    do
+    {
+        result = vkWaitSemaphores(device->device, &wait, CVM_VK_DEFAULT_TIMEOUT);
+        if(result == VK_TIMEOUT)
+        {
+            fprintf(stderr,"timeline semaphore seems to be stalling");
+        }
+    }
+    while(result == VK_TIMEOUT);
+    assert(result == VK_SUCCESS);
 }
 
-bool cvm_vk_timeline_semaphore_moment_query(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
+bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
 {
-    uint64_t v = 0;
-    VkResult r;
-    r = vkGetSemaphoreCounterValue(device->device,moment->semaphore,&v);
-    if(r==VK_SUCCESS)
+    VkResult result;
+    /// should this check non-null?
+    VkSemaphoreWaitInfo wait =
     {
-        return v>=moment->value;
-    }
-    else
-    {
-        return false;
-    }
-    #warning do range based comparison respecting the under the hood wrapping values
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .semaphoreCount=1,
+        .pSemaphores=&moment->semaphore,
+        .pValues=&moment->value,
+    };
+
+    result = vkWaitSemaphores(device->device, &wait, 0);
+    assert(result == VK_SUCCESS || result == VK_TIMEOUT);
+    return result == VK_SUCCESS;
 }

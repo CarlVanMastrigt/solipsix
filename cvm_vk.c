@@ -376,12 +376,12 @@ static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
     free(setup->device_feature_struct_sizes);
 }
 
-static VkPhysicalDeviceFeatures2* cvm_vk_create_device_feature_structure_list(const cvm_vk_device_setup * device_setup)
+static VkPhysicalDeviceFeatures2* cvm_vk_create_device_feature_structure_list(const cvm_vk_device_setup* device_setup)
 {
     uint32_t i;
-    VkBaseInStructure * last_feature_struct;
-    VkBaseInStructure * feature_struct;
-    VkPhysicalDeviceFeatures2 * features;
+    VkBaseInStructure* last_feature_struct;
+    VkBaseInStructure* feature_struct;
+    VkPhysicalDeviceFeatures2* features;
 
     /// set up chain of features, used to ensure
     /// init to zero, which is false for when this will be setting up only required features
@@ -495,13 +495,13 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
 
 static void cvm_vk_initialise_device_queue(cvm_vk_device * device,cvm_vk_device_queue * queue,uint32_t queue_family_index,uint32_t queue_index)
 {
-    cvm_vk_timeline_semaphore_initialise(device,&queue->timeline);
+    sol_vk_timeline_semaphore_initialise(&queue->timeline, device);
     vkGetDeviceQueue(device->device,queue_family_index,queue_index,&queue->queue);
 }
 
 static void cvm_vk_terminate_device_queue(cvm_vk_device * device,cvm_vk_device_queue * queue)
 {
-    cvm_vk_timeline_semaphore_terminate(device,&queue->timeline);
+    sol_vk_timeline_semaphore_terminate(&queue->timeline, device);
 }
 
 static void cvm_vk_initialise_device_queue_family(cvm_vk_device * device,cvm_vk_device_queue_family * queue_family,uint32_t queue_family_index,uint32_t queue_count)
@@ -569,6 +569,11 @@ static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_dev
     vkEnumerateDeviceExtensionProperties(device->physical_device,NULL,&available_extension_count,NULL);
     available_extensions=malloc(sizeof(VkExtensionProperties)*available_extension_count);
     vkEnumerateDeviceExtensionProperties(device->physical_device,NULL,&available_extension_count,available_extensions);
+
+    for(i=0;i<available_extension_count;i++)
+    {
+        printf(">>%s\n", available_extensions[i].extensionName);
+    }
 
 
     enabled_features = cvm_vk_create_device_feature_structure_list(device_setup);

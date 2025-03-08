@@ -25,6 +25,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_H
 #define CVM_VK_H
 
+#include "vk/timeline_semaphore.h"
+
 #ifndef CVM_VK_CHECK
 #define CVM_VK_CHECK(f)                                                         \
 {                                                                               \
@@ -96,7 +98,7 @@ static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignmen
 
 CVM_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy, 16)
 
-#include "vk/timeline_semaphore.h"
+
 #include "vk/command_pool.h"
 #include "vk/swapchain.h"
 
@@ -138,6 +140,7 @@ typedef struct cvm_vk_device_setup
     cvm_vk_device_feature_request_function ** feature_request;
     uint32_t feature_request_count;
 
+#warning this should be a pointer to the first struct instead
     VkStructureType * device_feature_struct_types;
     size_t * device_feature_struct_sizes;
     uint32_t device_feature_struct_count;
@@ -156,7 +159,7 @@ cvm_vk_device_setup;
 
 typedef struct cvm_vk_device_queue
 {
-    cvm_vk_timeline_semaphore timeline;
+    struct sol_vk_timeline_semaphore timeline;
     VkQueue queue;
 }
 cvm_vk_device_queue;
@@ -413,7 +416,7 @@ typedef struct cvm_vk_module_work_payload
     ///can also store secondary command buffer?
     /// have flags/enum (to assert on) regarding nature of CB, primary? inline? secondary? compute?
 
-    cvm_vk_timeline_semaphore waits[CVM_VK_PAYLOAD_MAX_WAITS];///this also allows host side semaphores so isn't that bad tbh...
+    struct sol_vk_timeline_semaphore waits[CVM_VK_PAYLOAD_MAX_WAITS];///this also allows host side semaphores so isn't that bad tbh...
     VkPipelineStageFlags2 wait_stages[CVM_VK_PAYLOAD_MAX_WAITS];
     uint32_t wait_count;
 
@@ -498,7 +501,7 @@ void cvm_vk_end_module_batch(cvm_vk_module_batch * batch);///handles all pending
 VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch * batch,uint32_t affected_queue_bitbask);///returned value should NOT be submitted directly, instead it should be handled by cvm_vk_end_module_batch
 
 
-void cvm_vk_work_payload_add_wait(cvm_vk_module_work_payload * payload,cvm_vk_timeline_semaphore semaphore,VkPipelineStageFlags2 stages);
+void cvm_vk_work_payload_add_wait(cvm_vk_module_work_payload * payload, struct sol_vk_timeline_semaphore semaphore,VkPipelineStageFlags2 stages);
 
 void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * payload,cvm_vk_module_batch * batch);
 void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);

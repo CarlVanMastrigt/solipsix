@@ -56,8 +56,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     VkImageView image_view;
     cvm_vk_resource_identifier image_view_unique_identifier;
 
-    /// "unique" identifier used to differentiate images after swapchain recreation
-    uint16_t index;
+    uint32_t index;
 
     VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
 
@@ -74,7 +73,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
 
-    cvm_vk_timeline_semaphore_moment last_use_moment;/// used for ensuring a swapchain has had all its images returned before being destroyed
+    struct sol_vk_timeline_semaphore_moment last_use_moment;/// used for ensuring a swapchain has had all its images returned before being destroyed
 }
 cvm_vk_swapchain_presentable_image;
 
@@ -125,12 +124,12 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
-int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup);
-void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
+void cvm_vk_swapchain_initialse(const cvm_vk_device* device, cvm_vk_surface_swapchain* swapchain, const cvm_vk_swapchain_setup* setup);
+void cvm_vk_swapchain_terminate(const cvm_vk_device* device, cvm_vk_surface_swapchain* swapchain);
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device);
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const cvm_vk_device* device);
 
-void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image);
+void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain* swapchain, const cvm_vk_device* device, cvm_vk_swapchain_presentable_image* presentable_image);
 
 
 #endif

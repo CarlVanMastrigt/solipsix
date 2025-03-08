@@ -592,7 +592,7 @@ void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, str
 }
 
 
-void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment)
+void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment)
 {
     sol_vk_staging_buffer_allocation_release(&batch->staging_buffer_allocation, completion_moment);
 }

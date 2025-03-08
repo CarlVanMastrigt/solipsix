@@ -60,6 +60,11 @@ static inline void name##_queue_initialise( name##_queue* q )                   
     q->front=0;                                                                 \
 }                                                                               \
                                                                                 \
+static inline void name##_queue_terminate( name##_queue* q )                    \
+{                                                                               \
+    free(q->data);                                                              \
+}                                                                               \
+                                                                                \
 static inline uint32_t name##_queue_new_index( name##_queue* q )                \
 {                                                                               \
     uint_fast32_t front_offset, move_count;                                     \
@@ -84,7 +89,7 @@ static inline uint32_t name##_queue_new_index( name##_queue* q )                
     return q->front + q->count++;                                               \
 }                                                                               \
                                                                                 \
-static inline type * name##_queue_get_ptr( name##_queue* q , uint32_t index )   \
+static inline type * name##_queue_access( name##_queue* q , uint32_t index )    \
 {                                                                               \
     return q->data + (index & (q->space - 1));                                  \
 }                                                                               \
@@ -128,11 +133,6 @@ static inline type * name##_queue_dequeue_ptr( name##_queue* q )                
     q->front++;                                                                 \
     q->count--;                                                                 \
     return ptr;                                                                 \
-}                                                                               \
-                                                                                \
-static inline void name##_queue_terminate( name##_queue* q )                    \
-{                                                                               \
-    free(q->data);                                                              \
 }                                                                               \
                                                                                 \
 static inline type * name##_queue_get_front_ptr( name##_queue* q )              \
