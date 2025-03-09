@@ -126,23 +126,25 @@ struct cvm_vk_instance
     const VkAllocationCallbacks* host_allocator;
 };
 
+// available features
+typedef float cvm_vk_device_feature_validation_function(const VkPhysicalDeviceFeatures2*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
+typedef void cvm_vk_device_feature_request_function(VkPhysicalDeviceFeatures2*, bool*, const VkPhysicalDeviceFeatures2*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
-typedef float cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
-typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
 typedef struct cvm_vk_device_setup
 {
     const struct cvm_vk_instance* instance;
 
-    cvm_vk_device_feature_validation_function ** feature_validation;
+    cvm_vk_device_feature_validation_function** feature_validation;
     uint32_t feature_validation_count;
 
-    cvm_vk_device_feature_request_function ** feature_request;
+    cvm_vk_device_feature_request_function** feature_request;
     uint32_t feature_request_count;
 
-#warning this should be a pointer to the first struct instead
-    VkStructureType * device_feature_struct_types;
-    size_t * device_feature_struct_sizes;
+    const char* preferred_device_name_substring;
+
+    VkStructureType* device_feature_struct_types;
+    size_t* device_feature_struct_sizes;
     uint32_t device_feature_struct_count;
 
     uint32_t desired_graphics_queues;
@@ -166,9 +168,10 @@ cvm_vk_device_queue;
 
 typedef struct cvm_vk_device_queue_family
 {
-    cvm_vk_device_queue * queues;
+    const VkQueueFamilyProperties properties;
+
+    cvm_vk_device_queue* queues;
     uint32_t queue_count;
-//    const VkQueueFamilyProperties properties;
     VkCommandPool internal_command_pool;
     ///mutex to lock above?
 }
@@ -197,14 +200,14 @@ struct cvm_vk_device
     const VkPhysicalDeviceProperties properties;
     const VkPhysicalDeviceMemoryProperties memory_properties;
 
-    const VkPhysicalDeviceFeatures2 * features;
+    const VkPhysicalDeviceFeatures2 features;// enabled features
 
-    const VkExtensionProperties * extensions;
+    const VkExtensionProperties* extensions;//enabled extensions
     uint32_t extension_count;
 
-    const VkQueueFamilyProperties * queue_family_properties;
+    // const VkQueueFamilyProperties* queue_family_properties;
 
-    cvm_vk_device_queue_family * queue_families;
+    cvm_vk_device_queue_family* queue_families;
     uint32_t queue_family_count;
 
 

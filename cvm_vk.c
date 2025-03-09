@@ -18,6 +18,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "solipsix.h"
+#include "sol_utils.h"
 
 
 static cvm_vk_device cvm_vk_;
@@ -189,18 +190,20 @@ void cvm_vk_destroy_surface(const struct cvm_vk_instance* instance, VkSurfaceKHR
 
 
 
-static float cvm_vk_internal_device_feature_validation_function(const VkBaseInStructure* valid_list,
+static float cvm_vk_internal_device_feature_validation_function(const VkPhysicalDeviceFeatures2* valid_list,
                                                                const VkPhysicalDeviceProperties* device_properties,
                                                                const VkPhysicalDeviceMemoryProperties* memory_properties,
                                                                const VkExtensionProperties* extension_properties,
                                                                uint32_t extension_count,
-                                                               const VkQueueFamilyProperties * queue_family_properties,
+                                                               const VkQueueFamilyProperties* queue_family_properties,
                                                                uint32_t queue_family_count)
 {
-    uint32_t i,extensions_found;
+    uint32_t i;
     const VkBaseInStructure* entry;
     const VkPhysicalDeviceVulkan12Features * features_12;
     const VkPhysicalDeviceVulkan13Features * features_13;
+    float weight = 1.0;
+    bool swapchain_ext_present = false;
 
     #warning SHOULD actually check if presentable with some SDL window (maybe externally? and in default case) because the selected laptop adapter may alter presentability later!
 
@@ -216,44 +219,49 @@ static float cvm_vk_internal_device_feature_validation_function(const VkBaseInSt
         {
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
                 features_12 = (const VkPhysicalDeviceVulkan12Features*)entry;
-                if(features_12->timelineSemaphore==VK_FALSE)return 0.0;
+                if(features_12->timelineSemaphore==VK_FALSE) weight = 0.0;
                 break;
 
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
                 features_13 = (const VkPhysicalDeviceVulkan13Features*)entry;
-                if(features_13->synchronization2==VK_FALSE)return 0.0;
+                if(features_13->synchronization2==VK_FALSE) weight = 0.0;
                 break;
 
             default: break;
         }
     }
 
-    extensions_found=0;
     for(i=0;i<extension_count;i++)
     {
         if(strcmp(extension_properties[i].extensionName,"VK_KHR_swapchain")==0)
         {
-            extensions_found++;
+            swapchain_ext_present = true;
         }
     }
-    if(extensions_found!=1)return 0.0;
+
+    if(!swapchain_ext_present)
+    {
+        weight = 0.0;
+    }
 
     switch(device_properties->deviceType)
     {
-        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 1.0;
-        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 0.25;
-        default: return 0.0625;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: weight *= 1.0;
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: weight *= 0.25;
+        default: weight *= 0.0625;
     }
+
+    return weight;
 }
 
-static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* set_list,
+static void cvm_vk_internal_device_feature_request_function(VkPhysicalDeviceFeatures2* set_list,
                                                             bool* extension_set_table,
-                                                            const VkBaseInStructure* valid_list,
+                                                            const VkPhysicalDeviceFeatures2* valid_list,
                                                             const VkPhysicalDeviceProperties* device_properties,
                                                             const VkPhysicalDeviceMemoryProperties* memory_properties,
                                                             const VkExtensionProperties* extension_properties,
                                                             uint32_t extension_count,
-                                                            const VkQueueFamilyProperties * queue_family_properties,
+                                                            const VkQueueFamilyProperties* queue_family_properties,
                                                             uint32_t queue_family_count)
 {
     uint32_t i;
@@ -266,18 +274,18 @@ static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* 
     (void)device_properties;
     (void)memory_properties;
 
-    for(set_entry = set_list;set_entry;set_entry = set_entry->pNext)
+    for(set_entry = set_list->pNext; set_entry; set_entry = set_entry->pNext)
     {
         switch(set_entry->sType)
         {
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
                 set_features_12 = (VkPhysicalDeviceVulkan12Features*)set_entry;
-                set_features_12->timelineSemaphore=VK_TRUE;
+                set_features_12->timelineSemaphore = VK_TRUE;
                 break;
 
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
                 features_13 = (VkPhysicalDeviceVulkan13Features*)set_entry;
-                features_13->synchronization2=VK_TRUE;
+                features_13->synchronization2 = VK_TRUE;
                 break;
 
             default: break;
@@ -305,14 +313,14 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-//        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
     };
     size_t feature_struct_sizes[4] =
     {
         sizeof(VkPhysicalDeviceVulkan11Features),
         sizeof(VkPhysicalDeviceVulkan12Features),
         sizeof(VkPhysicalDeviceVulkan13Features),
-//        sizeof(VkPhysicalDevicePresentWaitFeaturesKHR),
+        sizeof(VkPhysicalDevicePresentWaitFeaturesKHR),
 
     };
 
@@ -376,67 +384,59 @@ static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
     free(setup->device_feature_struct_sizes);
 }
 
-static VkPhysicalDeviceFeatures2* cvm_vk_create_device_feature_structure_list(const cvm_vk_device_setup* device_setup)
+static void cvm_vk_device_feature_list_initialise(VkPhysicalDeviceFeatures2* feature_list, const cvm_vk_device_setup* device_setup)
 {
     uint32_t i;
-    VkBaseInStructure* last_feature_struct;
-    VkBaseInStructure* feature_struct;
-    VkPhysicalDeviceFeatures2* features;
+    VkBaseOutStructure* feature;
+    memset(feature_list, 0, sizeof(VkPhysicalDeviceFeatures2));
 
-    /// set up chain of features, used to ensure
-    /// init to zero, which is false for when this will be setting up only required features
-    features = calloc(1,sizeof(VkPhysicalDeviceFeatures2));
-    features->sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    features->pNext=NULL;
+    feature_list->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    feature_list->pNext = NULL;
 
-    last_feature_struct=(VkBaseInStructure*)features;
-
+    feature = (VkBaseOutStructure*)feature_list;
     for(i=0;i<device_setup->device_feature_struct_count;i++)
     {
         /// init to zero, which is false for when this will be setting up only required features
-        feature_struct = calloc(1,device_setup->device_feature_struct_sizes[i]);
-        feature_struct->sType = device_setup->device_feature_struct_types[i];
-        feature_struct->pNext = NULL;
+        feature->pNext = calloc(1,device_setup->device_feature_struct_sizes[i]);
+        feature = feature->pNext;
 
-        last_feature_struct->pNext = feature_struct;
-        last_feature_struct = feature_struct;
+        feature->sType = device_setup->device_feature_struct_types[i];
+        feature->pNext = NULL;
     }
-
-    return features;
 }
 
-static void cvm_vk_destroy_device_feature_structure_list(VkPhysicalDeviceFeatures2 * features)
+static void cvm_vk_device_feature_list_terminate(VkPhysicalDeviceFeatures2* feature_list)
 {
-    VkBaseInStructure * s_next;
-    VkBaseInStructure * s;
+    VkBaseOutStructure* feature;
+    VkBaseOutStructure* next;
 
-    for(s=(VkBaseInStructure*)features; s; s=s_next)
+    for(feature = feature_list->pNext; feature; feature = next)
     {
-        s_next=(VkBaseInStructure*)s->pNext;
-        free(s);
+        next = feature->pNext;
+        free(feature);
     }
 }
 
 static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_device_to_test, const cvm_vk_device_setup * device_setup)
 {
     uint32_t i,queue_family_count,extension_count;
-    VkQueueFamilyProperties * queue_family_properties;
+    VkQueueFamilyProperties* queue_family_properties;
     VkBool32 surface_supported;
     VkPhysicalDeviceProperties properties;
     VkPhysicalDeviceMemoryProperties memory_properties;
-    VkPhysicalDeviceFeatures2 * features;
-    VkExtensionProperties * extensions;
+    VkPhysicalDeviceFeatures2 available_features;
+    VkExtensionProperties* extensions;
     float score = 1.0;
 
 
     vkGetPhysicalDeviceProperties(physical_device_to_test, &properties);
     vkGetPhysicalDeviceMemoryProperties(physical_device_to_test,&memory_properties);
 
-    features = cvm_vk_create_device_feature_structure_list(device_setup);
-    vkGetPhysicalDeviceFeatures2(physical_device_to_test, features);
+    cvm_vk_device_feature_list_initialise(&available_features, device_setup);
+    vkGetPhysicalDeviceFeatures2(physical_device_to_test, &available_features);
 
     vkEnumerateDeviceExtensionProperties(physical_device_to_test, NULL, &extension_count, NULL);
-    extensions=malloc(sizeof(VkExtensionProperties)*extension_count);
+    extensions=malloc(sizeof(VkExtensionProperties) * extension_count);
     vkEnumerateDeviceExtensionProperties(physical_device_to_test, NULL, &extension_count, extensions);
 
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test, &queue_family_count, NULL);
@@ -447,10 +447,10 @@ static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_
     for(i=0;i<device_setup->feature_validation_count;i++)
     {
         #warning pass in queue_family_satisfactory_bits and queue families!
-        score *= device_setup->feature_validation[i]((VkBaseInStructure*)features, &properties, &memory_properties, extensions, extension_count, queue_family_properties, queue_family_count);
+        score *= device_setup->feature_validation[i](&available_features, &properties, &memory_properties, extensions, extension_count, queue_family_properties, queue_family_count);
     }
 
-    cvm_vk_destroy_device_feature_structure_list(features);
+    cvm_vk_device_feature_list_terminate(&available_features);
     free(extensions);
     free(queue_family_properties);
 
@@ -504,7 +504,7 @@ static void cvm_vk_terminate_device_queue(cvm_vk_device * device,cvm_vk_device_q
     sol_vk_timeline_semaphore_terminate(&queue->timeline, device);
 }
 
-static void cvm_vk_initialise_device_queue_family(cvm_vk_device * device,cvm_vk_device_queue_family * queue_family,uint32_t queue_family_index,uint32_t queue_count)
+static void cvm_vk_initialise_device_queue_family(cvm_vk_device * device, cvm_vk_device_queue_family * queue_family,uint32_t queue_family_index,uint32_t queue_count)
 {
     uint32_t i;
 
@@ -539,126 +539,145 @@ static void cvm_vk_terminate_device_queue_family(cvm_vk_device * device,cvm_vk_d
     free(queue_family->queues);
 }
 
-static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_device_setup * device_setup)
+static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_device_setup * device_setup)
 {
-    uint32_t i,j,queue_count,enabled_extension_count,available_extension_count;
-    bool * enabled_extensions_table;
-    VkExtensionProperties * enabled_extensions;
-    VkPhysicalDeviceFeatures2 * enabled_features;
-    VkExtensionProperties * available_extensions;
-    const char ** enabled_extension_names;
-    VkPhysicalDeviceFeatures2 * available_features;
-    VkDeviceQueueCreateInfo * device_queue_creation_infos;
+    uint32_t i, j, available_extension_count, queue_family_count;
+    bool* enabled_extensions_table;
+    const char** enabled_extension_names;
+    VkExtensionProperties* available_extensions;
+    VkPhysicalDeviceFeatures2 available_features;
+    VkDeviceQueueCreateInfo* device_queue_creation_infos;
+    VkQueueFamilyProperties* queue_family_properties;
     VkQueueFlags queue_flags;
-    bool graphics, transfer, compute;
-    float * priorities;
-    uint32_t queue_counts[CVM_VK_MAX_QUEUE_FAMILY_COUNT];
+    uint32_t min_graphics_flag_count, min_transfer_flag_count, min_compute_flag_count, queue_flag_count;
+    float* priorities;
 
     /// being a little sneaky to circumvent const here
     vkGetPhysicalDeviceProperties(device->physical_device, (VkPhysicalDeviceProperties*)&device->properties);
     vkGetPhysicalDeviceMemoryProperties(device->physical_device, (VkPhysicalDeviceMemoryProperties*)&device->memory_properties);
 
-    vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &device->queue_family_count, NULL);
-    if(device->queue_family_count>CVM_VK_MAX_QUEUE_FAMILY_COUNT)return -1;
-    device->queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*device->queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &device->queue_family_count, (VkQueueFamilyProperties*)device->queue_family_properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &queue_family_count, NULL);
+    queue_family_properties = malloc(sizeof(VkQueueFamilyProperties) * queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &queue_family_count, queue_family_properties);
 
-    available_features = cvm_vk_create_device_feature_structure_list(device_setup);
-    vkGetPhysicalDeviceFeatures2(device->physical_device,available_features);
+    cvm_vk_device_feature_list_initialise(&available_features, device_setup);
+    vkGetPhysicalDeviceFeatures2(device->physical_device, &available_features);
 
-    vkEnumerateDeviceExtensionProperties(device->physical_device,NULL,&available_extension_count,NULL);
+    vkEnumerateDeviceExtensionProperties(device->physical_device, NULL, &available_extension_count, NULL);
     available_extensions=malloc(sizeof(VkExtensionProperties)*available_extension_count);
-    vkEnumerateDeviceExtensionProperties(device->physical_device,NULL,&available_extension_count,available_extensions);
+    vkEnumerateDeviceExtensionProperties(device->physical_device, NULL, &available_extension_count, available_extensions);
 
-    for(i=0;i<available_extension_count;i++)
-    {
-        printf(">>%s\n", available_extensions[i].extensionName);
-    }
+    // for(i=0;i<available_extension_count;i++)
+    // {
+    //     printf(">>%s\n", available_extensions[i].extensionName);
+    // }
 
 
-    enabled_features = cvm_vk_create_device_feature_structure_list(device_setup);
-    enabled_extensions_table=calloc(available_extension_count,sizeof(bool));
+    cvm_vk_device_feature_list_initialise((VkPhysicalDeviceFeatures2*)&device->features, device_setup);
+    enabled_extensions_table=calloc(available_extension_count, sizeof(bool));
 
     for(i=0;i<device_setup->feature_request_count;i++)
     {
-        device_setup->feature_request[i]((VkBaseOutStructure*)enabled_features,
+        device_setup->feature_request[i]((VkPhysicalDeviceFeatures2*)&device->features,
                                          enabled_extensions_table,
-                                         (VkBaseInStructure*)available_features,
+                                         &available_features,
                                          &device->properties,
                                          &device->memory_properties,
                                          available_extensions,
                                          available_extension_count,
-                                         device->queue_family_properties,
-                                         device->queue_family_count);
+                                         queue_family_properties,
+                                         queue_family_count);
     }
 
-    enabled_extension_count=0;
-    for(i=0;i<available_extension_count;i++)
+    device->extension_count = 0;
+    device->extensions = malloc(sizeof(VkExtensionProperties) * available_extension_count);
+
+    enabled_extension_names = malloc(sizeof(const char*) * available_extension_count);
+
+    for(i=0; i<available_extension_count; i++)
     {
         if(enabled_extensions_table[i])
         {
-            enabled_extension_count++;
+            enabled_extension_names[device->extension_count] = available_extensions[i].extensionName;
+
+            ((VkExtensionProperties*)device->extensions)[device->extension_count] = available_extensions[i];
+            // ^ circumvent const
+
+            device->extension_count++;
         }
     }
 
-    enabled_extension_names=malloc(sizeof(const char*)*enabled_extension_count);
-    enabled_extensions=malloc(sizeof(VkExtensionProperties)*enabled_extension_count);
 
-    enabled_extension_count=0;
-    for(i=0;i<available_extension_count;i++)
+    device->queue_families = malloc(sizeof(cvm_vk_device_queue_family) * queue_family_count);
+    device->queue_family_count = queue_family_count;
+
+
+
+    device->graphics_queue_family_index         = CVM_INVALID_U32_INDEX;
+    device->transfer_queue_family_index         = CVM_INVALID_U32_INDEX;
+    device->async_compute_queue_family_index    = CVM_INVALID_U32_INDEX;
+
+    min_compute_flag_count  = 32;
+    min_graphics_flag_count = 32;
+    min_transfer_flag_count = 32;
+
+    for(i=0;i<queue_family_count;i++)
     {
-        if(enabled_extensions_table[i])
+        device->queue_families[i].queue_count = 1;// default to 1
+        *((VkQueueFamilyProperties*)&device->queue_families[i].properties) = queue_family_properties[i];
+        // ^ circumvent const
+        queue_flags = queue_family_properties[i].queueFlags;
+        queue_flag_count = sol_u32_bit_count(queue_flags);
+        printf("queue family %u: %u queues max for %u\n",i ,queue_family_properties[i].queueCount, queue_family_properties[i].queueFlags);
+
+        // queue families with minimal bits set are best
+        if((queue_flags & VK_QUEUE_GRAPHICS_BIT) && (queue_flag_count < min_graphics_flag_count))
         {
-            enabled_extensions[enabled_extension_count]=available_extensions[i];
-            enabled_extension_names[enabled_extension_count]=available_extensions[i].extensionName;
-            enabled_extension_count++;
+            device->graphics_queue_family_index = i;
+            min_graphics_flag_count = queue_flag_count;
+        }
+        if((queue_flags & VK_QUEUE_COMPUTE_BIT) && (queue_flag_count < min_compute_flag_count))
+        {
+            device->async_compute_queue_family_index = i;
+            min_compute_flag_count = queue_flag_count;
+        }
+        // transfer should be a dedicated queue to be useful
+        if((queue_flags & VK_QUEUE_TRANSFER_BIT) && !(queue_flags & (VK_QUEUE_COMPUTE_BIT|VK_QUEUE_GRAPHICS_BIT)) && (queue_flag_count < min_transfer_flag_count))
+        {
+            device->transfer_queue_family_index = i;
+            min_transfer_flag_count = queue_flag_count;
         }
     }
 
-    device->features = enabled_features;
-    device->extensions = enabled_extensions;
-    device->extension_count = enabled_extension_count;
+    assert(device->graphics_queue_family_index != CVM_INVALID_U32_INDEX);
+
+    device->queue_families[device->graphics_queue_family_index].queue_count =
+        SOL_CLAMP(device_setup->desired_graphics_queues, 1, queue_family_properties[device->graphics_queue_family_index].queueCount);
 
 
-    device->graphics_queue_family_index=CVM_INVALID_U32_INDEX;
-    device->transfer_queue_family_index=CVM_INVALID_U32_INDEX;
-    device->fallback_present_queue_family_index=CVM_INVALID_U32_INDEX;
-    device->async_compute_queue_family_index=CVM_INVALID_U32_INDEX;
-
-
-
-    for(i=0;i<device->queue_family_count;i++)
+    if(device->async_compute_queue_family_index == device->graphics_queue_family_index)
     {
-        queue_counts[i]=1;
-        /// default of 1 per queue family
+        device->async_compute_queue_family_index = CVM_INVALID_U32_INDEX;
     }
-
-    i=device->queue_family_count;
-    while(i--)///assume lowest is best fit for anything in particular
+    else if(device->async_compute_queue_family_index != CVM_INVALID_U32_INDEX)
     {
-        queue_flags=device->queue_family_properties[i].queueFlags;
-        graphics=queue_flags & VK_QUEUE_GRAPHICS_BIT;
-        transfer=queue_flags & VK_QUEUE_TRANSFER_BIT;
-        compute =queue_flags & VK_QUEUE_COMPUTE_BIT;
-
-        if(graphics)
-        {
-            device->graphics_queue_family_index=i;
-            queue_counts[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_graphics_queues);
-        }
-
-        if(transfer && !graphics && !compute)
-        {
-            device->transfer_queue_family_index=i;
-            queue_counts[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_transfer_queues);
-        }
-
-        if(compute && !graphics)
-        {
-            device->async_compute_queue_family_index=i;
-            queue_counts[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_async_compute_queues);
-        }
+        device->queue_families[device->async_compute_queue_family_index].queue_count =
+            SOL_CLAMP(device_setup->desired_async_compute_queues, 1, queue_family_properties[device->async_compute_queue_family_index].queueCount);
     }
+
+    // if a queue family can do either graphics or compute it probably inst the kind of
+    if(device->transfer_queue_family_index != CVM_INVALID_U32_INDEX)
+    {
+        device->queue_families[device->transfer_queue_family_index].queue_count =
+            SOL_CLAMP(device_setup->desired_async_compute_queues, 1, queue_family_properties[device->transfer_queue_family_index].queueCount);
+    }
+
+    printf("graphics family: %u\n",device->graphics_queue_family_index);
+    printf("compute family: %u\n",device->async_compute_queue_family_index);
+    printf("transfer family: %u\n",device->transfer_queue_family_index);
+
+
+
 
 
     #warning REMOVE THESE
@@ -670,13 +689,15 @@ static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_dev
 
 
 
-    device_queue_creation_infos = malloc(sizeof(VkDeviceQueueCreateInfo)*device->queue_family_count);
-    for(i=0;i<device->queue_family_count;i++)
-    {
-        queue_count=queue_counts[i];
-        priorities=malloc(sizeof(float)*queue_count);
 
-        for(j=0;j<queue_count;j++)
+
+    device_queue_creation_infos = malloc(sizeof(VkDeviceQueueCreateInfo)*device->queue_family_count);
+
+    for(i=0; i<device->queue_family_count; i++)
+    {
+        priorities=malloc(sizeof(float) * device->queue_families[i].queue_count);
+
+        for(j=0; j<device->queue_families[i].queue_count; j++)
         {
             priorities[j] = 1.0;
         }
@@ -687,7 +708,7 @@ static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_dev
             .pNext=NULL,
             .flags=0,
             .queueFamilyIndex=i,
-            .queueCount=queue_count,
+            .queueCount=device->queue_families[i].queue_count,
             .pQueuePriorities=priorities,
         };
     }
@@ -695,22 +716,20 @@ static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_dev
     VkDeviceCreateInfo device_creation_info=(VkDeviceCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext=enabled_features,
+        .pNext=&device->features,
         .flags=0,
-        .queueCreateInfoCount=device->queue_family_count,
-        .pQueueCreateInfos= device_queue_creation_infos,
-        .enabledExtensionCount=enabled_extension_count,
-        .ppEnabledExtensionNames=enabled_extension_names,
+        .queueCreateInfoCount = device->queue_family_count,
+        .pQueueCreateInfos = device_queue_creation_infos,
+        .enabledExtensionCount = device->extension_count,
+        .ppEnabledExtensionNames = enabled_extension_names,
         .pEnabledFeatures=NULL,///using features2 in pNext chain instead
     };
 
     CVM_VK_CHECK(vkCreateDevice(device->physical_device, &device_creation_info, device_setup->instance->host_allocator, &device->device));
 
-    device->queue_families = malloc(sizeof(cvm_vk_device_queue_family)*device->queue_family_count);
-
-    for(i=0;i<device->queue_family_count;i++)
+    for(i=0; i<device->queue_family_count; i++)
     {
-        cvm_vk_initialise_device_queue_family(device,device->queue_families+i,i,queue_counts[i]);
+        cvm_vk_initialise_device_queue_family(device, device->queue_families+i, i, device->queue_families[i].queue_count);
     }
 
 
@@ -720,12 +739,13 @@ static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_dev
         free((void*)device_queue_creation_infos[i].pQueuePriorities);
     }
 
-    cvm_vk_destroy_device_feature_structure_list(available_features);
+    cvm_vk_device_feature_list_terminate(&available_features);
     free(available_extensions);
 
     free(enabled_extensions_table);
     free(enabled_extension_names);
     free(device_queue_creation_infos);
+    free(queue_family_properties);
 }
 
 static void cvm_vk_destroy_logical_device(cvm_vk_device * device)
@@ -736,10 +756,9 @@ static void cvm_vk_destroy_logical_device(cvm_vk_device * device)
         cvm_vk_terminate_device_queue_family(device,device->queue_families+i);
     }
     free(device->queue_families);
-    free((void*)device->queue_family_properties);
 
     vkDestroyDevice(device->device, device->host_allocator);
-    cvm_vk_destroy_device_feature_structure_list((void*)device->features);
+    cvm_vk_device_feature_list_terminate((VkPhysicalDeviceFeatures2*)&device->features);
     free((void*)device->extensions);
 }
 
