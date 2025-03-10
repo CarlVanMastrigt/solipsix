@@ -56,6 +56,9 @@ typedef struct cvm_vk_swapchain_presentable_image
     VkImageView image_view;
     cvm_vk_resource_identifier image_view_unique_identifier;
 
+    VkFence presentation_fence;// used if swapchain maintainence is present
+    bool presentation_fence_active;
+
     uint32_t index;
 
     VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it

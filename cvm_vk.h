@@ -107,13 +107,13 @@ typedef struct cvm_vk_instance_setup
 {
     const VkAllocationCallbacks* host_allocator;
 
-    const char ** layer_names;
+    const char** layer_names;
     uint32_t layer_count;
 
-    const char ** extension_names;
+    const char** extension_names;
     uint32_t extension_count;
 
-    const char * application_name;
+    const char* application_name;
     uint32_t application_version;
 }
 cvm_vk_instance_setup;
@@ -126,20 +126,14 @@ struct cvm_vk_instance
     const VkAllocationCallbacks* host_allocator;
 };
 
-// available features
-typedef float cvm_vk_device_feature_validation_function(const VkPhysicalDeviceFeatures2*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
-typedef void cvm_vk_device_feature_request_function(VkPhysicalDeviceFeatures2*, bool*, const VkPhysicalDeviceFeatures2*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
-
-
 typedef struct cvm_vk_device_setup
 {
     const struct cvm_vk_instance* instance;
 
-    cvm_vk_device_feature_validation_function** feature_validation;
-    uint32_t feature_validation_count;
+    float (*validation_function)(const VkPhysicalDeviceFeatures2*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
-    cvm_vk_device_feature_request_function** feature_request;
-    uint32_t feature_request_count;
+    // sets desired features and extensions
+    void (*request_function)(VkPhysicalDeviceFeatures2*, bool*, const VkPhysicalDeviceFeatures2*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
     const char* preferred_device_name_substring;
 
@@ -201,6 +195,7 @@ struct cvm_vk_device
     const VkPhysicalDeviceMemoryProperties memory_properties;
 
     const VkPhysicalDeviceFeatures2 features;// enabled features
+    bool feature_swapchain_maintainence;
 
     const VkExtensionProperties* extensions;//enabled extensions
     uint32_t extension_count;
@@ -246,7 +241,7 @@ void cvm_vk_destroy_surface(const struct cvm_vk_instance* instance, VkSurfaceKHR
 
 
 
-int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup);
+int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup* device_setup);
 ///above extra is the max extra used by any module
 void cvm_vk_device_terminate(cvm_vk_device * device);
 
