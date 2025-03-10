@@ -111,7 +111,7 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
     free(presentable_image->present_acquire_command_buffers);
 }
 
-static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device, const cvm_vk_surface_swapchain * swapchain, uint32_t generation, VkSwapchainKHR old_swapchain)
+static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device, const cvm_vk_surface_swapchain * swapchain, VkSwapchainKHR old_swapchain)
 {
     uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,image_acquisition_semaphore_count,width,height;
     VkBool32 surface_supported;
@@ -119,7 +119,6 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     VkPresentModeKHR * present_modes;
     VkImage * images;
 
-    instance->generation = generation;
     instance->acquired_image_count = 0;
     instance->out_of_date = false;
 
@@ -348,7 +347,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
     uint32_t i;
 
     /// get the front of the deletion queue
-    while((instance = cvm_vk_swapchain_instance_queue_get_front_ptr(&swapchain->swapchain_queue)) && instance->out_of_date)
+    while((instance = cvm_vk_swapchain_instance_queue_access_front(&swapchain->swapchain_queue)) && instance->out_of_date)
     {
         for(i=0;i<instance->image_count;i++)
         {
@@ -393,7 +392,7 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
 {
     cvm_vk_swapchain_presentable_image * presentable_image;
     cvm_vk_swapchain_instance * instance, * new_instance;
-    uint32_t new_instance_index, image_index;
+    uint32_t image_index;
     VkSemaphore acquire_semaphore;
     VkResult acquire_result;
 
@@ -401,15 +400,14 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
 
     do
     {
-        instance = cvm_vk_swapchain_instance_queue_get_back_ptr(&swapchain->swapchain_queue);
+        instance = cvm_vk_swapchain_instance_queue_access_back(&swapchain->swapchain_queue);
 
         /// create new instance if necessary
         if(instance==NULL || instance->out_of_date)
         {
-            new_instance_index = cvm_vk_swapchain_instance_queue_new_index(&swapchain->swapchain_queue);
-            new_instance = cvm_vk_swapchain_instance_queue_access(&swapchain->swapchain_queue, new_instance_index);
+            new_instance = cvm_vk_swapchain_instance_queue_enqueue_ptr(&swapchain->swapchain_queue);
 
-            cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, new_instance_index, instance ? instance->swapchain : VK_NULL_HANDLE);
+            cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, instance ? instance->swapchain : VK_NULL_HANDLE);
             instance = new_instance;
         }
 

@@ -309,7 +309,7 @@ static inline void cvm_overlay_target_resources_prune(cvm_overlay_renderer * ren
     while(renderer->target_resources.count > 1)
     {
         ///deletion queue, get the first entry ready to be deleted
-        target_resources = cvm_overlay_target_resources_queue_get_front_ptr(&renderer->target_resources);
+        target_resources = cvm_overlay_target_resources_queue_access_front(&renderer->target_resources);
         assert(target_resources->last_use_moment.semaphore != VK_NULL_HANDLE);
         if(sol_vk_timeline_semaphore_moment_query(&target_resources->last_use_moment, device))
         {
@@ -325,10 +325,10 @@ static inline struct cvm_overlay_target_resources* cvm_overlay_target_resources_
 {
     struct cvm_overlay_target_resources* target_resources;
 
-    target_resources = cvm_overlay_target_resources_queue_get_back_ptr(&renderer->target_resources);
+    target_resources = cvm_overlay_target_resources_queue_access_back(&renderer->target_resources);
     if(!cvm_overlay_target_resources_compatible_with_target(target_resources, target))
     {
-        target_resources = cvm_overlay_target_resources_queue_new(&renderer->target_resources);
+        target_resources = cvm_overlay_target_resources_queue_enqueue_ptr(&renderer->target_resources);
 
         cvm_overlay_target_resources_initialise(target_resources, device, &renderer->rendering_resources, target);
     }

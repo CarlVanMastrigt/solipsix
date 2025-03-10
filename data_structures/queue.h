@@ -39,7 +39,7 @@ iterating a queue
 for(i=0;i<q->count;i++) queue_get_ptr(q, q->front + i)
 */
 
-#define SOL_QUEUE(type,name,start_size)                                         \
+#define SOL_QUEUE(type, name, start_size)                                       \
                                                                                 \
 struct name##_queue                                                             \
 {                                                                               \
@@ -64,7 +64,7 @@ static inline void name##_queue_terminate(struct name##_queue* q)               
     free(q->data);                                                              \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_queue_new_index(struct name##_queue* q)           \
+static inline uint32_t name##_queue_enqueue_index(struct name##_queue* q)       \
 {                                                                               \
     uint_fast32_t front_offset, move_count;                                     \
     type * src;                                                                 \
@@ -88,22 +88,36 @@ static inline uint32_t name##_queue_new_index(struct name##_queue* q)           
     return q->front + q->count++;                                               \
 }                                                                               \
                                                                                 \
-static inline type* name##_queue_access(struct name##_queue* q, uint32_t index) \
+static inline type* name##_queue_access_index                                   \
+    (struct name##_queue* q, uint32_t index)                                    \
 {                                                                               \
     return q->data + (index & (q->space - 1));                                  \
 }                                                                               \
                                                                                 \
-static inline type* name##_queue_new(struct name##_queue* q)                    \
+static inline type* name##_queue_enqueue_ptr(struct name##_queue* q)            \
 {                                                                               \
-    return q->data + ( name##_queue_new_index(q) & (q->space - 1));             \
+    return q->data + ( name##_queue_enqueue_index(q) & (q->space - 1));         \
 }                                                                               \
                                                                                 \
 static inline uint32_t name##_queue_enqueue(struct name##_queue* q, type value) \
 {                                                                               \
     uint_fast32_t i;                                                            \
-    i = name##_queue_new_index(q);                                              \
+    i = name##_queue_enqueue_index(q);                                          \
     q->data[i & (q->space - 1)] = value;                                        \
     return i;                                                                   \
+}                                                                               \
+                                                                                \
+static inline type* name##_queue_dequeue_ptr(struct name##_queue* q)            \
+{                                                                               \
+    type* ptr;                                                                  \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    ptr = q->data + (q->front & (q->space - 1));                                \
+    q->front++;                                                                 \
+    q->count--;                                                                 \
+    return ptr;                                                                 \
 }                                                                               \
                                                                                 \
 static inline bool name##_queue_dequeue(struct name##_queue* q, type* value)    \
@@ -121,20 +135,7 @@ static inline bool name##_queue_dequeue(struct name##_queue* q, type* value)    
     return true;                                                                \
 }                                                                               \
                                                                                 \
-static inline type* name##_queue_dequeue_ptr(struct name##_queue* q)            \
-{                                                                               \
-    type* ptr;                                                                  \
-    if(q->count == 0)                                                           \
-    {                                                                           \
-        return NULL;                                                            \
-    }                                                                           \
-    ptr = q->data + (q->front & (q->space - 1));                                \
-    q->front++;                                                                 \
-    q->count--;                                                                 \
-    return ptr;                                                                 \
-}                                                                               \
-                                                                                \
-static inline type* name##_queue_get_front_ptr(struct name##_queue* q)          \
+static inline type* name##_queue_access_front(struct name##_queue* q)           \
 {                                                                               \
     if(q->count == 0)                                                           \
     {                                                                           \
@@ -143,7 +144,7 @@ static inline type* name##_queue_get_front_ptr(struct name##_queue* q)          
     return q->data + (q->front & (q->space - 1));                               \
 }                                                                               \
                                                                                 \
-static inline type* name##_queue_get_back_ptr(struct name##_queue* q)           \
+static inline type* name##_queue_access_back(struct name##_queue* q)            \
 {                                                                               \
     if(q->count == 0)                                                           \
     {                                                                           \

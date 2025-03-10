@@ -119,7 +119,7 @@ static inline void sol_vk_staging_buffer_query_allocations(struct sol_vk_staging
 {
     struct sol_vk_staging_buffer_segment * oldest_active_segment;
 
-    while((oldest_active_segment = sol_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue)))
+    while((oldest_active_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue)))
     {
         if(oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE) return; /// oldest segment has not been "completed"
 
@@ -182,7 +182,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
         /// otherwise; more space required
         assert(staging_buffer->segment_queue.count > 0);///should not need more space if there are no active segments
 
-        oldest_active_segment = sol_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue);
+        oldest_active_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue);
 
         if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
         {
@@ -270,7 +270,7 @@ void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_alloc
     assert(allocation->flushed);
     mtx_lock(&staging_buffer->access_mutex);
 
-    segment = sol_vk_staging_buffer_segment_queue_access(&staging_buffer->segment_queue, allocation->segment_index);
+    segment = sol_vk_staging_buffer_segment_queue_access_index(&staging_buffer->segment_queue, allocation->segment_index);
     segment->moment_of_last_use = moment_of_last_use;
 
     if(staging_buffer->threads_waiting_on_semaphore_setup)

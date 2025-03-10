@@ -88,8 +88,6 @@ struct cvm_vk_swapchain_instance
 
     VkSwapchainKHR swapchain;
 
-    uint32_t generation;/// essentially just index in the queue, used to identify this instance as novel
-
     uint32_t fallback_present_queue_family;///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
     uint64_t queue_family_presentable_mask;
 
