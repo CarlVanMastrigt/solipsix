@@ -122,7 +122,7 @@ typedef struct cvm_vk_surface_swapchain
     VkFence metering_fence;///wait till previous fence is acquired before acquiring another
     bool metering_fence_active;
 
-    cvm_vk_swapchain_instance_queue swapchain_queue;/// need to preserve out of date/invalid swapchains while they're still in use
+    struct cvm_vk_swapchain_instance_queue swapchain_queue;/// need to preserve out of date/invalid swapchains while they're still in use
 }
 cvm_vk_surface_swapchain;
 

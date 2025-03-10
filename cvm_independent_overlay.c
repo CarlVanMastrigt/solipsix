@@ -87,13 +87,13 @@ struct cvm_overlay_renderer
     uint32_t transient_count;
     uint32_t transient_count_initialised;
     struct cvm_overlay_transient_resources* transient_resources_backing;
-    cvm_overlay_transient_resources_queue transient_resources_queue;
+    struct cvm_overlay_transient_resources_queue transient_resources_queue;
 
     struct cvm_overlay_render_batch render_batch;
 
     struct cvm_overlay_rendering_resources rendering_resources;
 
-    cvm_overlay_target_resources_queue target_resources;
+    struct cvm_overlay_target_resources_queue target_resources;
 };
 
 
