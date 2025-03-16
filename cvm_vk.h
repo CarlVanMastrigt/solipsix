@@ -48,8 +48,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-CVM_STACK(VkBufferMemoryBarrier2, cvm_vk_buffer_barrier, 64)
-CVM_STACK(VkBufferCopy, cvm_vk_buffer_copy, 64)
+SOL_STACK(VkBufferMemoryBarrier2, cvm_vk_buffer_barrier_stack, cvm_vk_buffer_barrier_stack)
+SOL_STACK(VkBufferCopy, cvm_vk_buffer_copy_stack, cvm_vk_buffer_copy_stack)
 
 
 typedef struct cvm_vk_managed_buffer cvm_vk_managed_buffer;
@@ -96,7 +96,7 @@ static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignmen
 }
 
 
-CVM_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy, 16)
+SOL_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy_stack, cvm_vk_buffer_image_copy_stack)
 
 
 #include "vk/command_pool.h"
@@ -379,7 +379,7 @@ typedef struct queue_transfer_synchronization_data
 {
     atomic_uint_fast32_t spinlock;
     ///COULD have some extra data alongside this that marks data as available, sets an uint8_t from 0 to 1 (available) and marks actual dynamic buffer (if extant) as available
-    cvm_vk_buffer_barrier_stack acquire_barriers;
+    struct cvm_vk_buffer_barrier_stack acquire_barriers;
     VkPipelineStageFlags2 wait_stages;///stages that need to waited upon wrt transfer semaphore (stages that have dependence upon QFOT synchronised by semaphore)
     ///is above necessary?? are the stage barriers in the acquire barriers enough?
 

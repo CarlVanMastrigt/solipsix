@@ -67,7 +67,7 @@ VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_
         mtx_init(&staging_buffer->access_mutex, mtx_plain);
         cnd_init(&staging_buffer->setup_stall_condition);
 
-        sol_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue);
+        sol_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue, 16);
     }
 
     return result;
@@ -81,7 +81,7 @@ void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffe
     mtx_lock(&staging_buffer->access_mutex);
     staging_buffer->terminating = true;
     /// wait for all memory uses to complete, must be externally synchronised to ensure buffer is not in use elsewhere
-    while((oldest_active_segment = sol_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue)))
+    while(sol_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue, &oldest_active_segment))
     {
         /// this allows cleanup to be initiated while dangling allocations have been made
         if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
@@ -148,6 +148,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     VkDeviceSize required_space;
     bool wrap;
     struct sol_vk_staging_buffer_segment* oldest_active_segment;
+    struct sol_vk_staging_buffer_segment* new_segment;
     struct sol_vk_timeline_semaphore_moment oldest_moment;
     uint32_t segment_index,segment_count,masked_first_segment_index;
     VkDeviceSize acquired_offset;
@@ -209,12 +210,13 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     }
 
     /// note active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid
-    segment_index = sol_vk_staging_buffer_segment_queue_enqueue(&staging_buffer->segment_queue, (struct sol_vk_staging_buffer_segment)
+    sol_vk_staging_buffer_segment_queue_enqueue_ptr(&staging_buffer->segment_queue, &new_segment, &segment_index);
+    *new_segment = (struct sol_vk_staging_buffer_segment)
     {
         .moment_of_last_use = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL,
         .offset = staging_buffer->current_offset,
         .size = required_space,
-    });
+    };
 
     acquired_offset = wrap ? 0 : staging_buffer->current_offset;
     mapping = staging_buffer->mapping + acquired_offset;
@@ -270,7 +272,7 @@ void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_alloc
     assert(allocation->flushed);
     mtx_lock(&staging_buffer->access_mutex);
 
-    segment = sol_vk_staging_buffer_segment_queue_access_index(&staging_buffer->segment_queue, allocation->segment_index);
+    segment = sol_vk_staging_buffer_segment_queue_access_entry(&staging_buffer->segment_queue, allocation->segment_index);
     segment->moment_of_last_use = moment_of_last_use;
 
     if(staging_buffer->threads_waiting_on_semaphore_setup)

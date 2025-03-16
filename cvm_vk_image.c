@@ -848,7 +848,7 @@ void * cvm_vk_stage_image_atlas_upload(struct sol_vk_shunt_buffer* shunt_buffer,
 
     staging_ptr = sol_vk_shunt_buffer_reserve_bytes(shunt_buffer, bytes_per_pixel * width * height, &staging_offset);
 
-    *cvm_vk_buffer_image_copy_stack_new(copy_buffer) = (VkBufferImageCopy)
+    *cvm_vk_buffer_image_copy_stack_append_ptr(copy_buffer) = (VkBufferImageCopy)
     {
         .bufferOffset=staging_offset,
         .bufferRowLength=width,

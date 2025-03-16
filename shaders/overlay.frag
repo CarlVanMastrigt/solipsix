@@ -46,6 +46,7 @@ void main()
         default:c=c=1.0.xxxx;
     }
 
+    // mask/clip texture
     switch(d1.x&0xC0000000)///need to check assembly for if both paths are taken (and hence both loads!) and if so conditionally(?) load val early to use in each effective branch
     {
         case 0x40000000: c.a=min(c.a,textureLod(images[0],gl_FragCoord.xy-d0.xy+d2.zw,0).x);break;

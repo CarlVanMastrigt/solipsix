@@ -287,7 +287,7 @@ void cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swa
         swapchain->setup_info.preferred_surface_format=(VkSurfaceFormatKHR){.format=VK_FORMAT_B8G8R8A8_SRGB,.colorSpace=VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
     }
 
-    cvm_vk_swapchain_instance_queue_initialise(&swapchain->swapchain_queue);
+    cvm_vk_swapchain_instance_queue_initialise(&swapchain->swapchain_queue, 16);
 }
 
 void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain)
@@ -305,7 +305,7 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
     cvm_vk_destroy_fence(device,swapchain->metering_fence);
 
 
-    while((instance = cvm_vk_swapchain_instance_queue_dequeue_ptr(&swapchain->swapchain_queue)))
+    while(cvm_vk_swapchain_instance_queue_dequeue_ptr(&swapchain->swapchain_queue, &instance))
     {
         for(i=0;i<instance->image_count;i++)
         {
@@ -405,7 +405,7 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
         /// create new instance if necessary
         if(instance==NULL || instance->out_of_date)
         {
-            new_instance = cvm_vk_swapchain_instance_queue_enqueue_ptr(&swapchain->swapchain_queue);
+            cvm_vk_swapchain_instance_queue_enqueue_ptr(&swapchain->swapchain_queue, &new_instance, NULL);
 
             cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, instance ? instance->swapchain : VK_NULL_HANDLE);
             instance = new_instance;

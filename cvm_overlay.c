@@ -470,11 +470,11 @@ void cvm_overlay_render_batch_initialise(struct cvm_overlay_render_batch* batch,
 {
     VkDeviceSize shunt_buffer_alignment = cvm_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
-    cvm_overlay_element_render_data_stack_initialise(&batch->render_elements);
+    cvm_overlay_element_render_data_stack_initialise(&batch->render_elements, 64);
     sol_vk_shunt_buffer_initialise(&batch->upload_shunt_buffer, shunt_buffer_alignment, shunt_buffer_max_size, false);///256k, plenty for per frame
 
-    cvm_vk_buffer_image_copy_stack_initialise(&batch->alpha_atlas_copy_actions);
-    cvm_vk_buffer_image_copy_stack_initialise(&batch->colour_atlas_copy_actions);
+    cvm_vk_buffer_image_copy_stack_initialise(&batch->alpha_atlas_copy_actions, 64);
+    cvm_vk_buffer_image_copy_stack_initialise(&batch->colour_atlas_copy_actions, 64);
 }
 
 void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)

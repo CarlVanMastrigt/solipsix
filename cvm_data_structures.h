@@ -25,194 +25,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_DATA_STRUCTURES_H
 
 
-///add->push get->pull
+#include "data_structures/stack.h"
 
-#ifndef CVM_STACK
-#define CVM_STACK(type,name,start_size)                                         \
-                                                                                \
-typedef struct name##_stack                                                     \
-{                                                                               \
-    type * data;                                                                \
-    uint_fast32_t space;                                                        \
-    uint_fast32_t count;                                                        \
-}                                                                               \
-name##_stack;                                                                   \
-                                                                                \
-                                                                                \
-static inline void name##_stack_initialise( name##_stack * s )                  \
-{                                                                               \
-    assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    s->data=malloc( sizeof( type ) * start_size );                              \
-    s->space=start_size;                                                        \
-    s->count=0;                                                                 \
-}                                                                               \
-                                                                                \
-static inline type * name##_stack_new( name##_stack * s )                       \
-{                                                                               \
-    if(s->count==s->space)                                                      \
-    {                                                                           \
-        s->space *= 2;                                                          \
-        s->data=realloc(s->data, sizeof( type ) * s->space);                    \
-    }                                                                           \
-    return s->data+s->count++;                                                  \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_push( name##_stack * s , type value )           \
-{                                                                               \
-    *( name##_stack_new( s ) ) = value;                                         \
-}                                                                               \
-                                                                                \
-static inline bool name##_stack_pull( name##_stack * s , type * value )         \
-{                                                                               \
-    if(s->count==0)return false;                                                \
-    *value=s->data[--s->count];                                                 \
-    return true;                                                                \
-}                                                                               \
-                                                                                \
-static inline type * name##_stack_pull_ptr( name##_stack * s )                  \
-{                                                                               \
-    if(s->count==0)return NULL;                                                 \
-    return s->data + --s->count;                                                \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_terminate( name##_stack * s )                   \
-{                                                                               \
-    free(s->data);                                                              \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_reset( name##_stack * s )                       \
-{                                                                               \
-    s->count=0;                                                                 \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_push_multiple                                   \
-( name##_stack * s , uint_fast32_t count , const type * values)                 \
-{                                                                               \
-    uint_fast32_t n;                                                            \
-    while((s->count+count) > s->space)                                          \
-    {                                                                           \
-        s->space *= 2;                                                          \
-        s->data=realloc(s->data, sizeof( type ) * s->space);                    \
-    }                                                                           \
-    memcpy(s->data+s->count,values,sizeof( type )*count);                       \
-    s->count+=count;                                                            \
-}                                                                               \
-                                                                                \
-static inline size_t name##_stack_size( name##_stack * s )                      \
-{                                                                               \
-    return sizeof( type ) * s->count;                                           \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_copy( name##_stack * s , void * dst )           \
-{                                                                               \
-    memcpy( dst , s->data , sizeof( type ) * s->count );                        \
-}                                                                               \
-                                                                                \
-static inline type * name##_stack_get_ptr( name##_stack * s , uint_fast32_t i ) \
-{                                                                               \
-    return s->data + i;                                                         \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_remove( name##_stack * s , uint_fast32_t i )    \
-{                                                                               \
-    memmove( s->data + i, s->data + i + 1, sizeof(type) * ( --s->count-i));     \
-}                                                                               \
+#include "data_structures/queue.h"
 
-#endif
-
-CVM_STACK(uint32_t,u32,16)
-///used pretty universally, including below
+//#include "data_structures/array.h"
 
 
-
-
-
-#ifndef CVM_ARRAY
-#define CVM_ARRAY(type,name,start_size)                                         \
-                                                                                \
-typedef struct name##_array                                                     \
-{                                                                               \
-    u32_stack available_indices;                                                \
-    type * array;                                                               \
-    uint_fast32_t space;                                                        \
-    uint_fast32_t count;                                                        \
-}                                                                               \
-name##_array;                                                                   \
-                                                                                \
-                                                                                \
-static inline void name##_array_initialise( name##_array * l )                  \
-{                                                                               \
-    assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    u32_stack_initialise(&l->available_indices);                                \
-    l->array=malloc( sizeof( type ) * start_size );                             \
-    l->space=start_size;                                                        \
-    l->count=0;                                                                 \
-}                                                                               \
-                                                                                \
-static inline uint32_t name##_array_add( name##_array * l , type value )        \
-{                                                                               \
-    uint_fast32_t n;                                                            \
-    uint32_t i;                                                                 \
-    if(!u32_stack_pull(&l->available_indices,&i))                               \
-    {                                                                           \
-        if(l->count==l->space)                                                  \
-        {                                                                       \
-            l->space *= 2;                                                      \
-            l->array=realloc(l->array, sizeof( type ) * l->space);              \
-        }                                                                       \
-        i=l->count++;                                                           \
-    }                                                                           \
-    l->array[i]=value;                                                          \
-    return i;                                                                   \
-}                                                                               \
-                                                                                \
-static inline uint32_t name##_array_add_ptr                                     \
-( name##_array * l , const type * value )                                       \
-{                                                                               \
-    uint_fast32_t n;                                                            \
-    uint32_t i;                                                                 \
-    if(!u32_stack_pull(&l->available_indices,&i))                               \
-    {                                                                           \
-        if(l->count==l->space)                                                  \
-        {                                                                       \
-            l->space *= 2;                                                      \
-            l->array=realloc(l->array, sizeof( type ) * l->space);              \
-        }                                                                       \
-        i=l->count++;                                                           \
-    }                                                                           \
-    l->array[i]=*value;                                                         \
-    return i;                                                                   \
-}                                                                               \
-                                                                                \
-static inline type name##_array_get( name##_array * l , uint32_t i )            \
-{                                                                               \
-    u32_stack_push(&l->available_indices,i);                                    \
-    return l->array[i];                                                         \
-}                                                                               \
-                                                                                \
-/** returned pointer cannot be used after any other operation has occurred*/    \
-static inline const type * name##_array_get_ptr( name##_array * l , uint32_t i )\
-{                                                                               \
-    u32_stack_push(&l->available_indices,i);                                    \
-    return l->array+i;                                                          \
-}                                                                               \
-                                                                                \
-static inline void name##_array_terminate( name##_array * l )                   \
-{                                                                               \
-    u32_stack_terminate(&l->available_indices);                                 \
-    free(l->array);                                                             \
-}                                                                               \
-                                                                                \
-static inline void name##_array_reset( name##_array * l )                       \
-{                                                                               \
-    u32_stack_reset(&l->available_indices);                                     \
-    l->count=0;                                                                 \
-}                                                                               \
-
-#endif
-
-
-CVM_ARRAY(uint32_t,u32,16)
 
 
 /**
@@ -500,7 +319,7 @@ static inline type * name##_cache_get_oldest_ptr( name##_cache * cache )        
 
 
 
-#include "data_structures/queue.h"
+
 
 
 

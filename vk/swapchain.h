@@ -110,7 +110,7 @@ struct cvm_vk_swapchain_instance
 //    defaults;
 };
 
-SOL_QUEUE(cvm_vk_swapchain_instance,cvm_vk_swapchain_instance,4)
+SOL_QUEUE(cvm_vk_swapchain_instance, cvm_vk_swapchain_instance_queue, cvm_vk_swapchain_instance_queue)
 
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain

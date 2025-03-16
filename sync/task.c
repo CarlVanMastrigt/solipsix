@@ -145,7 +145,7 @@ void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, u
 
     sol_lockfree_pool_call_for_every_entry(&task_system->task_pool, &sol_sync_task_initialise, task_system);
 
-    sol_task_queue_initialise(&task_system->pending_task_queue);
+    sol_task_queue_initialise(&task_system->pending_task_queue, 16);
 
     task_system->worker_threads = malloc(sizeof(thrd_t) * worker_thread_count);
     task_system->worker_thread_count = worker_thread_count;
@@ -259,7 +259,7 @@ void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t c
     {
         mtx_lock(&task_system->worker_thread_mutex);
 
-        sol_task_queue_enqueue(&task_system->pending_task_queue, task);
+        sol_task_queue_enqueue(&task_system->pending_task_queue, task, NULL);
 
         if(task_system->stalled_thread_count)
         {

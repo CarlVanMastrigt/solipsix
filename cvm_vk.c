@@ -2127,7 +2127,7 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_bat
     for(i=0;i<CVM_VK_MAX_QUEUES;i++)
     {
         cvm_atomic_lock_create(&module_data->transfer_data[i].spinlock);
-        cvm_vk_buffer_barrier_stack_initialise(&module_data->transfer_data[i].acquire_barriers);
+        cvm_vk_buffer_barrier_stack_initialise(&module_data->transfer_data[i].acquire_barriers, 64);
         module_data->transfer_data[i].transfer_semaphore_wait_value=0;
         module_data->transfer_data[i].wait_stages=VK_PIPELINE_STAGE_2_NONE;
         module_data->transfer_data[i].associated_queue_family_index = (i==CVM_VK_GRAPHICS_QUEUE_INDEX)?cvm_vk_.graphics_queue_family_index:cvm_vk_.graphics_queue_family_index;

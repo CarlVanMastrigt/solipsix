@@ -25,6 +25,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_MEMORY_H
 #define CVM_VK_MEMORY_H
 
+#include "data_structures/stack.h"
+
+SOL_STACK(uint32_t, u32_stack, u32_stack)
+#warning try to remove above
+
 
 typedef struct cvm_vk_staging_buffer_region
 {
@@ -141,8 +146,8 @@ struct cvm_vk_managed_buffer
     ///copies can/should get built up withing frame at same time as dismissal list (create vs destroy essentially), dismissal list just needs to hold onto data over time
     atomic_uint_fast32_t copy_spinlock;
     uint16_t copy_update_counter;
-    cvm_vk_buffer_copy_stack pending_copies;
-    cvm_vk_buffer_barrier_stack copy_release_barriers;
+    struct cvm_vk_buffer_copy_stack pending_copies;
+    struct cvm_vk_buffer_barrier_stack copy_release_barriers;
     uint32_t copy_queue_bitmask;///queues that above copy will affect
 };
 
@@ -200,7 +205,7 @@ struct cvm_vk_managed_buffer_dismissal_list
     atomic_uint_fast32_t spinlock;
     ///should probably put all spinlocks in this file (and all uses of them) behind a "multithreaded" define guard
 
-    u32_stack * allocation_indices;
+    struct u32_stack * allocation_indices;
     uint32_t frame_count;///same as swapchain image count used to initialise this
     uint32_t frame_index;
 

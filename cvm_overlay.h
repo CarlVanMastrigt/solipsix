@@ -83,7 +83,7 @@ typedef struct cvm_overlay_element_render_data
 }
 cvm_overlay_element_render_data;
 
-CVM_STACK(cvm_overlay_element_render_data, cvm_overlay_element_render_data, 256)
+SOL_STACK(cvm_overlay_element_render_data, cvm_overlay_element_render_data_stack, cvm_overlay_element_render_data_stack)
 /// make starting size bigger
 
 struct cvm_overlay_render_batch;
@@ -233,6 +233,8 @@ void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image
 
 
 
+
+
 /// static resources? base resources?
 struct cvm_overlay_rendering_resources
 {
@@ -256,6 +258,7 @@ struct cvm_overlay_pipeline
 /// used both in setup/prep and actual_render functions
 ///     ^ actually... aside from the push constants (which COULD be moved to uniform) this is all only used by the prep stage!
 
+
 struct cvm_overlay_render_batch
 {
     /// preparation resources
@@ -274,8 +277,8 @@ struct cvm_overlay_render_batch
     /// i.e. not having the copy stack be part of the image atlas is a net positive
 
     /// copies to perform from shunt buffer to the atlases
-    cvm_vk_buffer_image_copy_stack alpha_atlas_copy_actions;
-    cvm_vk_buffer_image_copy_stack colour_atlas_copy_actions;
+    struct cvm_vk_buffer_image_copy_stack alpha_atlas_copy_actions;
+    struct cvm_vk_buffer_image_copy_stack colour_atlas_copy_actions;
 
 
     /// following are copies or transient data used only within the stages of overlay batch rendering
@@ -346,7 +349,7 @@ void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, str
 
 
 /// overlay render helper functions follow, move them to a helper h file...
-
+#warning move these to a helper (.h) file
 
 
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
@@ -356,7 +359,7 @@ static inline void cvm_render_shaded_overlay_element(struct cvm_overlay_render_b
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_new(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED,colour<<24},
@@ -397,7 +400,7 @@ static inline void cvm_render_shaded_fading_overlay_element(struct cvm_overlay_r
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_new(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
@@ -413,7 +416,7 @@ static inline void cvm_render_shaded_overlap_min_overlay_element(struct cvm_over
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_new(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN,colour<<24},
@@ -455,7 +458,7 @@ static inline void cvm_render_shaded_fading_overlap_min_overlay_element(struct c
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_new(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
@@ -470,7 +473,7 @@ static inline void cvm_render_fill_overlay_element(struct cvm_overlay_render_bat
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_new(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_FILL,colour<<24},
@@ -503,7 +506,7 @@ static inline void cvm_render_fill_fading_overlay_element(struct cvm_overlay_ren
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_new(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_FILL | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},

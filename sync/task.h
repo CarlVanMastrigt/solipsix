@@ -31,7 +31,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_sync_task;
 
-SOL_QUEUE(struct sol_sync_task*, sol_task, 16)
+SOL_QUEUE(struct sol_sync_task*, sol_task_queue, sol_task_queue)
 
 struct sol_sync_task_system
 {
