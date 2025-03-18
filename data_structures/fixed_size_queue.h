@@ -135,6 +135,30 @@ static inline bool function_prefix##_dequeue(struct struct_name* q, type* value)
     return true;                                                                                               \
 }                                                                                                              \
                                                                                                                \
+/** if there is space left just enqueue and return pointer */                                                  \
+/** otherwise; take the front of the queue and move it to the back, returning pointer */                       \
+/** pointer is both the old front and new back of the queue, the index is the new back */                      \
+static inline bool function_prefix##_requeue_ptr(struct struct_name* q, type** location, uint32_t* index_ptr)  \
+{                                                                                                              \
+    if(function_prefix##_enqueue_ptr(q, location, index_ptr))                                                  \
+    {                                                                                                          \
+        return true;                                                                                           \
+    }                                                                                                          \
+    else                                                                                                       \
+    {                                                                                                          \
+        if(location)                                                                                           \
+        {                                                                                                      \
+            *location = q->data + (q->front & (q->space - 1));                                                 \
+        }                                                                                                      \
+        if(index_ptr)                                                                                          \
+        {                                                                                                      \
+            *index_ptr = q->front + q->count;                                                                  \
+        }                                                                                                      \
+        q->front++;                                                                                            \
+        return false;                                                                                          \
+    }                                                                                                          \
+}                                                                                                              \
+                                                                                                               \
 static inline type* function_prefix##_access_front(struct struct_name* q)                                      \
 {                                                                                                              \
     if(q->count == 0)                                                                                          \
