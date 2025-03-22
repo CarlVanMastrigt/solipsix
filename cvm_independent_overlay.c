@@ -304,17 +304,19 @@ static inline bool cvm_overlay_target_resources_compatible_with_target(const str
 
 static inline void cvm_overlay_target_resources_prune(cvm_overlay_renderer * renderer, const cvm_vk_device * device)
 {
+    bool existing_resources;
     struct cvm_overlay_target_resources* target_resources;
     /// prune out of date resources
     while(renderer->target_resources.count > 1)
     {
         ///deletion queue, get the first entry ready to be deleted
-        target_resources = cvm_overlay_target_resources_queue_access_front(&renderer->target_resources);
+        existing_resources = cvm_overlay_target_resources_queue_access_front(&renderer->target_resources, &target_resources);
+        assert(existing_resources);
         assert(target_resources->last_use_moment.semaphore != VK_NULL_HANDLE);
         if(sol_vk_timeline_semaphore_moment_query(&target_resources->last_use_moment, device))
         {
             cvm_overlay_target_resources_terminate(target_resources, device);
-            cvm_overlay_target_resources_queue_dequeue(&renderer->target_resources, NULL);
+            cvm_overlay_target_resources_queue_prune_front(&renderer->target_resources);
         }
         else break;
     }
@@ -323,10 +325,11 @@ static inline void cvm_overlay_target_resources_prune(cvm_overlay_renderer * ren
 #warning "target_resources" needs a better name
 static inline struct cvm_overlay_target_resources* cvm_overlay_target_resources_acquire(cvm_overlay_renderer * renderer, const cvm_vk_device * device, const struct cvm_overlay_target * target)
 {
+    bool existing_resources;
     struct cvm_overlay_target_resources* target_resources;
 
-    target_resources = cvm_overlay_target_resources_queue_access_back(&renderer->target_resources);
-    if(!cvm_overlay_target_resources_compatible_with_target(target_resources, target))
+    existing_resources = cvm_overlay_target_resources_queue_access_back(&renderer->target_resources, &target_resources);
+    if(!existing_resources || !cvm_overlay_target_resources_compatible_with_target(target_resources, target))
     {
         cvm_overlay_target_resources_queue_enqueue_ptr(&renderer->target_resources, &target_resources, NULL);
 
@@ -632,11 +635,12 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(
 
     assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_STARTED);
 
+    #warning make this whole thing a part of swapchain's functionality
     if(last_use)/// don't have a perfect way to figure out, but could infer from
     {
         overlay_queue_family_index = device->graphics_queue_family_index;
 
-        presentable_image->last_use_queue_family = overlay_queue_family_index;
+        presentable_image->latest_queue_family = overlay_queue_family_index;
 
         // can present on this queue family
         if(presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<overlay_queue_family_index))
@@ -679,8 +683,9 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(
 
     completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, root_widget, &target);
 
-    presentable_image->last_use_moment = completion_moment;
+    presentable_image->latest_moment = completion_moment;
     presentable_image->layout = target.final_layout;
+    #warning may want to make above a function (like the whole block handling QFOT)
     /// must record changes made to layout
 
     return completion_moment;

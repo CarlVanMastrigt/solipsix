@@ -74,6 +74,7 @@ static inline void function_prefix##_enqueue_index(struct struct_name* q, uint32
 {                                                                                                                \
     uint32_t front_offset, move_count;                                                                           \
     type * src;                                                                                                  \
+    assert(index_ptr);                                                                                           \
     if(q->count == q->space)                                                                                     \
     {                                                                                                            \
         q->data = realloc(q->data, sizeof(type) * q->count * 2);                                                 \
@@ -91,47 +92,36 @@ static inline void function_prefix##_enqueue_index(struct struct_name* q, uint32
         memcpy(src + q->space, src, sizeof(type) * move_count);                                                  \
         q->space *= 2;                                                                                           \
     }                                                                                                            \
-    if(index_ptr)                                                                                                \
-    {                                                                                                            \
-        *index_ptr = q->front + q->count++;                                                                      \
-    }                                                                                                            \
+    *index_ptr = q->front + q->count;                                                                            \
+    q->count++;                                                                                                  \
 }                                                                                                                \
                                                                                                                  \
 static inline void function_prefix##_enqueue_ptr(struct struct_name* q, type** entry_ptr, uint32_t* index_ptr)   \
 {                                                                                                                \
     uint32_t index;                                                                                              \
+    assert(entry_ptr);                                                                                           \
     function_prefix##_enqueue_index(q, &index);                                                                  \
-    if(index_ptr)                                                                                                \
-    {                                                                                                            \
-        *index_ptr = index;                                                                                      \
-    }                                                                                                            \
-    if(entry_ptr)                                                                                                \
-    {                                                                                                            \
-        *entry_ptr = q->data + (index & (q->space - 1));                                                         \
-    }                                                                                                            \
+    if(index_ptr) *index_ptr = index;                                                                            \
+    *entry_ptr = q->data + (index & (q->space - 1));                                                             \
 }                                                                                                                \
                                                                                                                  \
 static inline void function_prefix##_enqueue(struct struct_name* q, type value, uint32_t* index_ptr)             \
 {                                                                                                                \
     uint32_t index;                                                                                              \
     function_prefix##_enqueue_index(q, &index);                                                                  \
-    if(index_ptr)                                                                                                \
-    {                                                                                                            \
-        *index_ptr = index;                                                                                      \
-    }                                                                                                            \
+    if(index_ptr) *index_ptr = index;                                                                            \
     q->data[index & (q->space - 1)] = value;                                                                     \
 }                                                                                                                \
                                                                                                                  \
 static inline bool function_prefix##_dequeue_ptr(struct struct_name* q, type** entry_ptr)                        \
 {                                                                                                                \
+    assert(entry_ptr);                                                                                           \
     if(q->count == 0)                                                                                            \
     {                                                                                                            \
+        *entry_ptr = NULL;                                                                                       \
         return false;                                                                                            \
     }                                                                                                            \
-    if(entry_ptr)                                                                                                \
-    {                                                                                                            \
-        *entry_ptr = q->data + (q->front & (q->space - 1));                                                      \
-    }                                                                                                            \
+    *entry_ptr = q->data + (q->front & (q->space - 1));                                                          \
     q->front++;                                                                                                  \
     q->count--;                                                                                                  \
     return true;                                                                                                 \
@@ -139,35 +129,45 @@ static inline bool function_prefix##_dequeue_ptr(struct struct_name* q, type** e
                                                                                                                  \
 static inline bool function_prefix##_dequeue(struct struct_name* q, type* value)                                 \
 {                                                                                                                \
-    if(q->count == 0)                                                                                            \
-    {                                                                                                            \
-        return false;                                                                                            \
-    }                                                                                                            \
-    if(value)                                                                                                    \
-    {                                                                                                            \
-        *value = q->data[ q->front & (q->space - 1) ];                                                           \
-    }                                                                                                            \
+    assert(value);                                                                                               \
+    if(q->count == 0) return false;                                                                              \
+    *value = q->data[q->front & (q->space - 1)];                                                                 \
     q->front++;                                                                                                  \
     q->count--;                                                                                                  \
     return true;                                                                                                 \
 }                                                                                                                \
                                                                                                                  \
-static inline type* function_prefix##_access_front(struct struct_name* q)                                        \
+/** remove the front of the queue without accessing its contents */                                              \
+/** should only be used after access_front has been used to check the entry that will be pruned */               \
+static inline void function_prefix##_prune_front(struct struct_name* q)                                          \
 {                                                                                                                \
-    if(q->count == 0)                                                                                            \
-    {                                                                                                            \
-        return NULL;                                                                                             \
-    }                                                                                                            \
-    return q->data + (q->front & (q->space - 1));                                                                \
+    assert(q->count > 0);                                                                                        \
+    q->front++;                                                                                                  \
+    q->count--;                                                                                                  \
 }                                                                                                                \
                                                                                                                  \
-static inline type* function_prefix##_access_back(struct struct_name* q)                                         \
+static inline bool function_prefix##_access_front(struct struct_name* q, type** entry_ptr)                       \
 {                                                                                                                \
+    assert(entry_ptr);                                                                                           \
     if(q->count == 0)                                                                                            \
     {                                                                                                            \
-        return NULL;                                                                                             \
+        *entry_ptr = NULL;                                                                                       \
+        return false;                                                                                            \
     }                                                                                                            \
-    return q->data + ((q->front + q->count - 1) & (q->space - 1));                                               \
+    *entry_ptr = q->data + (q->front & (q->space - 1));                                                          \
+    return true;                                                                                                 \
+}                                                                                                                \
+                                                                                                                 \
+static inline bool function_prefix##_access_back(struct struct_name* q, type** entry_ptr)                        \
+{                                                                                                                \
+    assert(entry_ptr);                                                                                           \
+    if(q->count == 0)                                                                                            \
+    {                                                                                                            \
+        *entry_ptr = NULL;                                                                                       \
+        return false;                                                                                            \
+    }                                                                                                            \
+    *entry_ptr = q->data + ((q->front + q->count - 1) & (q->space - 1));                                         \
+    return true;                                                                                                 \
 }                                                                                                                \
 
 

@@ -1071,6 +1071,59 @@ static inline void cvm_vk_pipeline_cache_terminate(struct cvm_vk_pipeline_cache*
     free(pipeline_cache->file_name);
 }
 
+static inline void sol_vk_object_pools_initialise(struct sol_vk_object_pools* pools,const struct cvm_vk_device * device)
+{
+    sol_vk_semaphore_stack_initialise(&pools->semaphores, 16);
+    mtx_init(&pools->semaphore_mutex, mtx_plain);
+}
+
+static inline void sol_vk_object_pools_terminate(struct sol_vk_object_pools* pools,const struct cvm_vk_device * device)
+{
+    VkSemaphore semaphore;
+
+    while(sol_vk_semaphore_stack_remove(&pools->semaphores, &semaphore))
+    {
+        vkDestroySemaphore(device->device, semaphore, device->host_allocator);
+    }
+    sol_vk_semaphore_stack_terminate(&pools->semaphores);
+    mtx_destroy(&pools->semaphore_mutex);
+}
+
+VkSemaphore sol_vk_device_object_pool_semaphore_acquire(struct cvm_vk_device* device)
+{
+    VkSemaphore semaphore;
+    VkResult result;
+    bool acquired;
+
+    mtx_lock(&device->object_pools.semaphore_mutex);
+    acquired = sol_vk_semaphore_stack_remove(&device->object_pools.semaphores, &semaphore);
+    mtx_unlock(&device->object_pools.semaphore_mutex);
+
+    if(!acquired)
+    {
+        VkSemaphoreCreateInfo create_info = (VkSemaphoreCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0
+        };
+
+        result = vkCreateSemaphore(device->device, &create_info, device->host_allocator, &semaphore);
+        assert(result == VK_SUCCESS);
+    }
+
+    return semaphore;
+}
+
+void sol_vk_device_object_pool_semaphore_release(struct cvm_vk_device* device, VkSemaphore semaphore)
+{
+    mtx_lock(&device->object_pools.semaphore_mutex);
+    sol_vk_semaphore_stack_append(&device->object_pools.semaphores, semaphore);
+    mtx_unlock(&device->object_pools.semaphore_mutex);
+}
+
+
+
 
 int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup* device_setup)
 {
@@ -1091,8 +1144,11 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup* 
 
     cvm_vk_create_transfer_chain();///make conditional on separate transfer queue?
 
-    cvm_vk_create_defaults_old();
+
     cvm_vk_defaults_initialise(&device->defaults, device);
+    sol_vk_object_pools_initialise(&device->object_pools, device);
+
+    cvm_vk_create_defaults_old();
 
     return 0;
 }
@@ -1104,6 +1160,8 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
     vkDeviceWaitIdle(device->device);
 
     cvm_vk_destroy_defaults_old();
+
+    sol_vk_object_pools_terminate(&device->object_pools, device);
     cvm_vk_defaults_terminate(&device->defaults, device);
 
 #warning make destroy

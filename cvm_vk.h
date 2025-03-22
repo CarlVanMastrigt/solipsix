@@ -97,6 +97,7 @@ static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignmen
 
 
 SOL_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy_stack, cvm_vk_buffer_image_copy_stack)
+SOL_STACK(VkSemaphore, sol_vk_semaphore_stack, sol_vk_semaphore_stack)
 
 
 #include "vk/command_pool.h"
@@ -183,8 +184,18 @@ struct cvm_vk_pipeline_cache
     char* file_name;
 };
 
+struct sol_vk_object_pools
+{
+    struct sol_vk_semaphore_stack semaphores;
+    mtx_t semaphore_mutex;
+};
+
+VkSemaphore sol_vk_device_object_pool_semaphore_acquire(struct cvm_vk_device* device);
+void sol_vk_device_object_pool_semaphore_release(struct cvm_vk_device* device, VkSemaphore semaphore);
+
 struct cvm_vk_device
 {
+    #warning need to add some serious multithreading consideration to this struct
     const VkAllocationCallbacks* host_allocator;
 
     VkPhysicalDevice physical_device;
@@ -222,6 +233,10 @@ struct cvm_vk_device
     struct cvm_vk_defaults defaults;
 
     atomic_uint_least64_t * resource_identifier_monotonic;
+
+    // move this somewhere else maybe?
+    // set of default data types that are recyclable within different objects in the device
+    struct sol_vk_object_pools object_pools;
 };
 
 static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acquire(const cvm_vk_device * device)

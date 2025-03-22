@@ -81,10 +81,15 @@ static inline void function_prefix##_append(struct struct_name* s, type value)  
     *(function_prefix##_append_ptr(s)) = value;                                                               \
 }                                                                                                             \
                                                                                                               \
-static inline type* function_prefix##_remove_ptr(struct struct_name* s)                                       \
+static inline bool function_prefix##_remove_ptr(struct struct_name* s, type** entry_ptr)                      \
 {                                                                                                             \
-    if(s->count == 0)return NULL;                                                                             \
-    return s->data + --s->count;                                                                              \
+    if(s->count == 0)                                                                                         \
+    {                                                                                                         \
+        *entry_ptr = NULL;                                                                                    \
+        return false;                                                                                         \
+    }                                                                                                         \
+    *entry_ptr = s->data + --s->count;                                                                        \
+    return true;                                                                                              \
 }                                                                                                             \
                                                                                                               \
 static inline bool function_prefix##_remove(struct struct_name* s, type* value)                               \

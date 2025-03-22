@@ -355,11 +355,14 @@ void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, str
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
 static inline void cvm_render_shaded_overlay_element(struct cvm_overlay_render_batch * restrict render_batch,rectangle b,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off)
 {
+    cvm_overlay_element_render_data* render_data;
+    
     b=get_rectangle_overlap(r,b);
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        render_data = cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements);
+        *render_data =(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED,colour<<24},
@@ -370,6 +373,8 @@ static inline void cvm_render_shaded_overlay_element(struct cvm_overlay_render_b
 
 static inline void cvm_render_shaded_fading_overlay_element(struct cvm_overlay_render_batch * restrict render_batch,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,rectangle fade_bound,rectangle fade_range)
 {
+    cvm_overlay_element_render_data* render_data;
+
     if(r.x1<fade_bound.x1)///beyond this opacity is 0 (completely transparent)
     {
         x_off+=fade_bound.x1-r.x1;
@@ -400,7 +405,8 @@ static inline void cvm_render_shaded_fading_overlay_element(struct cvm_overlay_r
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        render_data = cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements);
+        *render_data =(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
@@ -412,11 +418,14 @@ static inline void cvm_render_shaded_fading_overlay_element(struct cvm_overlay_r
 /// x/y_over_b equates to combination of, screen space coordinates of base of "overlap" element (negative) with texture coordinates of the tile the "overlap" element uses
 static inline void cvm_render_shaded_overlap_min_overlay_element(struct cvm_overlay_render_batch * restrict render_batch,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,int x_over_b,int y_over_b)
 {
+    cvm_overlay_element_render_data* render_data;
+
     b=get_rectangle_overlap(r,b);
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        render_data = cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements);
+        *render_data =(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN,colour<<24},
@@ -428,6 +437,8 @@ static inline void cvm_render_shaded_overlap_min_overlay_element(struct cvm_over
 static inline void cvm_render_shaded_fading_overlap_min_overlay_element(struct cvm_overlay_render_batch * restrict render_batch,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,
                                                                         rectangle fade_bound,rectangle fade_range,int x_over_b,int y_over_b)
 {
+    cvm_overlay_element_render_data* render_data;
+
     if(r.x1<fade_bound.x1)///beyond this opacity is 0 (completely transparent)
     {
         x_off+=fade_bound.x1-r.x1;
@@ -458,7 +469,8 @@ static inline void cvm_render_shaded_fading_overlap_min_overlay_element(struct c
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        render_data = cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements);
+        *render_data =(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
@@ -469,11 +481,14 @@ static inline void cvm_render_shaded_fading_overlap_min_overlay_element(struct c
 
 static inline void cvm_render_fill_overlay_element(struct cvm_overlay_render_batch * restrict render_batch,rectangle b,rectangle r,overlay_colour colour)
 {
+    cvm_overlay_element_render_data* render_data;
+
     b=get_rectangle_overlap(r,b);
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        render_data = cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements);
+        *render_data =(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_FILL,colour<<24},
@@ -484,6 +499,8 @@ static inline void cvm_render_fill_overlay_element(struct cvm_overlay_render_bat
 
 static inline void cvm_render_fill_fading_overlay_element(struct cvm_overlay_render_batch * restrict render_batch,rectangle b,rectangle r,overlay_colour colour,rectangle fade_bound,rectangle fade_range)
 {
+    cvm_overlay_element_render_data* render_data;
+
     if(r.x1<fade_bound.x1)r.x1=fade_bound.x1;///beyond this opacity is 0 (completely transparent)
     fade_bound.x1=r.x1-fade_bound.x1;///convert bound to distance from side
     if(fade_bound.x1>fade_range.x1) fade_bound.x1=fade_range.x1=0;
@@ -506,7 +523,8 @@ static inline void cvm_render_fill_fading_overlay_element(struct cvm_overlay_ren
 
     if(rectangle_has_positive_area(b))
     {
-        *cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements)=(cvm_overlay_element_render_data)
+        render_data = cvm_overlay_element_render_data_stack_append_ptr(&render_batch->render_elements);
+        *render_data =(cvm_overlay_element_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_FILL | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},

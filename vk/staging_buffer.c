@@ -115,11 +115,11 @@ void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffe
 
 
 #warning consider moving this back into the main function?
-static inline void sol_vk_staging_buffer_query_allocations(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
+static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
 {
     struct sol_vk_staging_buffer_segment * oldest_active_segment;
 
-    while((oldest_active_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue)))
+    while(sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue, &oldest_active_segment))
     {
         if(oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE) return; /// oldest segment has not been "completed"
 
@@ -132,7 +132,7 @@ static inline void sol_vk_staging_buffer_query_allocations(struct sol_vk_staging
 
         staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
 
-        sol_vk_staging_buffer_segment_queue_dequeue(&staging_buffer->segment_queue, NULL);/// remove oldest_active_segment from the queue
+        sol_vk_staging_buffer_segment_queue_prune_front(&staging_buffer->segment_queue);/// remove oldest_active_segment from the queue
 
         if(staging_buffer->remaining_space == staging_buffer->buffer_size)
         {
@@ -147,6 +147,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 {
     VkDeviceSize required_space;
     bool wrap;
+    bool existing_segment;
     struct sol_vk_staging_buffer_segment* oldest_active_segment;
     struct sol_vk_staging_buffer_segment* new_segment;
     struct sol_vk_timeline_semaphore_moment oldest_moment;
@@ -165,7 +166,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     {
         assert(!staging_buffer->terminating);
         /// try to free up space
-        sol_vk_staging_buffer_query_allocations(staging_buffer,device);
+        sol_vk_staging_buffer_prune_allocations(staging_buffer,device);
 
         wrap = staging_buffer->current_offset+requested_space > staging_buffer->buffer_size;
 
@@ -181,9 +182,8 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
         }
 
         /// otherwise; more space required
-        assert(staging_buffer->segment_queue.count > 0);///should not need more space if there are no active segments
-
-        oldest_active_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue);
+        existing_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue, &oldest_active_segment);
+        assert(existing_segment); ///should not need more space if there are no active segments
 
         if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
         {

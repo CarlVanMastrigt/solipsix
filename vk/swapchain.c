@@ -35,8 +35,8 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
     presentable_image->acquire_semaphore=VK_NULL_HANDLE;///set using one of the available image_acquisition_semaphores
     presentable_image->state=CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
 
-    presentable_image->last_use_queue_family = CVM_INVALID_U32_INDEX;
-    presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+    presentable_image->latest_queue_family = CVM_INVALID_U32_INDEX;
+    presentable_image->latest_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
 
     presentable_image->present_acquire_command_buffers = malloc(sizeof(VkCommandBuffer) * device->queue_family_count);
     for(i=0;i<device->queue_family_count;i++)
@@ -113,14 +113,14 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
 
 static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device, const cvm_vk_surface_swapchain * swapchain, VkSwapchainKHR old_swapchain)
 {
-    uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,image_acquisition_semaphore_count,width,height;
+    uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,width,height;
     VkBool32 surface_supported;
     VkSurfaceFormatKHR * formats;
     VkPresentModeKHR * present_modes;
     VkImage * images;
 
-    instance->acquired_image_count = 0;
     instance->out_of_date = false;
+    instance->acquired_image_count = 0;
 
     /// select format (image format and colourspace)
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(device->physical_device, swapchain->setup_info.surface, &format_count, NULL));
@@ -221,14 +221,6 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     free(images);
 
 
-    image_acquisition_semaphore_count = instance->image_count + 1;
-    instance->image_acquisition_semaphores = malloc(sizeof(VkSemaphore) * image_acquisition_semaphore_count);/// need 1 more than image count
-    for(i=0;i<image_acquisition_semaphore_count;i++)
-    {
-        instance->image_acquisition_semaphores[i]=cvm_vk_create_binary_semaphore(device);
-    }
-
-
     cvm_vk_create_swapchain_dependent_defaults(instance->surface_capabilities.currentExtent.width,instance->surface_capabilities.currentExtent.height);
     #warning make these defaults part of the swapchain_instance!?
 
@@ -237,9 +229,8 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
 
 static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device)
 {
-    uint32_t i,image_acquisition_semaphore_count;
-
-    /// free up instances ??
+    uint32_t i;
+    VkSemaphore semaphore;
 
     // need to wait for presentation to finish using the present semaphore before deleting it
     // without swapchain maintainence there is no better way to do this
@@ -248,7 +239,6 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
     {
         vkDeviceWaitIdle(device->device);
     }
-
 
     assert(instance->acquired_image_count == 0);///MUST WAIT TILL ALL IMAGES ARE RETURNED BEFORE TERMINATING SWAPCHAIN
 
@@ -261,14 +251,6 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
         cvm_vk_swapchain_presentable_image_terminate(instance->presentable_images+i, device, instance);
     }
     free(instance->presentable_images);
-
-
-    image_acquisition_semaphore_count = instance->image_count + 1;
-    for(i=0;i<image_acquisition_semaphore_count;i++)
-    {
-        vkDestroySemaphore(device->device, instance->image_acquisition_semaphores[i], NULL);
-    }
-    free(instance->image_acquisition_semaphores);
 
     vkDestroySwapchainKHR(device->device, instance->swapchain, NULL);
 }
@@ -313,20 +295,21 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 
             if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
             {
-                assert(presentable_image->last_use_moment.semaphore == VK_NULL_HANDLE);
+                assert(presentable_image->latest_moment.semaphore == VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
             }
             else
             {
                 assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED);
-                assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);
+                assert(presentable_image->latest_moment.semaphore != VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
 
-                sol_vk_timeline_semaphore_moment_wait(&presentable_image->last_use_moment, device);
+                sol_vk_timeline_semaphore_moment_wait(&presentable_image->latest_moment, device);
 
                 assert(instance->acquired_image_count > 0);
-                instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
-                presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+                instance->acquired_image_count--;
+                sol_vk_device_object_pool_semaphore_release(device, presentable_image->acquire_semaphore);
+                presentable_image->latest_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                 presentable_image->acquire_semaphore = VK_NULL_HANDLE;
                 presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
             }
@@ -340,14 +323,14 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 
 
 
-static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device)
+static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
 {
     cvm_vk_swapchain_presentable_image * presentable_image;
     cvm_vk_swapchain_instance * instance;
     uint32_t i;
 
     /// get the front of the deletion queue
-    while((instance = cvm_vk_swapchain_instance_queue_access_front(&swapchain->swapchain_queue)) && instance->out_of_date)
+    while(cvm_vk_swapchain_instance_queue_access_front(&swapchain->swapchain_queue, &instance) && instance->out_of_date)
     {
         for(i=0;i<instance->image_count;i++)
         {
@@ -355,20 +338,21 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
 
             if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
             {
-                assert(presentable_image->last_use_moment.semaphore == VK_NULL_HANDLE);
+                assert(presentable_image->latest_moment.semaphore == VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
             }
             else
             {
                 assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED);
-                assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);
+                assert(presentable_image->latest_moment.semaphore != VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
 
-                if(sol_vk_timeline_semaphore_moment_query(&presentable_image->last_use_moment, device))
+                if(sol_vk_timeline_semaphore_moment_query(&presentable_image->latest_moment, device))
                 {
                     assert(instance->acquired_image_count > 0);
-                    instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
-                    presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+                    instance->acquired_image_count--;
+                    sol_vk_device_object_pool_semaphore_release(device, presentable_image->acquire_semaphore);
+                    presentable_image->latest_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                     presentable_image->acquire_semaphore = VK_NULL_HANDLE;
                     presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
                 }
@@ -378,7 +362,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
         if(instance->acquired_image_count == 0)
         {
             cvm_vk_swapchain_instance_terminate(instance, device);
-            cvm_vk_swapchain_instance_queue_dequeue(&swapchain->swapchain_queue, NULL);
+            cvm_vk_swapchain_instance_queue_prune_front(&swapchain->swapchain_queue);
         }
         else
         {
@@ -388,8 +372,9 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
 }
 
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device)
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
 {
+    bool existing_instance;
     cvm_vk_swapchain_presentable_image * presentable_image;
     cvm_vk_swapchain_instance * instance, * new_instance;
     uint32_t image_index;
@@ -400,10 +385,10 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
 
     do
     {
-        instance = cvm_vk_swapchain_instance_queue_access_back(&swapchain->swapchain_queue);
+        existing_instance = cvm_vk_swapchain_instance_queue_access_back(&swapchain->swapchain_queue, &instance);
 
         /// create new instance if necessary
-        if(instance==NULL || instance->out_of_date)
+        if(!existing_instance || instance==NULL || instance->out_of_date)
         {
             cvm_vk_swapchain_instance_queue_enqueue_ptr(&swapchain->swapchain_queue, &new_instance, NULL);
 
@@ -421,8 +406,10 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
             swapchain->metering_fence_active=false;
         }
 
-        acquire_semaphore = instance->image_acquisition_semaphores[instance->acquired_image_count++];
+
+        acquire_semaphore = sol_vk_device_object_pool_semaphore_acquire(device);
         acquire_result = vkAcquireNextImageKHR(device->device, instance->swapchain, CVM_VK_DEFAULT_TIMEOUT, acquire_semaphore, swapchain->metering_fence, &image_index);
+        instance->acquired_image_count++;
 
         if(acquire_result==VK_SUCCESS || acquire_result==VK_SUBOPTIMAL_KHR)
         {
@@ -437,18 +424,22 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
 
             if(presentable_image->state != CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
             {
-                instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
+                // recycle the presented image (presented image existed, it needs to be cleaned up)
+                assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED);
+                instance->acquired_image_count--;
+                sol_vk_device_object_pool_semaphore_release(device, presentable_image->acquire_semaphore);
             }
 
-            presentable_image->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
             presentable_image->acquire_semaphore = acquire_semaphore;
             presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_ACQUIRED;
             presentable_image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
-            presentable_image->last_use_queue_family=CVM_INVALID_U32_INDEX;
+            presentable_image->latest_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+            presentable_image->latest_queue_family=CVM_INVALID_U32_INDEX;
         }
         else
         {
-            instance->image_acquisition_semaphores[--instance->acquired_image_count] = acquire_semaphore;
+            instance->acquired_image_count--;
+            sol_vk_device_object_pool_semaphore_release(device, acquire_semaphore);
             if(acquire_result != VK_TIMEOUT)
             {
                 fprintf(stderr,"acquire_presentable_image failed -- unknown reason (%u)\n", acquire_result);
@@ -536,29 +527,30 @@ static VkCommandBuffer cvm_vk_swapchain_create_image_qfot_command_buffer(const c
     return command_buffer;
 }
 
-void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image)
+void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image* presentable_image)
 {
     #warning needs massive cleanup
     VkSemaphoreSubmitInfo wait_semaphores[1];
     VkSemaphoreSubmitInfo signal_semaphores[2];
     cvm_vk_device_queue_family * present_queue_family;
     cvm_vk_device_queue * present_queue;
-    uint32_t image_index = presentable_image->index;
     cvm_vk_swapchain_instance * swapchain_instance;
-    const void* prev_vk_struct = NULL;
+    const void* prev_vk_struct;
+    VkResult result;
+
 
     swapchain_instance = presentable_image->parent_swapchain_instance;
 
-    assert(presentable_image->last_use_queue_family != CVM_INVALID_U32_INDEX);
+    assert(presentable_image->latest_queue_family != CVM_INVALID_U32_INDEX);
     assert(presentable_image->layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED)
     {
-        if(presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family]==VK_NULL_HANDLE)
+        if(presentable_image->present_acquire_command_buffers[presentable_image->latest_queue_family]==VK_NULL_HANDLE)
         {
             #warning could allocate the command buffers upfront and only reset upon swapchain recreation...
-            presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family] =
-                cvm_vk_swapchain_create_image_qfot_command_buffer(device, presentable_image->image, presentable_image->last_use_queue_family, swapchain_instance->fallback_present_queue_family);
+            presentable_image->present_acquire_command_buffers[presentable_image->latest_queue_family] =
+                cvm_vk_swapchain_create_image_qfot_command_buffer(device, presentable_image->image, presentable_image->latest_queue_family, swapchain_instance->fallback_present_queue_family);
         }
 
 
@@ -568,11 +560,12 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         ///fixed count and layout of wait and signal semaphores here
         wait_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
-        presentable_image->last_use_moment = sol_vk_timeline_semaphore_generate_moment(&present_queue->timeline);
+        presentable_image->latest_moment = sol_vk_timeline_semaphore_generate_moment(&present_queue->timeline);
         /// presentable_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
-        signal_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-        signal_semaphores[1]=sol_vk_timeline_semaphore_moment_submit_info(&presentable_image->last_use_moment, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-        #warning REMOVE THIS ^^
+        signal_semaphores[0] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        signal_semaphores[1] = sol_vk_timeline_semaphore_moment_submit_info(&presentable_image->latest_moment, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        #warning REMOVE THIS ^^ (but... these both seem necessary?)
+        #warning is waiting on the latest moment nonsense? i.e. is it invalid to ever actually orchistrate timing by waiting on this after present?
 
         VkSubmitInfo2 submit_info=(VkSubmitInfo2)
         {
@@ -587,7 +580,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
                 {
                     .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
                     .pNext=NULL,
-                    .commandBuffer=presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family],
+                    .commandBuffer=presentable_image->present_acquire_command_buffers[presentable_image->latest_queue_family],
                     .deviceMask=0
                 }
             },
@@ -601,14 +594,25 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
     }
     else
     {
-        assert(swapchain_instance->queue_family_presentable_mask | (1 << presentable_image->last_use_queue_family));///must be presentable on last used queue family
-        present_queue_family = device->queue_families + presentable_image->last_use_queue_family;
+        assert(swapchain_instance->queue_family_presentable_mask | (1 << presentable_image->latest_queue_family));///must be presentable on last used queue family
+        present_queue_family = device->queue_families + presentable_image->latest_queue_family;
         present_queue = present_queue_family->queues + 0;/// use queue 0
     }
 
     assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE);
 
 
+
+    /// wait on fence for PRIOR present if it has happened
+    if(presentable_image->presentation_fence_active)
+    {
+        cvm_vk_wait_on_fence_and_reset(device, presentable_image->presentation_fence);
+        presentable_image->presentation_fence_active = false;
+    }
+
+
+
+    prev_vk_struct = NULL;
 
     const VkSwapchainPresentFenceInfoEXT present_fence_info =
     {
@@ -623,12 +627,6 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         prev_vk_struct = &present_fence_info;
     }
 
-    if(presentable_image->presentation_fence_active)
-    {
-        cvm_vk_wait_on_fence_and_reset(device, presentable_image->presentation_fence);
-        presentable_image->presentation_fence_active = false;
-    }
-
     const VkPresentInfoKHR present_info =
     {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -637,30 +635,34 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         .pWaitSemaphores = &presentable_image->present_semaphore,
         .swapchainCount = 1,
         .pSwapchains = &swapchain_instance->swapchain,
-        .pImageIndices = &image_index,
+        .pImageIndices = &presentable_image->index,
         .pResults = NULL
     };
 
     #warning present should be synchronised (check this is true) -- does present (or regular submission for that matter) need to be externally synchronised!?
 
-    VkResult r = vkQueuePresentKHR(present_queue->queue, &present_info);
+    result = vkQueuePresentKHR(present_queue->queue, &present_info);
 
-    if(r>=VK_SUCCESS)
+    presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED;// this is fine right??
+
+    switch(result)
     {
-        if(r==VK_SUBOPTIMAL_KHR)
-        {
-            puts("presented swapchain suboptimal");///common error
-            swapchain_instance->out_of_date = true;
-        }
-        else if(r!=VK_SUCCESS)fprintf(stderr,"PRESENTATION SUCCEEDED WITH RESULT : %d\n",r);
-        presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED;
-        presentable_image->presentation_fence_active = device->feature_swapchain_maintainence;
-    }
-    else
-    {
-        if(r==VK_ERROR_OUT_OF_DATE_KHR)puts("couldn't present (out of date)");///common error
-        else fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n",r);
+    case VK_ERROR_OUT_OF_DATE_KHR:
+    case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
+    case VK_ERROR_SURFACE_LOST_KHR:
+        // above are technically errors, could do something different?
+        fprintf(stderr,"PRESENTATION SUCCEEDED WITH RESULT : %d\n", result);
+    case VK_SUBOPTIMAL_KHR:
+        // for all above; the swapchain should be rebuilt
         swapchain_instance->out_of_date = true;
+    case VK_SUCCESS:
+        // for all above; the present actually happened and we need to wait on the fence
+        presentable_image->presentation_fence_active = device->feature_swapchain_maintainence;
+        break;
+    default:
+        fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n", result);
+        assert(false);
+        break;
     }
 }
 

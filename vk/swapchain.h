@@ -71,12 +71,13 @@ typedef struct cvm_vk_swapchain_presentable_image
     enum cvm_vk_presentable_image_state state;
     VkImageLayout layout;
 
-    uint32_t last_use_queue_family;
-
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
 
-    struct sol_vk_timeline_semaphore_moment last_use_moment;/// used for ensuring a swapchain has had all its images returned before being destroyed
+    uint32_t latest_queue_family;// latest queue family where this image was used (useful for QFOT)
+    struct sol_vk_timeline_semaphore_moment latest_moment;// used to order uses of this image across different submodules
+    // ^ this being signalled by the presenting command buffer shouldn't communicate whether present has fully competed, only WSI managed primitives can do that
+    // so waiting on this (as is presently done) for an existing presented image accomplishes nothing (or at least that should be the case)
 }
 cvm_vk_swapchain_presentable_image;
 
@@ -93,10 +94,9 @@ struct cvm_vk_swapchain_instance
 
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
-    VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count plus 1
-    cvm_vk_swapchain_presentable_image * presentable_images;
+    cvm_vk_swapchain_presentable_image* presentable_images; // generated/initialised/set_up upon acquisition of swapchain image from WSI
     uint32_t image_count;/// this is also the number of swapchain images
-    uint32_t acquired_image_count;/// init as 0, used for tracking use of image_acquisition_semaphores
+    uint32_t acquired_image_count;/// just for debug tracking
 
     bool out_of_date;/// can be used
 
@@ -111,6 +111,7 @@ struct cvm_vk_swapchain_instance
 };
 
 SOL_QUEUE(cvm_vk_swapchain_instance, cvm_vk_swapchain_instance_queue, cvm_vk_swapchain_instance_queue)
+
 
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain
@@ -128,7 +129,7 @@ cvm_vk_surface_swapchain;
 void cvm_vk_swapchain_initialse(const cvm_vk_device* device, cvm_vk_surface_swapchain* swapchain, const cvm_vk_swapchain_setup* setup);
 void cvm_vk_swapchain_terminate(const cvm_vk_device* device, cvm_vk_surface_swapchain* swapchain);
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const cvm_vk_device* device);
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, cvm_vk_device* device);
 
 void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain* swapchain, const cvm_vk_device* device, cvm_vk_swapchain_presentable_image* presentable_image);
 
