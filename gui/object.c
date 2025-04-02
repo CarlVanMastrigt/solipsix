@@ -80,35 +80,35 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj)
 
 
 
-void sol_gui_object_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch)
+void sol_gui_object_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
 	assert(obj);
 
 	if(obj->structure_functions && obj->structure_functions->render)
 	{
-		offset = vec2_s16_add(offset, obj->position.start);
+		offset = s16_vec2_add(offset, obj->position.start);
 		obj->structure_functions->render(obj, offset, batch);
 	}
 }
 
-struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
+struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
 	assert(obj);
 
 	if(obj->structure_functions && obj->structure_functions->hit_scan)
 	{
-		location = vec2_s16_sub(location, obj->position.start);
+		location = s16_vec2_sub(location, obj->position.start);
 		return obj->structure_functions->hit_scan(obj, location);
 	}
 
 	return NULL;
 }
 
-vec2_s16 sol_gui_object_min_size(struct sol_gui_object* obj)
+s16_vec2 sol_gui_object_min_size(struct sol_gui_object* obj)
 {
 	assert(obj);
 
-	vec2_s16 min_size = {0,0};
+	s16_vec2 min_size = {0,0};
 
 	if(obj->structure_functions && obj->structure_functions->min_size)
 	{
@@ -119,7 +119,7 @@ vec2_s16 sol_gui_object_min_size(struct sol_gui_object* obj)
 	return min_size;
 }
 
-void sol_gui_object_place_content(struct sol_gui_object* obj, rect_s16 content_rect)
+void sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_rect)
 {
 	assert(obj);
 
@@ -162,10 +162,10 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 
 
 // this should be used with the utmost care (prefer calling context reorganization function)
-// void sol_gui_object_reorganise(struct sol_gui_object* obj, rect_s16 rect)
+// void sol_gui_object_reorganise(struct sol_gui_object* obj, s16_rect rect)
 // {
-// 	vec2_s16 min_size = sol_gui_object_min_size(obj);
-// 	assert( vec2_s16_cmp_all_lte(min_size, rect_s16_size(rect)) );// provided rect must have enough space for
+// 	s16_vec2 min_size = sol_gui_object_min_size(obj);
+// 	assert( s16_vec2_cmp_all_lte(min_size, s16_rect_size(rect)) );// provided rect must have enough space for
 // 	sol_gui_object_place_content(obj, rect);
 // }
 

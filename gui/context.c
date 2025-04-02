@@ -29,7 +29,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/container.h"
 
 
-struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, vec2_s16 window_offset, vec2_s16 window_size)
+struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size)
 {
 	struct sol_gui_object* root_container;
 	uint32_t SOL_GUI_EVENT_BASE = SDL_RegisterEvents(4);
@@ -181,18 +181,18 @@ void sol_gui_context_set_focused_object(struct sol_gui_context* context, struct 
 
 
 /// this is different than reorganise root, this assumes min_sizes havent changed
-bool sol_gui_context_update_window(struct sol_gui_context* context, vec2_s16 window_offset, vec2_s16 window_size)
+bool sol_gui_context_update_window(struct sol_gui_context* context, s16_vec2 window_offset, s16_vec2 window_size)
 {
 	// assume min_size setting isn't required
-	if(vec2_m16_all(vec2_s16_cmp_eq(window_size, context->window_size)))
+	if(m16_vec2_all(s16_vec2_cmp_eq(window_size, context->window_size)))
 	{
 		// nothing internal has changed, no need to place content again
 		context->window_offset = window_offset;
 	}
 	else
 	{
-		context->content_fit = vec2_m16_all(vec2_s16_cmp_lte(context->window_min_size, window_size));
-		rect_s16 content_rect = {.start={0,0}, .end = vec2_s16_max(context->window_min_size, context->window_size)};
+		context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, window_size));
+		s16_rect content_rect = {.start={0,0}, .end = s16_vec2_max(context->window_min_size, context->window_size)};
 		sol_gui_object_place_content(context->root_container, content_rect);
 	}
 
@@ -204,9 +204,9 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 {
 	context->window_min_size = sol_gui_object_min_size(context->root_container);
 
-	context->content_fit = vec2_m16_all(vec2_s16_cmp_lte(context->window_min_size, context->window_size));
+	context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, context->window_size));
 
-	rect_s16 content_rect = {.start={0,0}, .end = vec2_s16_max(context->window_min_size, context->window_size)};
+	s16_rect content_rect = {.start={0,0}, .end = s16_vec2_max(context->window_min_size, context->window_size)};
 	sol_gui_object_place_content(context->root_container, content_rect);
 
 	return context->content_fit;
@@ -218,7 +218,7 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 {
 	struct sol_gui_object* object;
 	bool result;
-	vec2_s16 mouse_location;
+	s16_vec2 mouse_location;
 	const SDL_Event* sdl_event = &input->sdl_event;
 
 	#warning assert its not in the range supported
@@ -252,7 +252,7 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 	if(sdl_type == SDL_MOUSEMOTION)
 	{
 		// could also be touch screen hover or similar
-		mouse_location = vec2_s16_set(sdl_event->motion.x, sdl_event->motion.y);
+		mouse_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);
 		#warning also do this if widgets have been reorganised? (will need to record latest mouse pos for this)
 		object = sol_gui_object_hit_scan(context->root_container, mouse_location);
 

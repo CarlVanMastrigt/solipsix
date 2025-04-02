@@ -37,7 +37,7 @@ void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_o
 void sol_gui_container_destroy(struct sol_gui_object* obj);
 
 
-void sol_gui_container_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, vec2_s16 location);
+void sol_gui_container_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
+struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_vec2 location);
 
 

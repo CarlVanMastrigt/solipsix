@@ -27,87 +27,87 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_gui_theme_simple_data
 {
-	vec2_s16 base_unit_size;
+	s16_vec2 base_unit_size;
 
-	vec2_s16 box_border;
-	vec2_s16 box_content_border;
-	vec2_s16 box_text_border;
-	vec2_s16 panel_content_border;
+	s16_vec2 box_border;
+	s16_vec2 box_content_border;
+	s16_vec2 box_text_border;
+	s16_vec2 panel_content_border;
 };
 
 
 
-static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
+static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
 {
 }
 
-static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect)
+static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = rect_s16_sub_border(rect, simple_theme_data->box_border);
+		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
-	return rect_s16_contains_origin(rect);
+	return s16_rect_contains_origin(rect);
 }
 
-static rect_s16 sol_gui_theme_simple_box_place_content(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect)
+static s16_rect sol_gui_theme_simple_box_place_content(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = rect_s16_sub_border(rect, simple_theme_data->box_border);
+		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
 	return rect;
 }
 
-static vec2_s16 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size)
+static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	vec2_s16 size = contents_size;
+	s16_vec2 size = contents_size;
 
 	// box must be at least base_unit_size
-	size = vec2_s16_max(size, simple_theme_data->base_unit_size);
+	size = s16_vec2_max(size, simple_theme_data->base_unit_size);
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		size = vec2_s16_add(size, vec2_s16_mul_scalar(simple_theme_data->box_border, 2));// added to either side
+		size = s16_vec2_add(size, s16_vec2_mul_scalar(simple_theme_data->box_border, 2));// added to either side
 	}
 
 	return size;
 }
 
-static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
+static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
 {
 }
 
-static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect)
+static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = rect_s16_sub_border(rect, simple_theme_data->box_border);
+		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
-	return rect_s16_contains_origin(rect);
+	return s16_rect_contains_origin(rect);
 }
 
-static rect_s16 sol_gui_theme_simple_panel_place_content(struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect)
+static s16_rect sol_gui_theme_simple_panel_place_content(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
 {
 	return rect;/// needs review tbh, some way to tell if text offset is necessary &c.?
 }
 
-static vec2_s16 sol_gui_theme_simple_panel_size(struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size)
+static s16_vec2 sol_gui_theme_simple_panel_size(struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	return vec2_s16_add(contents_size, vec2_s16_mul_scalar(simple_theme_data->panel_content_border, 2));
+	return s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->panel_content_border, 2));
 }
 
 
@@ -126,11 +126,11 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			font_size = 12;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = vec2_s16_set(16, 16),// min size
-				.box_border           = vec2_s16_set(1, 1),
-				.box_content_border   = vec2_s16_set(2, 2),
-				.box_text_border      = vec2_s16_set(6, 2),
-				.panel_content_border = vec2_s16_set(3, 3),
+				.base_unit_size       = s16_vec2_set(16, 16),// min size
+				.box_border           = s16_vec2_set(1, 1),
+				.box_content_border   = s16_vec2_set(2, 2),
+				.box_text_border      = s16_vec2_set(6, 2),
+				.panel_content_border = s16_vec2_set(3, 3),
 			};
 			break;
 		default:
@@ -138,22 +138,22 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			font_size = 16;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = vec2_s16_set(20, 20),// min size
-				.box_border           = vec2_s16_set(1, 1),
-				.box_content_border   = vec2_s16_set(2, 2),
-				.box_text_border      = vec2_s16_set(8, 2),
-				.panel_content_border = vec2_s16_set(4, 4),
+				.base_unit_size       = s16_vec2_set(20, 20),// min size
+				.box_border           = s16_vec2_set(1, 1),
+				.box_content_border   = s16_vec2_set(2, 2),
+				.box_text_border      = s16_vec2_set(8, 2),
+				.panel_content_border = s16_vec2_set(4, 4),
 			};
 			break;
 		case 2: // large
 			font_size = 24;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = vec2_s16_set(30, 30),// min size
-				.box_border           = vec2_s16_set(2, 2),
-				.box_content_border   = vec2_s16_set(3, 3),
-				.box_text_border      = vec2_s16_set(12, 3),
-				.panel_content_border = vec2_s16_set(5, 5),
+				.base_unit_size       = s16_vec2_set(30, 30),// min size
+				.box_border           = s16_vec2_set(2, 2),
+				.box_content_border   = s16_vec2_set(3, 3),
+				.box_text_border      = s16_vec2_set(12, 3),
+				.panel_content_border = s16_vec2_set(5, 5),
 			};
 			break;
 	}

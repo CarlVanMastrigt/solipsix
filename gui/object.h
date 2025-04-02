@@ -22,8 +22,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <inttypes.h>
 
-#include "math/vec2_s16.h"
-#include "math/rect_s16.h"
+#include "math/s16_vec2.h"
+#include "math/s16_rect.h"
 
 #include "gui/enums.h"
 #include "gui/context.h"
@@ -51,16 +51,16 @@ struct sol_gui_object_structure_functions
 	// appearance
 
 	// put in the batch to be passed into overlay rendererer
-    void (*const render) (struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
+    void (*const render) (struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
 
     // used to recursively find the gui_object under the pixel location provided
-    struct sol_gui_object* (*const hit_scan) (struct sol_gui_object* obj, vec2_s16 location);// hit_scan, scan
+    struct sol_gui_object* (*const hit_scan) (struct sol_gui_object* obj, s16_vec2 location);// hit_scan, scan
 
     // sets the min_size of the gui_object to inform parents of their minimum size
-    vec2_s16 (*const min_size) (struct sol_gui_object* obj);
+    s16_vec2 (*const min_size) (struct sol_gui_object* obj);
 
     // fills out any data affected by the position(size and location) of this object (which must have been set by the gui_object's parent) and decides how to distribute that space amongst its children if it has them
-    void (*const place_content) (struct sol_gui_object* obj, rect_s16 content_rect);
+    void (*const place_content) (struct sol_gui_object* obj, s16_rect content_rect);
 
     // adds a child to this widget, will error if widget cannot accept children
     void (*const add_child) (struct sol_gui_object* obj, struct sol_gui_object* child);
@@ -82,8 +82,8 @@ struct sol_gui_object
 	uint32_t reference_count : SOL_GUI_REFERENCE_BIT_COUNT;
 	uint32_t flags           : SOL_GUI_OBJECT_FLAGS_BIT_COUNT;
 
-	vec2_s16 min_size;
-	rect_s16 position;/// this is relative to parent
+	s16_vec2 min_size;
+	s16_rect position;/// this is relative to parent
 
 	// other widgets in structure
 	struct sol_gui_object* parent;
@@ -108,10 +108,10 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 
 
 // these perform any meta operations on objects and call their internal functions if present
-void                   sol_gui_object_render       (struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_object_hit_scan     (struct sol_gui_object* obj, vec2_s16 location);
-vec2_s16               sol_gui_object_min_size     (struct sol_gui_object* obj);
-void                   sol_gui_object_place_content(struct sol_gui_object* obj, rect_s16 content_rect);
+void                   sol_gui_object_render       (struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
+struct sol_gui_object* sol_gui_object_hit_scan     (struct sol_gui_object* obj, s16_vec2 location);
+s16_vec2               sol_gui_object_min_size     (struct sol_gui_object* obj);
+void                   sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_rect);
 void                   sol_gui_object_add_child    (struct sol_gui_object* obj, struct sol_gui_object* child);
 void                   sol_gui_object_remove_child (struct sol_gui_object* obj, struct sol_gui_object* child);
 
@@ -123,5 +123,5 @@ bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_in
 
 
 // this should be used with the utmost care (prefer calling context reorganization function)
-// void sol_gui_object_reorganise(struct sol_gui_object* obj, rect_s16 rect);
+// void sol_gui_object_reorganise(struct sol_gui_object* obj, s16_rect rect);
 

@@ -72,21 +72,21 @@ static inline void* sol_gui_button_get_buffer(struct sol_gui_button* button)
 
 
 
-static void sol_gui_text_button_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch)
+static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	char* text = sol_gui_button_get_buffer(button);
 	exit('!');
 }
-static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
+static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
 	exit('!');
 	return obj;
 }
-static vec2_s16 sol_gui_text_button_min_size(struct sol_gui_object* obj)
+static s16_vec2 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 {
 	exit('!');
-	return (vec2_s16){0,0};
+	return (s16_vec2){0,0};
 }
 static const struct sol_gui_object_structure_functions sol_gui_text_button_structure_functions =
 {
@@ -112,21 +112,21 @@ struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* contex
 
 
 
-static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch)
+static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	char* utf8_icon = sol_gui_button_get_buffer(button);
 	exit('!');
 }
-static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
+static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
 	exit('!');
 	return obj;
 }
-static vec2_s16 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
+static s16_vec2 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 {
 	exit('!');
-	return (vec2_s16){0,0};
+	return (s16_vec2){0,0};
 }
 static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_structure_functions =
 {

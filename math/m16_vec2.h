@@ -22,18 +22,18 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct vec2_m16
+typedef struct m16_vec2
 {
     uint16_t x;
     uint16_t y;
 }
-vec2_m16;
+m16_vec2;
 
-static inline bool vec2_m16_any(vec2_m16 v)
+static inline bool m16_vec2_any(m16_vec2 v)
 {
     return v.x || v.y;
 }
-static inline bool vec2_m16_all(vec2_m16 v)
+static inline bool m16_vec2_all(m16_vec2 v)
 {
     return v.x && v.y;
 }

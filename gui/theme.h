@@ -21,8 +21,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
-#include "math/vec2_s16.h"
-#include "math/rect_s16.h"
+#include "math/s16_vec2.h"
+#include "math/s16_rect.h"
 
 /** size classes:
  * size classes allow the creation of boxes that neatly fit inside one another and can fulfill different purposes
@@ -56,17 +56,16 @@ struct sol_gui_theme
     */
 
     // should this even use bounds? limited render should be managed with constrained renders
-    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
-    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);/// box should be offset should be such that the origin is the selection point to be queried
-    rect_s16 (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
-    vec2_s16 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size);
+    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
+    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);/// box should be offset should be such that the origin is the selection point to be queried
+    s16_rect (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
+    s16_vec2 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
 
     // box render with scroll information ?? (for localised scroll, can be extra)
-
-    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
-    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
-    rect_s16 (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 rect);
-    vec2_s16 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size);
+    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
+    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
+    s16_rect (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
+    s16_vec2 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
 
     #warning call function clip against box (subset of clip generic which acts on any shaded/mask element)
 

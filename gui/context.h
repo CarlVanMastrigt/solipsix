@@ -21,7 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
-#include "math/vec2_s16.h"
+#include "math/s16_vec2.h"
 
 struct sol_input;
 struct sol_gui_object;
@@ -33,9 +33,9 @@ struct sol_gui_object;
 struct sol_gui_context
 {
     // should be position and size of containing system window
-    vec2_s16 window_offset;
-    vec2_s16 window_size;
-    vec2_s16 window_min_size;
+    s16_vec2 window_offset;
+    s16_vec2 window_size;
+    s16_vec2 window_min_size;
 
 	// shouldnt be able to modify the theme's data from
     const struct sol_gui_theme* theme;
@@ -71,7 +71,7 @@ struct sol_gui_context
 };
 
 // also creates and returns the root object
-struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, vec2_s16 window_offset, vec2_s16 window_size);
+struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size);
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
 // actually not sure how to handle these, they WILL retain objects though
@@ -84,7 +84,7 @@ void sol_gui_context_set_focused_object    (struct sol_gui_context* context, str
  * otherwise if min_size is null will supress errors and FORCE it to work
  *  this will result in content escaping the screen range, and will set content_fits to false
  * */
-bool sol_gui_context_update_window(struct sol_gui_context* context, vec2_s16 window_offset, vec2_s16 window_size);
+bool sol_gui_context_update_window(struct sol_gui_context* context, s16_vec2 window_offset, s16_vec2 window_size);
 // call this when contents of all widgets may have changed, e.g. at crteation time, after theme change, if a single widget in root has changed, instead try to be more precise
 bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
 

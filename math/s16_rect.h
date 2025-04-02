@@ -22,17 +22,17 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stdbool.h>
 
-#include "math/vec2_s16.h"
+#include "math/s16_vec2.h"
 
 
-typedef struct rect_s16
+typedef struct s16_rect
 {
-    vec2_s16 start;
-    vec2_s16 end;
+    s16_vec2 start;
+    s16_vec2 end;
 }
-rect_s16;
+s16_rect;
 
-static inline rect_s16 rect_s16_intersect(rect_s16 lhs, rect_s16 rhs)
+static inline s16_rect s16_rect_intersect(s16_rect lhs, s16_rect rhs)
 {
     lhs.start.x += (rhs.start.x > lhs.start.x) ? (rhs.start.x - lhs.start.x) : 0;
     lhs.start.y += (rhs.start.y > lhs.start.y) ? (rhs.start.y - lhs.start.y) : 0;
@@ -42,43 +42,43 @@ static inline rect_s16 rect_s16_intersect(rect_s16 lhs, rect_s16 rhs)
 
     return lhs;
 }
-static inline rect_s16 rect_s16_add_offset(rect_s16 r, vec2_s16 o)
+static inline s16_rect s16_rect_add_offset(s16_rect r, s16_vec2 o)
 {
-    return (rect_s16){.start.x=r.start.x+o.x, .start.y=r.start.y+o.y, .end.x=r.end.x+o.x, .end.y=r.end.y+o.y};
+    return (s16_rect){.start.x=r.start.x+o.x, .start.y=r.start.y+o.y, .end.x=r.end.x+o.x, .end.y=r.end.y+o.y};
 }
-static inline rect_s16 rect_s16_sub_offset(rect_s16 r, vec2_s16 o)
+static inline s16_rect s16_rect_sub_offset(s16_rect r, s16_vec2 o)
 {
-    return (rect_s16){.start.x=r.start.x-o.x, .start.y=r.start.y-o.y,.end.x=r.end.x-o.x, .end.y=r.end.y-o.y};
+    return (s16_rect){.start.x=r.start.x-o.x, .start.y=r.start.y-o.y,.end.x=r.end.x-o.x, .end.y=r.end.y-o.y};
 }
-static inline rect_s16 rect_s16_dilate(rect_s16 r, int32_t d)
+static inline s16_rect s16_rect_dilate(s16_rect r, int32_t d)
 {
-    return (rect_s16){.start.x=r.start.x-d, .start.y=r.start.y-d,.end.x=r.end.x+d, .end.y=r.end.y+d};
+    return (s16_rect){.start.x=r.start.x-d, .start.y=r.start.y-d,.end.x=r.end.x+d, .end.y=r.end.y+d};
 }
-static inline rect_s16 rect_s16_add_border(rect_s16 r, vec2_s16 b)
+static inline s16_rect s16_rect_add_border(s16_rect r, s16_vec2 b)
 {
-    return (rect_s16){.start = vec2_s16_sub(r.start, b),.end = vec2_s16_add(r.start, b)};
+    return (s16_rect){.start = s16_vec2_sub(r.start, b),.end = s16_vec2_add(r.start, b)};
 }
-static inline rect_s16 rect_s16_sub_border(rect_s16 r, vec2_s16 b)
+static inline s16_rect s16_rect_sub_border(s16_rect r, s16_vec2 b)
 {
-    return (rect_s16){.start = vec2_s16_add(r.start, b),.end = vec2_s16_sub(r.start, b)};
+    return (s16_rect){.start = s16_vec2_add(r.start, b),.end = s16_vec2_sub(r.start, b)};
 }
-static inline bool rect_s16_contains_point(rect_s16 r, vec2_s16 p)
+static inline bool s16_rect_contains_point(s16_rect r, s16_vec2 p)
 {
     return ((r.start.x <= p.x)&&(r.start.y <= p.y)&&(r.end.x > p.x)&&(r.end.y> p.y));
 }
-static inline bool rect_s16_contains_origin(rect_s16 r)
+static inline bool s16_rect_contains_origin(s16_rect r)
 {
     return ((r.start.x <= 0)&&(r.start.y <= 0)&&(r.end.x > 0)&&(r.end.y> 0));
 }
-static inline bool rect_s16_have_overlap(rect_s16 lhs, rect_s16 rhs)
+static inline bool s16_rect_have_overlap(s16_rect lhs, s16_rect rhs)
 {
     return lhs.start.x<rhs.end.x && lhs.end.x>rhs.start.x && lhs.start.y<rhs.end.y && lhs.end.y>rhs.start.y;
 }
-static inline vec2_s16 rect_s16_size(rect_s16 r)
+static inline s16_vec2 s16_rect_size(s16_rect r)
 {
-    return vec2_s16_sub(r.end, r.start);
+    return s16_vec2_sub(r.end, r.start);
 }
-static inline bool rect_s16_valid(rect_s16 r)
+static inline bool s16_rect_valid(s16_rect r)
 {
     return r.start.x<=r.end.x && r.start.y<=r.end.y;
 }

@@ -24,7 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/container.h"
 
 
-void sol_gui_container_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch)
+void sol_gui_container_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
@@ -35,7 +35,7 @@ void sol_gui_container_render(struct sol_gui_object* obj, vec2_s16 offset, struc
 		sol_gui_object_render(child, offset, batch);
 	}
 }
-struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, vec2_s16 location)
+struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
@@ -52,22 +52,22 @@ struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, ve
 	}
 	return NULL;
 }
-static vec2_s16 sol_gui_container_min_size(struct sol_gui_object* obj)
+static s16_vec2 sol_gui_container_min_size(struct sol_gui_object* obj)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
-	vec2_s16 min_size = {0,0};
-	vec2_s16 child_min_size;
+	s16_vec2 min_size = {0,0};
+	s16_vec2 child_min_size;
 
 	for(child = container->first_child; child; child = child->next)
 	{
 		child_min_size = sol_gui_object_min_size(child);
-		min_size = vec2_s16_max(min_size, child_min_size);
+		min_size = s16_vec2_max(min_size, child_min_size);
 	}
 
 	return min_size;
 }
-static void sol_gui_container_place_content(struct sol_gui_object* obj, rect_s16 content_rect)
+static void sol_gui_container_place_content(struct sol_gui_object* obj, s16_rect content_rect)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
