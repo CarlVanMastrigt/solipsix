@@ -507,7 +507,8 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
 static void cvm_vk_initialise_device_queue(cvm_vk_device * device,cvm_vk_device_queue * queue,uint32_t queue_family_index,uint32_t queue_index)
 {
     sol_vk_timeline_semaphore_initialise(&queue->timeline, device);
-    vkGetDeviceQueue(device->device,queue_family_index,queue_index,&queue->queue);
+    vkGetDeviceQueue(device->device, queue_family_index, queue_index, &queue->queue);
+    queue->family_index = queue_family_index;
 }
 
 static void cvm_vk_terminate_device_queue(cvm_vk_device * device,cvm_vk_device_queue * queue)
@@ -518,16 +519,6 @@ static void cvm_vk_terminate_device_queue(cvm_vk_device * device,cvm_vk_device_q
 static void cvm_vk_initialise_device_queue_family(cvm_vk_device * device, cvm_vk_device_queue_family * queue_family,uint32_t queue_family_index,uint32_t queue_count)
 {
     uint32_t i;
-
-    VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .queueFamilyIndex=queue_family_index,
-    };
-
-    CVM_VK_CHECK(vkCreateCommandPool(device->device, &command_pool_create_info, device->host_allocator, &queue_family->internal_command_pool));
 
     queue_family->queues=malloc(sizeof(cvm_vk_device_queue)*queue_count);
     queue_family->queue_count=queue_count;
@@ -540,8 +531,6 @@ static void cvm_vk_initialise_device_queue_family(cvm_vk_device * device, cvm_vk
 static void cvm_vk_terminate_device_queue_family(cvm_vk_device * device,cvm_vk_device_queue_family * queue_family)
 {
     uint32_t i;
-
-    vkDestroyCommandPool(device->device, queue_family->internal_command_pool, device->host_allocator);
 
     for(i=0;i<queue_family->queue_count;i++)
     {
@@ -716,19 +705,9 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
 
 
 
-    #warning REMOVE THESE
-    {
-        printf("graphics family: %u\n",device->graphics_queue_family_index);
-        printf("compute family: %u\n",device->async_compute_queue_family_index);
-        printf("transfer family: %u\n",device->transfer_queue_family_index);
-
-        device->fallback_present_queue_family_index = device->async_compute_queue_family_index;
-        device->fallback_present_queue_family_index = device->graphics_queue_family_index;
-        #warning this is temporary while transfers get back up and running!
-        device->transfer_queue_family_index = device->graphics_queue_family_index;
-        if(device->transfer_queue_family_index==CVM_INVALID_U32_INDEX)device->transfer_queue_family_index=device->graphics_queue_family_index;
-    }
-
+    printf("graphics family: %u\n",device->graphics_queue_family_index);
+    printf("compute family: %u\n",device->async_compute_queue_family_index);
+    printf("transfer family: %u\n",device->transfer_queue_family_index);
 
 
 
@@ -1071,33 +1050,41 @@ static inline void cvm_vk_pipeline_cache_terminate(struct cvm_vk_pipeline_cache*
     free(pipeline_cache->file_name);
 }
 
-static inline void sol_vk_object_pools_initialise(struct sol_vk_object_pools* pools,const struct cvm_vk_device * device)
+static inline struct sol_vk_object_pools* sol_vk_object_pools_create(const struct cvm_vk_device * device)
 {
-    sol_vk_semaphore_stack_initialise(&pools->semaphores, 16);
-    mtx_init(&pools->semaphore_mutex, mtx_plain);
+    struct sol_vk_object_pools* object_pools = malloc(sizeof(struct sol_vk_object_pools));
+
+    sol_vk_semaphore_stack_initialise(&object_pools->semaphores, 16);
+    mtx_init(&object_pools->semaphore_mutex, mtx_plain);
+
+    return object_pools;
 }
 
-static inline void sol_vk_object_pools_terminate(struct sol_vk_object_pools* pools,const struct cvm_vk_device * device)
+static inline void sol_vk_object_pools_destroy(struct sol_vk_object_pools* object_pools, const struct cvm_vk_device * device)
 {
     VkSemaphore semaphore;
 
-    while(sol_vk_semaphore_stack_remove(&pools->semaphores, &semaphore))
+    while(sol_vk_semaphore_stack_remove(&object_pools->semaphores, &semaphore))
     {
         vkDestroySemaphore(device->device, semaphore, device->host_allocator);
     }
-    sol_vk_semaphore_stack_terminate(&pools->semaphores);
-    mtx_destroy(&pools->semaphore_mutex);
+    sol_vk_semaphore_stack_terminate(&object_pools->semaphores);
+    mtx_destroy(&object_pools->semaphore_mutex);
+
+    free(object_pools);
 }
 
-VkSemaphore sol_vk_device_object_pool_semaphore_acquire(struct cvm_vk_device* device)
+VkSemaphore sol_vk_device_object_pool_semaphore_acquire(const struct cvm_vk_device* device)
 {
     VkSemaphore semaphore;
     VkResult result;
     bool acquired;
 
-    mtx_lock(&device->object_pools.semaphore_mutex);
-    acquired = sol_vk_semaphore_stack_remove(&device->object_pools.semaphores, &semaphore);
-    mtx_unlock(&device->object_pools.semaphore_mutex);
+    struct sol_vk_object_pools* object_pools = device->object_pools;
+
+    mtx_lock(&object_pools->semaphore_mutex);
+    acquired = sol_vk_semaphore_stack_remove(&object_pools->semaphores, &semaphore);
+    mtx_unlock(&object_pools->semaphore_mutex);
 
     if(!acquired)
     {
@@ -1115,11 +1102,12 @@ VkSemaphore sol_vk_device_object_pool_semaphore_acquire(struct cvm_vk_device* de
     return semaphore;
 }
 
-void sol_vk_device_object_pool_semaphore_release(struct cvm_vk_device* device, VkSemaphore semaphore)
+void sol_vk_device_object_pool_semaphore_release(const struct cvm_vk_device* device, VkSemaphore semaphore)
 {
-    mtx_lock(&device->object_pools.semaphore_mutex);
-    sol_vk_semaphore_stack_append(&device->object_pools.semaphores, semaphore);
-    mtx_unlock(&device->object_pools.semaphore_mutex);
+    struct sol_vk_object_pools* object_pools = device->object_pools;
+    mtx_lock(&object_pools->semaphore_mutex);
+    sol_vk_semaphore_stack_append(&object_pools->semaphores, semaphore);
+    mtx_unlock(&object_pools->semaphore_mutex);
 }
 
 
@@ -1146,7 +1134,7 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup* 
 
 
     cvm_vk_defaults_initialise(&device->defaults, device);
-    sol_vk_object_pools_initialise(&device->object_pools, device);
+    device->object_pools = sol_vk_object_pools_create(device);
 
     cvm_vk_create_defaults_old();
 
@@ -1161,7 +1149,7 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
 
     cvm_vk_destroy_defaults_old();
 
-    sol_vk_object_pools_terminate(&device->object_pools, device);
+    sol_vk_object_pools_destroy(device->object_pools, device);
     cvm_vk_defaults_terminate(&device->defaults, device);
 
 #warning make destroy

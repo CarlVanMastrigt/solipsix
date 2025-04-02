@@ -624,7 +624,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(
     };
 
 
-    #warning genericize the following with a function
+    #warning genericize the following with a function (in swapchain)
 
     if(first_use)/// can figure out from state
     {
@@ -632,53 +632,23 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(
         presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_STARTED;
         target.wait_semaphores[target.wait_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->acquire_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
+    else
+    {
+        #warning technically need to handle QFOT here! but thats quite painful, otherwise need to handle (wait on) any other use of this image
+    }
 
     assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_STARTED);
 
-    #warning make this whole thing a part of swapchain's functionality
+    #warning presentable image management part of swapchain's functionality
     if(last_use)/// don't have a perfect way to figure out, but could infer from
     {
         overlay_queue_family_index = device->graphics_queue_family_index;
 
-        presentable_image->latest_queue_family = overlay_queue_family_index;
+        assert(presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<overlay_queue_family_index));// must be able to present on this queue family
 
-        // can present on this queue family
-        if(presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<overlay_queue_family_index))
-        {
-            presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE;
-            /// signal after any stage that could modify the image contents
-            target.signal_semaphores[target.signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
-        }
-        else
-        {
-            presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED;
-
-            target.signal_semaphores[target.signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-            target.release_barriers[target.release_barrier_count++] = (VkImageMemoryBarrier2)
-            {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext = NULL,
-                .srcStageMask  =  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask  =  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                /// ignored by QFOT??
-                .dstStageMask = 0,///no relevant stage representing present... (afaik), maybe VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT ??
-                .dstAccessMask = 0,///should be 0 by spec
-                .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
-                .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .srcQueueFamilyIndex = overlay_queue_family_index,
-                .dstQueueFamilyIndex = presentable_image->parent_swapchain_instance->fallback_present_queue_family,
-                .image = presentable_image->image,
-                .subresourceRange = (VkImageSubresourceRange)
-                {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1
-                }
-            };
-        }
+        presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE;
+        /// signal after any stage that could modify the image contents
+        target.signal_semaphores[target.signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
 
     completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, root_widget, &target);

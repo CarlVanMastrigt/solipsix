@@ -100,9 +100,6 @@ SOL_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy_stack, cvm_vk_buffer_image
 SOL_STACK(VkSemaphore, sol_vk_semaphore_stack, sol_vk_semaphore_stack)
 
 
-#include "vk/command_pool.h"
-#include "vk/swapchain.h"
-
 
 typedef struct cvm_vk_instance_setup
 {
@@ -152,12 +149,11 @@ typedef struct cvm_vk_device_setup
 cvm_vk_device_setup;
 
 
-#warning separate device and instance?
-
 typedef struct cvm_vk_device_queue
 {
     struct sol_vk_timeline_semaphore timeline;
     VkQueue queue;
+    uint32_t family_index;
 }
 cvm_vk_device_queue;
 
@@ -167,8 +163,6 @@ typedef struct cvm_vk_device_queue_family
 
     cvm_vk_device_queue* queues;
     uint32_t queue_count;
-    VkCommandPool internal_command_pool;
-    ///mutex to lock above?
 }
 cvm_vk_device_queue_family;
 
@@ -190,12 +184,12 @@ struct sol_vk_object_pools
     mtx_t semaphore_mutex;
 };
 
-VkSemaphore sol_vk_device_object_pool_semaphore_acquire(struct cvm_vk_device* device);
-void sol_vk_device_object_pool_semaphore_release(struct cvm_vk_device* device, VkSemaphore semaphore);
+VkSemaphore sol_vk_device_object_pool_semaphore_acquire(const struct cvm_vk_device* device);
+void sol_vk_device_object_pool_semaphore_release(const struct cvm_vk_device* device, VkSemaphore semaphore);
 
 struct cvm_vk_device
 {
-    #warning need to add some serious multithreading consideration to this struct
+    #warning need to add some serious multithreading consideration to this struct, probably with a recursive mutex
     const VkAllocationCallbacks* host_allocator;
 
     VkPhysicalDevice physical_device;
@@ -224,20 +218,21 @@ struct cvm_vk_device
     uint32_t transfer_queue_family_index;///rename to host_device_transfer ??
     uint32_t async_compute_queue_family_index;
 
-    uint32_t fallback_present_queue_family_index;
-    #warning remove present, this should be per swapchain image
-    #warning add image backing blocks per heap type (start with 0 blocks, used for small, non-dedicated allocations)
-
     struct cvm_vk_pipeline_cache pipeline_cache;
 
     struct cvm_vk_defaults defaults;
 
     atomic_uint_least64_t * resource_identifier_monotonic;
+    #warning make above track/manage all resources as well as their backing memory
+    #warning add image backing blocks per heap type (start with 0 blocks, used for small, non-dedicated allocations)
 
     // move this somewhere else maybe?
     // set of default data types that are recyclable within different objects in the device
-    struct sol_vk_object_pools object_pools;
+    struct sol_vk_object_pools* object_pools;
 };
+
+#include "vk/command_pool.h"
+#include "vk/swapchain.h"
 
 static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acquire(const cvm_vk_device * device)
 {

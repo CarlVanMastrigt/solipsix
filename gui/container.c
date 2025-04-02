@@ -29,7 +29,7 @@ void sol_gui_container_render(struct sol_gui_object* obj, vec2_s16 offset, struc
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 
-	// search back to front
+	// iterate back to front for when children can stack (first is on top)
 	for(child = container->last_child; child; child = child->prev)
 	{
 		sol_gui_object_render(child, offset, batch);
@@ -41,7 +41,7 @@ struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, ve
 	struct sol_gui_object* child;
 	struct sol_gui_object* result;
 
-	// search front to back
+	// iterate(search) front to back for when children can stack (first is on top)
 	for(child = container->first_child; child; child = child->next)
 	{
 		result = sol_gui_object_hit_scan(child, location);

@@ -29,20 +29,12 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
     presentable_image->index = index;
     presentable_image->parent_swapchain_instance = parent_swapchain_instance;
 
-    presentable_image->present_semaphore = cvm_vk_create_binary_semaphore(device);
-    presentable_image->qfot_semaphore = cvm_vk_create_binary_semaphore(device);
+    presentable_image->present_semaphore = sol_vk_device_object_pool_semaphore_acquire(device);
 
     presentable_image->acquire_semaphore=VK_NULL_HANDLE;///set using one of the available image_acquisition_semaphores
     presentable_image->state=CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
 
-    presentable_image->latest_queue_family = CVM_INVALID_U32_INDEX;
     presentable_image->latest_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
-
-    presentable_image->present_acquire_command_buffers = malloc(sizeof(VkCommandBuffer) * device->queue_family_count);
-    for(i=0;i<device->queue_family_count;i++)
-    {
-        presentable_image->present_acquire_command_buffers[i] = VK_NULL_HANDLE;
-    }
 
     presentable_image->presentation_fence = cvm_vk_create_fence(device, false);
     presentable_image->presentation_fence_active = false;
@@ -79,9 +71,13 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
     #warning above may need to move to have a mutex lock, at the very least for the resource identifier
 }
 
-static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, const cvm_vk_swapchain_instance * parent_swapchain_instance)
+static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain_presentable_image* presentable_image, const cvm_vk_device * device, const cvm_vk_swapchain_instance * parent_swapchain_instance)
 {
     uint32_t i;
+    cvm_vk_swapchain_instance* swapchain_instance;
+
+
+    swapchain_instance = presentable_image->parent_swapchain_instance;
 
     if(presentable_image->presentation_fence_active)
     {
@@ -95,20 +91,7 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
 
     assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
 
-    vkDestroySemaphore(device->device, presentable_image->present_semaphore, NULL);
-    vkDestroySemaphore(device->device, presentable_image->qfot_semaphore, NULL);
-
-    ///queue ownership transfer stuff
-    for(i=0;i<device->queue_family_count;i++)
-    {
-        if(presentable_image->present_acquire_command_buffers[i]!=VK_NULL_HANDLE)
-        {
-            /// FUUUUCK, this BS probably means each instance wants its own set of command pools, freeing command pools can cause fragmentation! WTF should I do!?
-            vkFreeCommandBuffers(device->device, device->queue_families[parent_swapchain_instance->fallback_present_queue_family].internal_command_pool, 1, presentable_image->present_acquire_command_buffers+i);
-            #warning requires synchronization! (uses shared command pool, ergo not thread safe)
-        }
-    }
-    free(presentable_image->present_acquire_command_buffers);
+    sol_vk_device_object_pool_semaphore_release(device, presentable_image->present_semaphore);
 }
 
 static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device, const cvm_vk_surface_swapchain * swapchain, VkSwapchainKHR old_swapchain)
@@ -157,6 +140,7 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     free(present_modes);
 
 
+
     /// search for presentable queue families
     instance->queue_family_presentable_mask = 0;
     instance->fallback_present_queue_family = CVM_INVALID_U32_INDEX;
@@ -172,6 +156,7 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     }
     if(instance->queue_family_presentable_mask==0) return -1;///cannot present to this surface!
     assert(instance->fallback_present_queue_family != CVM_INVALID_U32_INDEX);
+
 
     /// check surface capabilities and create a the new swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physical_device, swapchain->setup_info.surface, &instance->surface_capabilities));
@@ -221,6 +206,8 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     free(images);
 
 
+
+
     cvm_vk_create_swapchain_dependent_defaults(instance->surface_capabilities.currentExtent.width,instance->surface_capabilities.currentExtent.height);
     #warning make these defaults part of the swapchain_instance!?
 
@@ -257,7 +244,7 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
 
 
 
-void cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup)
+void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup)
 {
     swapchain->setup_info = *setup;
 
@@ -272,7 +259,7 @@ void cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swa
     cvm_vk_swapchain_instance_queue_initialise(&swapchain->swapchain_queue, 16);
 }
 
-void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain)
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, const struct cvm_vk_device * device)
 {
     cvm_vk_swapchain_instance * instance;
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -323,7 +310,7 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 
 
 
-static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
+static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface_swapchain * swapchain, const struct cvm_vk_device * device)
 {
     cvm_vk_swapchain_presentable_image * presentable_image;
     cvm_vk_swapchain_instance * instance;
@@ -372,7 +359,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
 }
 
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, const struct cvm_vk_device * device)
 {
     bool existing_instance;
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -434,7 +421,6 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
             presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_ACQUIRED;
             presentable_image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
             presentable_image->latest_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
-            presentable_image->latest_queue_family=CVM_INVALID_U32_INDEX;
         }
         else
         {
@@ -457,156 +443,34 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
 
 
 
-static VkCommandBuffer cvm_vk_swapchain_create_image_qfot_command_buffer(const cvm_vk_device * device, VkImage image, uint32_t src_queue_family, uint32_t dst_queue_family)
-{
-    VkCommandBuffer command_buffer;
-    #warning mutex lock on device internal command pool (device no longer const?)
-    #warning instead move command pool to the swapchain instance? only need 1 command pool! for the fallback queue family!
-    VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .pNext=NULL,
-        .commandPool=device->queue_families[dst_queue_family].internal_command_pool,
-        .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount=1
-    };
-
-    CVM_VK_CHECK(vkAllocateCommandBuffers(device->device,&command_buffer_allocate_info,&command_buffer));
-
-    VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext=NULL,
-        .flags=0,///not one time use
-        .pInheritanceInfo=NULL
-    };
-
-    VkDependencyInfo present_acquire_dependencies=
-    {
-        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext=NULL,
-        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT,
-        .memoryBarrierCount=0,
-        .pMemoryBarriers=NULL,
-        .bufferMemoryBarrierCount=0,
-        .pBufferMemoryBarriers=NULL,
-        .imageMemoryBarrierCount=1,
-        .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext=NULL,
-                .srcStageMask=0,/// from examles: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
-                .srcAccessMask=0,
-                .dstStageMask=VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,/// ??? what stage even is present? (stage and access can probably be 0, just being overly safe here)
-                .dstAccessMask=VK_ACCESS_2_MEMORY_READ_BIT,
-                .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .srcQueueFamilyIndex=src_queue_family,
-                .dstQueueFamilyIndex=dst_queue_family,
-                .image=image,
-                .subresourceRange=(VkImageSubresourceRange)
-                {
-                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel=0,
-                    .levelCount=1,
-                    .baseArrayLayer=0,
-                    .layerCount=1
-                }
-            }
-        }
-    };
 
 
-    CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer,&command_buffer_begin_info));
-
-    vkCmdPipelineBarrier2(command_buffer,&present_acquire_dependencies);
-
-    CVM_VK_CHECK(vkEndCommandBuffer(command_buffer));
-
-    return command_buffer;
-}
-
-void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image* presentable_image)
+#warning instead of handling QFOT, keep this as a reference and ENFORCE that most recently used queue is presentable
+#warning could/should have first/last use signal/wait generation instead? (with internal validation, requiring queue family info?)
+#warning an implementation of a managed image may be able to handle this (with enough tweaking)
+void cvm_vk_surface_swapchain_present_image(const cvm_vk_device * device, cvm_vk_swapchain_presentable_image* presentable_image, cvm_vk_device_queue* present_queue)
 {
     #warning needs massive cleanup
     VkSemaphoreSubmitInfo wait_semaphores[1];
     VkSemaphoreSubmitInfo signal_semaphores[2];
-    cvm_vk_device_queue_family * present_queue_family;
-    cvm_vk_device_queue * present_queue;
-    cvm_vk_swapchain_instance * swapchain_instance;
+    cvm_vk_swapchain_instance* swapchain_instance;
     const void* prev_vk_struct;
     VkResult result;
 
 
     swapchain_instance = presentable_image->parent_swapchain_instance;
 
-    assert(presentable_image->latest_queue_family != CVM_INVALID_U32_INDEX);
     assert(presentable_image->layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-    if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED)
-    {
-        if(presentable_image->present_acquire_command_buffers[presentable_image->latest_queue_family]==VK_NULL_HANDLE)
-        {
-            #warning could allocate the command buffers upfront and only reset upon swapchain recreation...
-            presentable_image->present_acquire_command_buffers[presentable_image->latest_queue_family] =
-                cvm_vk_swapchain_create_image_qfot_command_buffer(device, presentable_image->image, presentable_image->latest_queue_family, swapchain_instance->fallback_present_queue_family);
-        }
-
-
-        present_queue_family = device->queue_families + swapchain_instance->fallback_present_queue_family;
-        present_queue = present_queue_family->queues+0;/// use queue 0
-
-        ///fixed count and layout of wait and signal semaphores here
-        wait_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
-
-        presentable_image->latest_moment = sol_vk_timeline_semaphore_generate_moment(&present_queue->timeline);
-        /// presentable_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
-        signal_semaphores[0] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-        signal_semaphores[1] = sol_vk_timeline_semaphore_moment_submit_info(&presentable_image->latest_moment, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-        #warning REMOVE THIS ^^ (but... these both seem necessary?)
-        #warning is waiting on the latest moment nonsense? i.e. is it invalid to ever actually orchistrate timing by waiting on this after present?
-
-        VkSubmitInfo2 submit_info=(VkSubmitInfo2)
-        {
-            .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .pNext=NULL,
-            .flags=0,
-            .waitSemaphoreInfoCount=1,///fixed number, set above
-            .pWaitSemaphoreInfos=wait_semaphores,
-            .commandBufferInfoCount=1,
-            .pCommandBufferInfos=(VkCommandBufferSubmitInfo[1])
-            {
-                {
-                    .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-                    .pNext=NULL,
-                    .commandBuffer=presentable_image->present_acquire_command_buffers[presentable_image->latest_queue_family],
-                    .deviceMask=0
-                }
-            },
-            .signalSemaphoreInfoCount=2,///fixed number, set above
-            .pSignalSemaphoreInfos=signal_semaphores
-        };
-
-        CVM_VK_CHECK(vkQueueSubmit2(present_queue->queue, 1, &submit_info, VK_NULL_HANDLE));
-
-        presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE;
-    }
-    else
-    {
-        assert(swapchain_instance->queue_family_presentable_mask | (1 << presentable_image->latest_queue_family));///must be presentable on last used queue family
-        present_queue_family = device->queue_families + presentable_image->latest_queue_family;
-        present_queue = present_queue_family->queues + 0;/// use queue 0
-    }
-
     assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE);
+    assert(swapchain_instance->queue_family_presentable_mask | (1 << present_queue->family_index));///must be presentable on last used queue family
 
-
-
-    /// wait on fence for PRIOR present if it has happened
+    /// reset fence if it was submitted before
     if(presentable_image->presentation_fence_active)
     {
-        cvm_vk_wait_on_fence_and_reset(device, presentable_image->presentation_fence);
+        // wait on fence for PRIOR present of this image shouldn't be necessary, as image acquisition should be metered, ergo we just query the fence and assert its been signalled
+        result = vkWaitForFences(device->device, 1, &presentable_image->presentation_fence, VK_TRUE, 0);
+        assert(result == VK_SUCCESS);
+        vkResetFences(device->device, 1, &presentable_image->presentation_fence);
         presentable_image->presentation_fence_active = false;
     }
 

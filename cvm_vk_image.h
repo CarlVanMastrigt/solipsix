@@ -1,5 +1,5 @@
 /**
-Copyright 2021,2022,2024 Carl van Mastrigt
+Copyright 2021,2022,2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -32,7 +32,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct cvm_vk_supervised_image
 {
     /// conceptually: this relies on write->write barriers being transitive
-    /// must be extrnally synchronised an match execution order of submitted work
+    /// must be extrnally synchronised and match execution order of submitted work (ergo probably best to just use this in single threaded fashion)
 
     VkImage image;
     VkImageView view;
@@ -57,11 +57,14 @@ void cvm_vk_supervised_image_barrier(struct cvm_vk_supervised_image* supervised_
 
 
 
-///probably want to use a base tile size of 4 by default? yeah, i think i should use this
 
 
 
-#define CVM_VK_BASE_TILE_SIZE_FACTOR 2
+
+
+
+
+#define CVM_VK_BASE_TILE_SIZE_FACTOR 2 /*2 corresponds to the minimum granularity of BC images (2^2 = 4)*/
 #define CVM_VK_BASE_TILE_SIZE (1u<<CVM_VK_BASE_TILE_SIZE_FACTOR)
 #define CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT 256
 

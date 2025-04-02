@@ -29,8 +29,8 @@ enum cvm_vk_presentable_image_state
 {
     CVM_VK_PRESENTABLE_IMAGE_STATE_READY = 0,/// basically uninitialised
     CVM_VK_PRESENTABLE_IMAGE_STATE_ACQUIRED = 1,
-    CVM_VK_PRESENTABLE_IMAGE_STATE_STARTED = 2,/// have waited on acquire semaphore basically
-    CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED = 3, /// for QFOT
+    CVM_VK_PRESENTABLE_IMAGE_STATE_STARTED = 2,/// have waited on acquire semaphore; basically is being rendered to
+    // CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED = 3, /// for QFOT
     CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE = 4,
     CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED = 5,
 };
@@ -66,15 +66,12 @@ typedef struct cvm_vk_swapchain_presentable_image
     cvm_vk_swapchain_instance * parent_swapchain_instance;/// use with care
 
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR, which doesn not accept timeline semaphores
-    VkSemaphore qfot_semaphore;///required in cases where a QFOT is required, i.e. present_semaphore was signalled but alter work is required to actually present the image
 
     enum cvm_vk_presentable_image_state state;
     VkImageLayout layout;
+    #warning make this a managed image? that way layout tracking can be handled
 
-    /// the command buffers to recieve the QFOT should be created as necessary
-    VkCommandBuffer * present_acquire_command_buffers;
-
-    uint32_t latest_queue_family;// latest queue family where this image was used (useful for QFOT)
+    // uint32_t latest_queue_family;// latest queue family where this image was used (useful for QFOT)
     struct sol_vk_timeline_semaphore_moment latest_moment;// used to order uses of this image across different submodules
     // ^ this being signalled by the presenting command buffer shouldn't communicate whether present has fully competed, only WSI managed primitives can do that
     // so waiting on this (as is presently done) for an existing presented image accomplishes nothing (or at least that should be the case)
@@ -92,13 +89,13 @@ struct cvm_vk_swapchain_instance
     uint32_t fallback_present_queue_family;///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
     uint64_t queue_family_presentable_mask;
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
+    VkSurfaceCapabilitiesKHR surface_capabilities;// contains info about the surface, should really be used
 
     cvm_vk_swapchain_presentable_image* presentable_images; // generated/initialised/set_up upon acquisition of swapchain image from WSI
     uint32_t image_count;/// this is also the number of swapchain images
     uint32_t acquired_image_count;/// just for debug tracking
 
-    bool out_of_date;/// can be used
+    bool out_of_date;/// if true should be recreated ASAP
 
 //    struct /// pregenerated defaults for use in creating other state
 //    {
@@ -126,12 +123,12 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
-void cvm_vk_swapchain_initialse(const cvm_vk_device* device, cvm_vk_surface_swapchain* swapchain, const cvm_vk_swapchain_setup* setup);
-void cvm_vk_swapchain_terminate(const cvm_vk_device* device, cvm_vk_surface_swapchain* swapchain);
+void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup);
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device);
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, cvm_vk_device* device);
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device);
 
-void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain* swapchain, const cvm_vk_device* device, cvm_vk_swapchain_presentable_image* presentable_image);
+void cvm_vk_surface_swapchain_present_image(const cvm_vk_device* device, cvm_vk_swapchain_presentable_image* presentable_image, cvm_vk_device_queue* present_queue);
 
 
 #endif
