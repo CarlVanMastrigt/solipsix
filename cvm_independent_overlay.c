@@ -502,7 +502,7 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, const s
 
 
 
-struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, const struct cvm_overlay_target* target)
+struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, struct sol_gui_context* gui_context, const struct cvm_overlay_target* target)
 {
     cvm_vk_command_buffer cb;
     struct sol_vk_timeline_semaphore_moment completion_moment;
@@ -522,7 +522,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_v
     render_batch = &renderer->render_batch;
 
     /// setup/reset the render batch
-    cvm_overlay_render_batch_build(render_batch, root_widget, image_atlases, target->extent);
+    cvm_overlay_render_batch_build(render_batch, gui_context, image_atlases, target->extent);
 
 
 
@@ -596,7 +596,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_v
 }
 
 
-struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
+struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, struct sol_gui_context* gui_context, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
 {
     uint32_t overlay_queue_family_index;
     struct sol_vk_timeline_semaphore_moment completion_moment;
@@ -651,7 +651,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(
         target.signal_semaphores[target.signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
 
-    completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, root_widget, &target);
+    completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, gui_context, &target);
 
     presentable_image->latest_moment = completion_moment;
     presentable_image->layout = target.final_layout;

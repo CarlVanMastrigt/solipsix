@@ -55,17 +55,23 @@ struct sol_gui_theme
      * size: given some content, how big does the box/panel need to be (paired with place_content)
     */
 
-    // should this even use bounds? limited render should be managed with constrained renders
-    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
-    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);/// box should be offset should be such that the origin is the selection point to be queried
+
+    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch);
+    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);/// box should be offset should be such that the origin is the selection point to be queried
     s16_rect (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
-    s16_vec2 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
+    s16_vec2 (*box_size)          (struct sol_gui_theme* restrict theme, uint32_t flags, s16_vec2 contents_size);
+    // may need a function that subtracts borders for items that require clipping to be passed on, OR parent information can be passed down (bounds and flags that dictate borders)
 
     // box render with scroll information ?? (for localised scroll, can be extra)
-    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour);
-    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
+    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch);
+    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);
     s16_rect (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
     s16_vec2 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
+
+    #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
+    // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)
+    // would almost need to compose clip functions (could just do this?) intermediary render very undesirable, but may be "the" solution...
+    // may also want generic bounding struct to apply to rendering, can impose box and panel clipping, fade, hard bounds &c.
 
     #warning call function clip against box (subset of clip generic which acts on any shaded/mask element)
 

@@ -21,6 +21,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 #include <vulkan/vulkan_core.h>
 
+#include "gui/object.h"
+
 
 static VkResult cvm_overlay_descriptor_pool_create(VkDescriptorPool* pool, const cvm_vk_device * device, uint32_t active_render_count)
 {
@@ -127,8 +129,8 @@ VkResult cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering
     result = cvm_overlay_pipeline_layout_create(&rendering_resources->pipeline_layout, device, rendering_resources->descriptor_set_layout);
     assert(result == VK_SUCCESS);
 
-    cvm_vk_create_shader_stage_info(&rendering_resources->vertex_pipeline_stage,  device, "shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&rendering_resources->fragment_pipeline_stage,device, "shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&rendering_resources->vertex_pipeline_stage,  device, "solipsix/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&rendering_resources->fragment_pipeline_stage,device, "solipsix/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
     return result;
 }
@@ -490,7 +492,7 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)
 
 /// can actually easily sub in/out atlases, will just require re-filling them from cpu data (or can even manually copy over data between atlases, which would defragment in the process)
 #warning replace atlases with cvm_overlay_image_atlases
-void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget* root_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent)
+void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent)
 {
     /// copy actions should be reset when copied, this must have been done before resetting the batch (overlay system relies on these entries having been staged and uploaded)
     assert(batch->alpha_atlas_copy_actions.count == 0);
@@ -499,26 +501,21 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     sol_vk_shunt_buffer_reset(&batch->upload_shunt_buffer);
     cvm_overlay_element_render_data_stack_reset(&batch->render_elements);
 
+    batch->current_render_bounds = s16_rect_set(0, 0, target_extent.width, target_extent.height);
+
     batch->colour_atlas = &image_atlases->colour_atlas;
     batch->alpha_atlas  = &image_atlases->alpha_atlas;
 
-    batch->target_extent = target_extent;
-    if(root_widget->base.r.x1 != 0 || root_widget->base.r.y1 != 0)
+    batch->final_target_extent = target_extent;
+
+    bool gui_fits = sol_gui_context_update_screen_size(gui_context, s16_vec2_set(target_extent.width, target_extent.height));
+    if(!gui_fits)
     {
-        fprintf(stderr, "overlay rendering expects the menu widget to start at 0,0");
-        /// ^ could fix this by having scissor rect be the mechanism for drawing a subsection of the target rather than the viewport
+        fprintf(stderr, "overlay doesn't fit on screen\n");
     }
 
-    if(root_widget->base.r.x2 != target_extent.width || root_widget->base.r.y2 != target_extent.height)
-    {
-//        clock_gettime(CLOCK_REALTIME,&ts1);
-        organise_root_widget(root_widget, target_extent.width, target_extent.height);
-//        clock_gettime(CLOCK_REALTIME,&ts2);
-//        ns=(ts2.tv_sec-ts1.tv_sec)*1000000000 + ts2.tv_nsec-ts1.tv_nsec;
-//        printf("re-organise: %llu\n",ns);
-    }
-
-    render_widget_overlay(batch, root_widget);
+    sol_gui_context_render(gui_context, batch);
+    // render_widget_overlay(batch, root_widget);
 }
 
 void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)
@@ -573,7 +570,7 @@ descriptor set (from batch): must come from managed per-frame resources, dynamic
 */
 void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer)
 {
-    if(pipeline->extent.width != batch->target_extent.width || pipeline->extent.height != batch->target_extent.height)
+    if(pipeline->extent.width != batch->final_target_extent.width || pipeline->extent.height != batch->final_target_extent.height)
     {
         fprintf(stderr, "overlay pipeline must be built with the same extent as the batch");
     }
@@ -581,7 +578,7 @@ void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, str
     ///    ^ no, it actually needs to be the size of the screen, b/c these should actually match!
     ///         ^ if they do match, then why are the rendering glitches more prevalent now? -- is there a bug in my base implementation?
 
-    float push_constants[2]={2.0/(float)batch->target_extent.width, 2.0/(float)batch->target_extent.height};
+    float push_constants[2]={2.0/(float)batch->final_target_extent.width, 2.0/(float)batch->final_target_extent.height};
     vkCmdPushConstants(command_buffer, rendering_resources->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2, push_constants);
     /// set index (firstSet) is defined in pipeline creation (index in array)
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rendering_resources->pipeline_layout, 0, 1, &batch->descriptor_set, 0, NULL);

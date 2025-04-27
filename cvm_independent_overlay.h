@@ -30,7 +30,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 /// can be a drop in renderer after other rendering and simply render over the top of other work
 
 
-
+struct sol_gui_context;
 
 
 
@@ -71,9 +71,9 @@ typedef struct cvm_overlay_renderer cvm_overlay_renderer;
 struct cvm_overlay_renderer* cvm_overlay_renderer_create(const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count);
 void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, const struct cvm_vk_device* device);
 
-struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, const struct cvm_overlay_target* target);
+struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, struct sol_gui_context* gui_context, const struct cvm_overlay_target* target);
 
-struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, cvm_vk_swapchain_presentable_image* presentable_image, bool last_use);
+struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, struct sol_gui_context* gui_context, cvm_vk_swapchain_presentable_image* presentable_image, bool last_use);
 
 
 

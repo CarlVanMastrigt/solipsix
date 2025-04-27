@@ -21,7 +21,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 
 #include "gui/button.h"
+#include "overlay/enums.h"
 
+#include <stdio.h>
 
 
 bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
@@ -69,24 +71,46 @@ static inline void* sol_gui_button_get_buffer(struct sol_gui_button* button)
 {
 	return (button+1);
 }
+static inline const void* sol_gui_button_get_buffer_const(const struct sol_gui_button* button)
+{
+	return (button+1);
+}
 
 
 
 static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
-	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	char* text = sol_gui_button_get_buffer(button);
-	exit('!');
+	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+
+	theme->box_render(theme, obj->flags, obj->position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 }
 static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
-	exit('!');
-	return obj;
+	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+
+	if(theme->box_select(theme, obj->flags, obj->position, location))
+	{
+		puts(text);
+		return obj;
+	}
+	return NULL;
 }
 static s16_vec2 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 {
-	exit('!');
-	return (s16_vec2){0,0};
+	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+
+	s16_vec2 content_size = s16_vec2_set(0,0);
+
+	return theme->box_size(theme, obj->flags, content_size);
 }
 static const struct sol_gui_object_structure_functions sol_gui_text_button_structure_functions =
 {
@@ -114,19 +138,28 @@ struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* contex
 
 static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
-	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	char* utf8_icon = sol_gui_button_get_buffer(button);
-	exit('!');
+	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+
+	theme->box_render(theme, obj->flags, obj->position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 }
 static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
-	exit('!');
+	#warning box_select not taking position is... not ideal
 	return obj;
 }
 static s16_vec2 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 {
-	exit('!');
-	return (s16_vec2){0,0};
+	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+
+	s16_vec2 content_size = s16_vec2_set(0,0);
+
+	return theme->box_size(theme, obj->flags, content_size);
 }
 static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_structure_functions =
 {

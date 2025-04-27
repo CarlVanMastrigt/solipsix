@@ -32,13 +32,30 @@ typedef struct s16_rect
 }
 s16_rect;
 
+
+static inline s16_rect s16_rect_set(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end)
+{
+    return (s16_rect){.start = s16_vec2_set(x_start, y_start), .end = s16_vec2_set(x_end, y_end)};
+}
+static inline bool s16_rect_valid(s16_rect r)
+{
+    return r.start.x<=r.end.x && r.start.y<=r.end.y;
+}
+static inline bool s16_rect_will_intersect(s16_rect lhs, s16_rect rhs)
+{
+    return lhs.start.x < rhs.end.x && rhs.start.x < lhs.end.x && lhs.start.y < rhs.end.y && rhs.start.y < lhs.end.y;
+}
 static inline s16_rect s16_rect_intersect(s16_rect lhs, s16_rect rhs)
 {
-    lhs.start.x += (rhs.start.x > lhs.start.x) ? (rhs.start.x - lhs.start.x) : 0;
-    lhs.start.y += (rhs.start.y > lhs.start.y) ? (rhs.start.y - lhs.start.y) : 0;
+    // note that this function doesn't return whether the 2 rectangles intersect
+    // in the case that intersection isn't guaranteed `s16_rect_will_intersect` can be used
+    // OR the result of this function can be validated with `s16_rect_valid` as an invalid rect will be returned should they not intersect
 
-    lhs.end.x += (rhs.end.x < lhs.end.x) ? (rhs.end.x - lhs.end.x) : 0;
-    lhs.end.y += (rhs.end.y < lhs.end.y) ? (rhs.end.y - lhs.end.y) : 0;
+    lhs.start.x = (rhs.start.x < lhs.start.x) ? lhs.start.x : rhs.start.x;
+    lhs.start.y = (rhs.start.y < lhs.start.y) ? lhs.start.y : rhs.start.y;
+
+    lhs.end.x = (rhs.end.x > lhs.end.x) ? lhs.end.x : rhs.end.x;
+    lhs.end.y = (rhs.end.y > lhs.end.y) ? lhs.end.y : rhs.end.y;
 
     return lhs;
 }
@@ -56,11 +73,11 @@ static inline s16_rect s16_rect_dilate(s16_rect r, int32_t d)
 }
 static inline s16_rect s16_rect_add_border(s16_rect r, s16_vec2 b)
 {
-    return (s16_rect){.start = s16_vec2_sub(r.start, b),.end = s16_vec2_add(r.start, b)};
+    return (s16_rect){.start = s16_vec2_sub(r.start, b),.end = s16_vec2_add(r.end, b)};
 }
 static inline s16_rect s16_rect_sub_border(s16_rect r, s16_vec2 b)
 {
-    return (s16_rect){.start = s16_vec2_add(r.start, b),.end = s16_vec2_sub(r.start, b)};
+    return (s16_rect){.start = s16_vec2_add(r.start, b),.end = s16_vec2_sub(r.end, b)};
 }
 static inline bool s16_rect_contains_point(s16_rect r, s16_vec2 p)
 {
@@ -68,17 +85,9 @@ static inline bool s16_rect_contains_point(s16_rect r, s16_vec2 p)
 }
 static inline bool s16_rect_contains_origin(s16_rect r)
 {
-    return ((r.start.x <= 0)&&(r.start.y <= 0)&&(r.end.x > 0)&&(r.end.y> 0));
-}
-static inline bool s16_rect_have_overlap(s16_rect lhs, s16_rect rhs)
-{
-    return lhs.start.x<rhs.end.x && lhs.end.x>rhs.start.x && lhs.start.y<rhs.end.y && lhs.end.y>rhs.start.y;
+    return ((r.start.x <= 0) && (r.start.y <= 0) && (r.end.x > 0)&&(r.end.y> 0));
 }
 static inline s16_vec2 s16_rect_size(s16_rect r)
 {
     return s16_vec2_sub(r.end, r.start);
-}
-static inline bool s16_rect_valid(s16_rect r)
-{
-    return r.start.x<=r.end.x && r.start.y<=r.end.y;
 }

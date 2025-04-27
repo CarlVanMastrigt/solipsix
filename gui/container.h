@@ -31,7 +31,7 @@ struct sol_gui_container
 
 void sol_gui_container_construct(struct sol_gui_container* container, struct sol_gui_context* context);
 struct sol_gui_object* sol_gui_container_create(struct sol_gui_context* context);
-// min_size and place content should be varied by anything that would use this
+// min_size and place content should be varied by anything that would use this, the following however should be shared
 void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_destroy(struct sol_gui_object* obj);
@@ -40,4 +40,4 @@ void sol_gui_container_destroy(struct sol_gui_object* obj);
 void sol_gui_container_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_vec2 location);
 
-
+int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container);

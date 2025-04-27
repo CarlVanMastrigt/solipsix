@@ -29,7 +29,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/container.h"
 
 
-struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size)
+struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size)
 {
 	struct sol_gui_object* root_container;
 	uint32_t SOL_GUI_EVENT_BASE = SDL_RegisterEvents(4);
@@ -44,6 +44,8 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 		.highlighted_object = NULL,
 		.focused_object = NULL,
 		.previously_clicked_object = NULL,
+		.scratch_buffer = malloc(65536),
+		.scratch_space = 65536,
 		.SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN = SOL_GUI_EVENT_BASE + 0,
 		.SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END   = SOL_GUI_EVENT_BASE + 1,
 		.SOL_GUI_EVENT_OBJECT_FOCUS_BEGIN     = SOL_GUI_EVENT_BASE + 2,
@@ -60,6 +62,7 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 
 void sol_gui_context_terminate(struct sol_gui_context* context)
 {
+	bool root_widget_destroyed;
 	if(context->previously_clicked_object)
 	{
 		assert(context->previously_clicked_object->context == context);
@@ -69,8 +72,12 @@ void sol_gui_context_terminate(struct sol_gui_context* context)
 	sol_gui_context_set_focused_object(context, NULL);
 
 	// this will effectively recursively release the objects in the heirarchy
-	sol_gui_object_release(context->root_container);
+	root_widget_destroyed = sol_gui_object_release(context->root_container);
+	assert(root_widget_destroyed);
+
 	assert(context->registered_object_count == 0);
+
+	free(context->scratch_buffer);
 }
 
 
@@ -179,20 +186,24 @@ void sol_gui_context_set_focused_object(struct sol_gui_context* context, struct 
 
 
 
+void sol_gui_context_update_screen_offset(struct sol_gui_context* context, s16_vec2 window_offset)
+{
+	// in future this may actually need to do something
+	context->window_offset = window_offset;
+}
 
 /// this is different than reorganise root, this assumes min_sizes havent changed
-bool sol_gui_context_update_window(struct sol_gui_context* context, s16_vec2 window_offset, s16_vec2 window_size)
+bool sol_gui_context_update_screen_size(struct sol_gui_context* context, s16_vec2 window_size)
 {
-	// assume min_size setting isn't required
-	if(m16_vec2_all(s16_vec2_cmp_eq(window_size, context->window_size)))
+	// puts("UPDATE SCREEN SIZE");
+	// if the sizes arent both equal, need to reorganise
+	if(!m16_vec2_all(s16_vec2_cmp_eq(window_size, context->window_size)))
 	{
-		// nothing internal has changed, no need to place content again
-		context->window_offset = window_offset;
-	}
-	else
-	{
+		// puts("DO UPDATE");
 		context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, window_size));
+		context->window_size = window_size;
 		s16_rect content_rect = {.start={0,0}, .end = s16_vec2_max(context->window_min_size, context->window_size)};
+		printf("CR: %d %d -> %d %d\n", content_rect.start.x, content_rect.start.y, content_rect.end.x, content_rect.end.y);
 		sol_gui_object_place_content(context->root_container, content_rect);
 	}
 
@@ -202,7 +213,7 @@ bool sol_gui_context_update_window(struct sol_gui_context* context, s16_vec2 win
 // call this when contents of all widgets may have changed, e.g. at crteation time, after theme change, if a single "toplevel" object in root has changed, instead try to be more precise
 bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 {
-	context->window_min_size = sol_gui_object_min_size(context->root_container);
+	context->window_min_size = sol_gui_object_min_size(context->root_container, SOL_GUI_OBJECT_POSITION_FLAGS_ALL);
 
 	context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, context->window_size));
 
@@ -212,7 +223,17 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 	return context->content_fit;
 }
 
+void sol_gui_context_render(struct sol_gui_context* context, struct cvm_overlay_render_batch* batch)
+{
+	struct sol_gui_object* root_container = context->root_container;
 
+	if(!m16_vec2_all(s16_vec2_cmp_eq(root_container->position.start, s16_vec2_set(0, 0))))
+    {
+        fprintf(stderr, "overlay rendering expects the root widget to start at 0,0\n");
+    }
+
+	sol_gui_object_render(root_container, s16_vec2_set(0, 0), batch);
+}
 
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input)
 {
@@ -234,7 +255,7 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 	// handle focused object
 	if(context->focused_object)
 	{
-		// if something is focused may will consume input
+		// if something is focused may/will consume input
 		object = context->focused_object;
 
 		result = object->input_action(object, input);
@@ -278,4 +299,6 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 			return true;
 		}
 	}
+
+	return false;
 }

@@ -22,6 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 
 // this is to FULLY contain freetype
+// create and destroy avoids freetype being defined in any more than one c file (size needn't be known globally)
 
 struct sol_font_library;
 struct sol_font;

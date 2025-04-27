@@ -23,16 +23,24 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/container.h"
 
+#warning container should only perform actions on enabled children
+#warning is it better to remove the concept of enabled/disabled entirely? would require altering structure to add/remove elements (add in random locations)
 
 void sol_gui_container_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 
+	// child locations are relative to parent
+	offset = s16_vec2_add(offset, obj->position.start);
+
 	// iterate back to front for when children can stack (first is on top)
 	for(child = container->last_child; child; child = child->prev)
 	{
-		sol_gui_object_render(child, offset, batch);
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			sol_gui_object_render(child, offset, batch);
+		}
 	}
 }
 struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
@@ -41,13 +49,19 @@ struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s1
 	struct sol_gui_object* child;
 	struct sol_gui_object* result;
 
+	// child locations are relative to parent
+	location = s16_vec2_sub(location, obj->position.start);
+
 	// iterate(search) front to back for when children can stack (first is on top)
 	for(child = container->first_child; child; child = child->next)
 	{
-		result = sol_gui_object_hit_scan(child, location);
-		if(result)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 		{
-			return result;
+			result = sol_gui_object_hit_scan(child, location);
+			if(result)
+			{
+				return result;
+			}
 		}
 	}
 	return NULL;
@@ -58,11 +72,17 @@ static s16_vec2 sol_gui_container_min_size(struct sol_gui_object* obj)
 	struct sol_gui_object* child;
 	s16_vec2 min_size = {0,0};
 	s16_vec2 child_min_size;
+	uint32_t position_flags;
+
+	position_flags = obj->flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		child_min_size = sol_gui_object_min_size(child);
-		min_size = s16_vec2_max(min_size, child_min_size);
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			child_min_size = sol_gui_object_min_size(child, position_flags);
+			min_size = s16_vec2_max(min_size, child_min_size);
+		}
 	}
 
 	return min_size;
@@ -72,9 +92,14 @@ static void sol_gui_container_place_content(struct sol_gui_object* obj, s16_rect
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 
+	obj->position = content_rect;
+
 	for(child = container->first_child; child; child = child->next)
 	{
-		sol_gui_object_place_content(child, content_rect);
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			sol_gui_object_place_content(child, content_rect);
+		}
 	}
 }
 void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child)
@@ -130,16 +155,16 @@ void sol_gui_container_destroy(struct sol_gui_object* obj)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
-	struct sol_gui_object* next;
+
+	while((child = container->first_child))
+	{
+		sol_gui_object_remove_child(obj, child);
+		sol_gui_object_release(child);
+		// ^ this line is responsible for recursive deletion of widgets, implicitly a container "gains owvership" of it's children when they are added
+		// specifically they take implicit ownership of the initial reference all widgets start with
+	}
 
 	assert(container->base.reference_count == 0);
-
-	for(child = container->first_child; child; child = next)
-	{
-		next = child->next;// after destroy child may be invalid, so must call this here
-		sol_gui_object_release(child);
-		assert(next == container->first_child);// child must remove itself from the parent as part of above function
-	}
 }
 static const struct sol_gui_object_structure_functions sol_gui_container_structure_functions =
 {
@@ -171,4 +196,22 @@ struct sol_gui_object* sol_gui_container_create(struct sol_gui_context* context)
 	sol_gui_container_construct(container, context);
 
 	return &container->base;
+}
+
+
+
+int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container)
+{
+	struct sol_gui_object* child;
+	int16_t enabled_child_count = 0;
+
+	for(child = container->first_child; child; child = child->next)
+	{
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			enabled_child_count++;
+		}
+	}
+
+	return enabled_child_count;
 }

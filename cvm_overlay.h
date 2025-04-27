@@ -35,6 +35,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_OVERLAY_ELEMENT_OVERLAP_MUL 0x80000000
 
 
+// struct sol_gui_object;
+struct sol_gui_context;
+
+#include "math/s16_rect.h"
+
 
 typedef struct overlay_theme overlay_theme;
 
@@ -266,6 +271,12 @@ struct cvm_overlay_render_batch
 
     struct sol_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
 
+
+        // information regarding current rendering stack position (as part of compositing), this will probably need to be handled better
+        s16_rect current_render_bounds;
+
+
+
     /// the atlases can be used for other purposes, but the shunt buffer and copy list must be kept in sync (ergo them going together here)
 
     /// need a good way to track use of tiles in atlas, can have usage mask (u8/u16) that can be reset en-masse?
@@ -292,7 +303,8 @@ struct cvm_overlay_render_batch
     /// set and then used in rendering, copied here just to prevent passing it around
     VkDescriptorSet descriptor_set;// -- unowned
 
-    VkExtent2D target_extent;
+    // only used for primary rendering? also need one for intermediaries(? or only allow single intermediary?)
+    VkExtent2D final_target_extent;
 };
 
 /// this could reasonably also create the descriptor sets which could then simply be accessed/acquired later
@@ -316,10 +328,10 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch);
 
 /// `root_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
 /// we should know resolution of presentable image/target/viewport of pipeline to be used here, and organise menu widget accordingly
-void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget* root_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
+void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
 
 /// `descriptor_set` must have been fetched with `cvm_overlay_descriptor_set_fetch`
-
+#warning these need better names, "stage" implies its the batching stage, instead:  `render_batch_step_<step_name>` , this being render_batch_step_element_staging, step_image_upload, image_transition,
 void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
 
 /// copies staged data into atlases used by rendering

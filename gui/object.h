@@ -42,16 +42,19 @@ struct sol_input;
 #warning possibly want render batch to know screen/window dimension to prevent rendering offscreen items
 
 
-
-
 struct sol_gui_object;
 
 struct sol_gui_object_structure_functions
 {
-	// appearance
+	#warning should obj be const for most of these?
 
 	// put in the batch to be passed into overlay rendererer
     void (*const render) (struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
+    #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
+    // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)
+    // would almost need to compose clip functions (could just do this?) intermediary render very undesirable, but may be "the" solution...
+    // may also want generic bounding struct to apply to rendering, can impose box and panel clipping, fade, hard bounds &c.
+    // inherited struct *could* incorporate offset, but then the contents would basically be copied at every stage of the stack
 
     // used to recursively find the gui_object under the pixel location provided
     struct sol_gui_object* (*const hit_scan) (struct sol_gui_object* obj, s16_vec2 location);// hit_scan, scan
@@ -99,7 +102,7 @@ struct sol_gui_object
 void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context* context);
 
 void sol_gui_object_retain(struct sol_gui_object* obj);
-void sol_gui_object_release(struct sol_gui_object* obj);
+bool sol_gui_object_release(struct sol_gui_object* obj);
 
 // basically gets parent and then calls `sol_gui_object_remove_child`
 void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
@@ -110,7 +113,7 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 // these perform any meta operations on objects and call their internal functions if present
 void                   sol_gui_object_render       (struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_object_hit_scan     (struct sol_gui_object* obj, s16_vec2 location);
-s16_vec2               sol_gui_object_min_size     (struct sol_gui_object* obj);
+s16_vec2               sol_gui_object_min_size     (struct sol_gui_object* obj, uint32_t position_flags);
 void                   sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_rect);
 void                   sol_gui_object_add_child    (struct sol_gui_object* obj, struct sol_gui_object* child);
 void                   sol_gui_object_remove_child (struct sol_gui_object* obj, struct sol_gui_object* child);

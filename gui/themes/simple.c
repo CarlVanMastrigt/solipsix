@@ -25,6 +25,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // probably need/want more includes from overlay
 #include "sol_font.h"
 
+
+#include "cvm_overlay.h"
+#include <stdio.h>
+
 struct sol_gui_theme_simple_data
 {
 	s16_vec2 base_unit_size;
@@ -35,13 +39,46 @@ struct sol_gui_theme_simple_data
 	s16_vec2 panel_content_border;
 };
 
+#warning put bounds and animatable properties on the batch, and have batch setup struct for this information,
+// mark sub components as mutable/inherited and pass them in as a const pointer that can be substituted?
+// ^ either sub components of the whole struct, allowing it to be substituted at appropriate points
+//   ^also by allowing transient image use we can do sub-renders, *compositor style*, with sub regions of the instance array to render and re-order when needed
 
-
-static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
+static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch)
 {
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+
+	cvm_overlay_element_render_data* render_data = cvm_overlay_element_render_data_stack_append_ptr(&batch->render_elements);
+
+	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
+	{
+		colour = SOL_OVERLAY_COLOUR_MAIN;
+	}
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
+	}
+
+	rect = s16_rect_intersect(rect, batch->current_render_bounds);
+
+	if(s16_rect_valid(rect))
+	{
+		#warning should also check rect is positive at this point
+		*render_data =(cvm_overlay_element_render_data)
+	    {
+	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
+	        {CVM_OVERLAY_ELEMENT_FILL, colour<<24},
+	        {0,0,0,0}
+	    };
+	}
+
+	// printf("render box: %d %d  %d %d\n",rect.start.x, rect.start.y, rect.end.x,rect.end.y);
+
+
 }
 
-static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
+static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
@@ -50,7 +87,7 @@ static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_
 		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
-	return s16_rect_contains_origin(rect);
+	return s16_rect_contains_point(rect, location);
 }
 
 static s16_rect sol_gui_theme_simple_box_place_content(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
@@ -69,7 +106,8 @@ static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint3
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	s16_vec2 size = contents_size;
+	// min size is content with theme border
+	s16_vec2 size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->box_content_border, 2));
 
 	// box must be at least base_unit_size
 	size = s16_vec2_max(size, simple_theme_data->base_unit_size);
@@ -82,11 +120,11 @@ static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint3
 	return size;
 }
 
-static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct cvm_overlay_render_batch * restrict render_batch, enum sol_overlay_colour colour)
+static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch)
 {
 }
 
-static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
+static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 

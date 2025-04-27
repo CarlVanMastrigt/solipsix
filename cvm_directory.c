@@ -28,7 +28,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_utils.h"
 #include "cvm_directory.h"
-#include "cvm_sorts.h"
+#include "sorts/quicksort.h"
 
 
 // generic functions used by utilities
@@ -99,9 +99,9 @@ static inline bool cvm_directory_sort_function(const struct cvm_directory_entry*
 	return directory->sort_function(entry_1, entry_2, directory);
 }
 
-#define CVM_COMPARE_LT cvm_directory_sort_function
-CVM_QUICKSORT_CONTEXT(struct cvm_directory_entry, cvm_directory_sort, 8, const struct cvm_directory*);
-
+#define SOL_COMPARE_LT cvm_directory_sort_function
+SOL_QUICKSORT_CONTEXT(struct cvm_directory_entry, cvm_directory_sort, 8, const struct cvm_directory*);
+#undef SOL_COMPARE_LT
 
 
 

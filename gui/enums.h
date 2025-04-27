@@ -30,20 +30,18 @@ enum sol_gui_layout
 };
 
 // how space in a container will be shared/distributed
-enum sol_gui_space_distribution
+enum sol_gui_distribution
 {
-	// dont use the remaining space, leave it empty at the start of the container
+	// dont use the remaining space, leave it empty at the start of the container, without uniform sizing is the same as first with an empty widget added to the start, added for conveneince
     SOL_GUI_SPACE_DISTRIBUTION_START,
-    // dont use the remaining space, leave it empty at the end of the container
+    // dont use the remaining space, leave it empty at the end of the container, without uniform sizing is the same as last with an empty widget added to the end, added for conveneince
     SOL_GUI_SPACE_DISTRIBUTION_END,
 	// first object in container gets all remaining space
     SOL_GUI_SPACE_DISTRIBUTION_FIRST,
     // last object in container gets all remaining space
     SOL_GUI_SPACE_DISTRIBUTION_LAST,
-    // distribute remaining space evenly amonst all objects
-    SOL_GUI_SPACE_DISTRIBUTION_EVEN,
-    // distribute space in an attempt to make all objects in the container the same size, starting with the smallest first
-    SOL_GUI_SPACE_DISTRIBUTION_SAME,
+    // distribute remaining space evenly amongst all objects and ensure all contained objects are (as close to as possible) the same size
+    SOL_GUI_SPACE_DISTRIBUTION_UNIFORM,
 };
 
 // used for things like text, specifically avoiding left/right because alignment may be rlative to horizontal OR vertical directions
@@ -70,6 +68,7 @@ enum sol_gui_alignment
 #define SOL_GUI_OBJECT_POSITION_FLAG_LAST_X        0x00000200
 #define SOL_GUI_OBJECT_POSITION_FLAG_FIRST_Y       0x00000400
 #define SOL_GUI_OBJECT_POSITION_FLAG_LAST_Y        0x00000800
+#define SOL_GUI_OBJECT_POSITION_FLAGS_ALL          0x00000F00
 // properties should be immutable after being set at widget creation
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x00800000
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x00400000

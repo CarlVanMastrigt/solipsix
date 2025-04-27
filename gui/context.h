@@ -20,11 +20,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include <inttypes.h>
+#include <stddef.h>
 
 #include "math/s16_vec2.h"
 
 struct sol_input;
 struct sol_gui_object;
+struct cvm_overlay_render_batch;
 
 /** context
  * outside ofgui setup/creation usually want to pass around context for rendering, input management &c.
@@ -37,8 +39,7 @@ struct sol_gui_context
     s16_vec2 window_size;
     s16_vec2 window_min_size;
 
-	// shouldnt be able to modify the theme's data from
-    const struct sol_gui_theme* theme;
+    struct sol_gui_theme* theme;
 
     /// put settings here?? make it a pointer!?
 
@@ -61,7 +62,9 @@ struct sol_gui_context
 
     struct sol_gui_object* root_container;// this should not change
 
-
+    // scratch used by any part of the GUI when space is needed (specifically possible because a GUI context is single threaded)
+    void* scratch_buffer;
+    size_t scratch_space;
 
     // event used for interoperability with SDL and usage in gui object input
     uint32_t SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN;
@@ -71,7 +74,7 @@ struct sol_gui_context
 };
 
 // also creates and returns the root object
-struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size);
+struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size);
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
 // actually not sure how to handle these, they WILL retain objects though
@@ -84,10 +87,12 @@ void sol_gui_context_set_focused_object    (struct sol_gui_context* context, str
  * otherwise if min_size is null will supress errors and FORCE it to work
  *  this will result in content escaping the screen range, and will set content_fits to false
  * */
-bool sol_gui_context_update_window(struct sol_gui_context* context, s16_vec2 window_offset, s16_vec2 window_size);
+void sol_gui_context_update_screen_offset(struct sol_gui_context* context, s16_vec2 window_offset);
+bool sol_gui_context_update_screen_size(struct sol_gui_context* context, s16_vec2 window_size);
 // call this when contents of all widgets may have changed, e.g. at crteation time, after theme change, if a single widget in root has changed, instead try to be more precise
 bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
 
+void sol_gui_context_render(struct sol_gui_context* context, struct cvm_overlay_render_batch* batch);
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input);
 
 
