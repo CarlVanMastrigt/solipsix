@@ -21,7 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <assert.h>
 
-#include "gui/container.h"
+#include "gui/objects/container.h"
 
 #warning container should only perform actions on enabled children
 #warning is it better to remove the concept of enabled/disabled entirely? would require altering structure to add/remove elements (add in random locations)
@@ -93,6 +93,9 @@ static void sol_gui_container_place_content(struct sol_gui_object* obj, s16_rect
 	struct sol_gui_object* child;
 
 	obj->position = content_rect;
+#warning move above to sol_gui_object_place_content and make below unnecessary by having it be a relative value!
+	// this would also make it `content_size` instead which would make everything MUCH SIMPLLER (though may be better to keep it a rect... not sure)
+	content_rect = s16_rect_move_start_to_origin(content_rect);
 
 	for(child = container->first_child; child; child = child->next)
 	{
@@ -160,8 +163,9 @@ void sol_gui_container_destroy(struct sol_gui_object* obj)
 	{
 		sol_gui_object_remove_child(obj, child);
 		sol_gui_object_release(child);
-		// ^ this line is responsible for recursive deletion of widgets, implicitly a container "gains owvership" of it's children when they are added
-		// specifically they take implicit ownership of the initial reference all widgets start with
+		// ^ this line is responsible for recursive deletion of gui objects, implicitly a container "gains ownership" of it's children when they are added
+		// specifically they take implicit ownership of the initial reference all gui objects start with
+		// they also lose ownership when the child is removed through normal means
 	}
 
 	assert(container->base.reference_count == 0);

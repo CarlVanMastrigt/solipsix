@@ -91,3 +91,7 @@ static inline s16_vec2 s16_rect_size(s16_rect r)
 {
     return s16_vec2_sub(r.end, r.start);
 }
+static inline s16_rect s16_rect_move_start_to_origin(s16_rect r)
+{
+    return (s16_rect){.start = s16_vec2_set(0, 0), .end = s16_rect_size(r)};
+}

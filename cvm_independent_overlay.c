@@ -19,6 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solipsix.h"
 
+#include "overlay/enums.h"
 
 
 
@@ -528,16 +529,16 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_v
 
     /// move this somewhere?? theme data? allow non-destructive mutation based on these?
     #warning make it so this is used in uniform texel buffer, good to test that
-    const float overlay_colours[OVERLAY_NUM_COLOURS*4]=
+    const float overlay_colours[SOL_OVERLAY_COLOUR_COUNT*4]=
     {
-        1.0,0.1,0.1,1.0,///OVERLAY_NO_COLOUR (error)
-        0.24,0.24,0.6,0.9,///OVERLAY_BACKGROUND_COLOUR
-        0.12,0.12,0.36,0.85,///OVERLAY_MAIN_COLOUR
-        0.12,0.12,0.48,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
-        0.3,0.3,1.0,0.2,///OVERLAY_HIGHLIGHTING_COLOUR
-        0.4,0.6,0.9,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR
-        0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0
-        0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
+        1.0,0.1,0.1,1.0,/// SOL_OVERLAY_COLOUR_ERROR | SOL_OVERLAY_COLOUR_DEFAULT
+        0.24,0.24,0.6,0.9,/// SOL_OVERLAY_COLOUR_BACKGROUND
+        0.12,0.12,0.36,0.85,/// SOL_OVERLAY_COLOUR_MAIN
+        0.16,0.16,0.40,0.85,/// SOL_OVERLAY_COLOUR_HIGHLIGHTED
+        0.16,0.16,0.48,0.85,/// SOL_OVERLAY_COLOUR_FOCUSED
+        0.4,0.6,0.9,0.8,/// SOL_OVERLAY_COLOUR_STANDARD_TEXT
+        0.2,0.3,1.0,0.8,/// SOL_OVERLAY_COLOUR_COMPOSITION_TEXT
+        0.4,0.6,0.9,0.3,/// SOL_OVERLAY_COLOUR_TEXT_SELECTION
     };
 
 

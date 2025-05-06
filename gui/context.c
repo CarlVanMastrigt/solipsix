@@ -26,7 +26,133 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "sol_input.h"
 
 #include "gui/context.h"
-#include "gui/container.h"
+#include "gui/objects/container.h"
+
+
+
+
+
+static inline void sol_gui_context_set_highlight(struct sol_gui_context* context, struct sol_gui_object* obj)
+{
+	struct sol_input highlight_event;
+
+	assert(context->highlighted_object == NULL);// old highlight should be removed before new one added
+
+	context->highlighted_object = obj;
+
+	if(obj)
+	{
+		assert(obj->context == context);
+		assert(obj->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE);
+		assert( !(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED));// object should not already be highlighted
+
+		obj->flags |= SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED;
+
+		// signal to the object that it has become highlighted
+		highlight_event.sdl_event.user = (SDL_UserEvent)
+		{
+			.type = context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN,
+			.timestamp = SDL_GetTicks(),
+		};
+		obj->input_action(obj, &highlight_event);
+
+		sol_gui_object_retain(obj);
+	}
+}
+
+static inline void sol_gui_context_clear_highlight(struct sol_gui_context* context, struct sol_gui_object* obj)
+{
+	struct sol_input highlight_event;
+
+	assert(context->highlighted_object == obj);// must have been highlighted object
+
+	context->highlighted_object = NULL;
+
+	if(obj)
+	{
+		assert(obj->context == context);
+		assert(obj->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE);
+		assert(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED);
+
+		obj->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED;
+
+		// signal to the object that it is no longer highlighted
+		highlight_event.sdl_event.user = (SDL_UserEvent)
+		{
+			.type = context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END,
+			.timestamp = SDL_GetTicks(),
+		};
+		obj->input_action(obj, &highlight_event);
+
+		if (context->previous_highlighted_object)
+		{
+			sol_gui_object_release(context->previous_highlighted_object);
+			// release previous
+		}
+
+		context->previous_highlighted_object = obj;
+	}
+}
+
+
+static inline void sol_gui_context_set_focus(struct sol_gui_context* context, struct sol_gui_object* obj)
+{
+	struct sol_input focus_event;
+
+	assert(context->focused_object == NULL);// focus should be removed before being added
+
+	context->focused_object = obj;
+
+	if(obj)
+	{
+		assert(obj->context == context);
+		assert(obj->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE);
+		assert( !(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED));// object should not already be focused
+
+		obj->flags |= SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED;
+
+		// signal to the object that it has become focused
+		focus_event.sdl_event.user = (SDL_UserEvent)
+		{
+			.type = context->SOL_GUI_EVENT_OBJECT_FOCUS_BEGIN,
+			.timestamp = SDL_GetTicks(),
+		};
+		obj->input_action(obj, &focus_event);
+
+		sol_gui_object_retain(obj);
+	}
+}
+
+static inline void sol_gui_context_clear_focus(struct sol_gui_context* context, struct sol_gui_object* obj)
+{
+	struct sol_input focus_event;
+
+	assert(context->focused_object == obj);// must have been focused object
+
+	context->focused_object = NULL;
+
+	if(obj)
+	{
+		assert(obj->context == context);
+		assert(obj->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE);
+		assert(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED);
+
+		obj->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED;
+
+		// signal to the object that it is no longer focused
+		focus_event.sdl_event.user = (SDL_UserEvent)
+		{
+			.type = context->SOL_GUI_EVENT_OBJECT_FOCUS_END,
+			.timestamp = SDL_GetTicks(),
+		};
+		obj->input_action(obj, &focus_event);
+
+		sol_gui_object_release(obj);
+	}
+}
+
+
+
 
 
 struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size)
@@ -40,9 +166,10 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 		.theme = theme,
 		.registered_object_count = 0,
 		.content_fit = true,
-		.highlighted_object_navigated = false,
 		.highlighted_object = NULL,
 		.focused_object = NULL,
+		.highlight_removable = true,
+		.previous_highlighted_object = NULL,
 		.previously_clicked_object = NULL,
 		.scratch_buffer = malloc(65536),
 		.scratch_space = 65536,
@@ -63,13 +190,19 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 void sol_gui_context_terminate(struct sol_gui_context* context)
 {
 	bool root_widget_destroyed;
+
+	sol_gui_context_clear_highlight(context, context->highlighted_object);
+	sol_gui_context_clear_focus(context, context->focused_object);
+
 	if(context->previously_clicked_object)
 	{
-		assert(context->previously_clicked_object->context == context);
 		sol_gui_object_release(context->previously_clicked_object);
 	}
-	sol_gui_context_set_highlighted_object(context, NULL, false);
-	sol_gui_context_set_focused_object(context, NULL);
+
+	if(context->previous_highlighted_object)
+	{
+		sol_gui_object_release(context->previous_highlighted_object);
+	}
 
 	// this will effectively recursively release the objects in the heirarchy
 	root_widget_destroyed = sol_gui_object_release(context->root_container);
@@ -81,106 +214,43 @@ void sol_gui_context_terminate(struct sol_gui_context* context)
 }
 
 
+
+
+
+
 #warning may need to scan up to find highlightable widget?
 // chosen? elected? highlighted? focused?
-void sol_gui_context_set_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool navigated)
+void sol_gui_context_change_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool removable)
 {
-	struct sol_input highlight_event;
+
 	struct sol_gui_object* old_highlighted = context->highlighted_object;
 
-	assert(!navigated || obj!=NULL);//should not be able to navigate to null (navigation scan should just fail) -- this may change
-	assert(obj || navigated || !context->highlighted_object_navigated);// should not be removing navigated highlight with non-navigated highlight
+	if(!context->highlight_removable && obj==NULL)
+	{
+		// existing highlight specified it shouldn't be removable
+		return;
+	}
 
-	context->highlighted_object_navigated = navigated;// use this to determine how navigation happened in object (e.g. when highlight begin/end is called)
-
-	#warning alternative to above is to have different kinds of "highlighted" objects; those under mouse and those navigated to (hovered and navigated?)
-	#warning probably do want to store previously navigated highlighted object to allow UI re-entry (otherwise navigated highlighted object needs to be re-set whenever UI wants to be navigated)
+	context->highlight_removable = removable;
 
 	if(old_highlighted != obj)
 	{
-		if(old_highlighted)
-		{
-			assert(old_highlighted->context == context);
-			assert(old_highlighted->flags & SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED);
-
-			old_highlighted->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED;
-
-			// signal to the object that it has become highlighted
-			highlight_event.sdl_event.user = (SDL_UserEvent)
-			{
-				.type = context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END,
-				.timestamp = SDL_GetTicks(),
-			};
-			old_highlighted->input_action(old_highlighted, &highlight_event);
-
-			sol_gui_object_release(old_highlighted);
-		}
-		if(obj)
-		{
-			assert(obj->context == context);
-			assert(obj->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE);
-			assert( !(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED));// object should not already be highlighted
-
-			obj->flags |= SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED;
-
-			// signal to the object that it has become highlighted
-			highlight_event.sdl_event.user = (SDL_UserEvent)
-			{
-				.type = context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN,
-				.timestamp = SDL_GetTicks(),
-			};
-			obj->input_action(obj, &highlight_event);
-
-			sol_gui_object_retain(obj);
-		}
-		context->highlighted_object = obj;
+		sol_gui_context_clear_highlight(context, old_highlighted);
+		sol_gui_context_set_highlight(context, obj);
 	}
 }
 
-void sol_gui_context_set_focused_object(struct sol_gui_context* context, struct sol_gui_object* obj)
+void sol_gui_context_change_focused_object(struct sol_gui_context* context, struct sol_gui_object* obj)
 {
 	struct sol_input focus_event;
 	struct sol_gui_object* old_focused = context->focused_object;
 
 	if(old_focused != obj)
 	{
-		if(old_focused)
-		{
-			assert(old_focused->context == context);
-			assert(old_focused->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED);
-			assert(obj == NULL);// need to de-focus before next object can be focused (?)
+		assert(obj == NULL || old_focused == NULL);// need to de-focus before next object can be focused (?)
 
-			old_focused->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED;
-
-			// signal to the object that it has become focused
-			focus_event.sdl_event.user = (SDL_UserEvent)
-			{
-				.type = context->SOL_GUI_EVENT_OBJECT_FOCUS_END,
-				.timestamp = SDL_GetTicks(),
-			};
-			old_focused->input_action(old_focused, &focus_event);
-
-			sol_gui_object_release(old_focused);
-		}
-		if(obj)
-		{
-			assert(obj->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE);
-			assert( !(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED));// object should not already be focused
-			assert(obj->context == context);
-
-			obj->flags |= SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED;
-
-			// signal to the object that it has become focused
-			focus_event.sdl_event.user = (SDL_UserEvent)
-			{
-				.type = context->SOL_GUI_EVENT_OBJECT_FOCUS_BEGIN,
-				.timestamp = SDL_GetTicks(),
-			};
-			obj->input_action(obj, &focus_event);
-
-			sol_gui_object_retain(obj);
-		}
-		context->focused_object = obj;
+		sol_gui_context_clear_focus(context, old_focused);
+		sol_gui_context_set_focus(context, obj);
 	}
 }
 
@@ -240,17 +310,9 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 	struct sol_gui_object* object;
 	bool result;
 	s16_vec2 mouse_location;
+
 	const SDL_Event* sdl_event = &input->sdl_event;
-
-	#warning assert its not in the range supported
-	// assert(input->sdl_event.type != context->SOL_GUI_EVENT_OBJECT_HIGHLIGHTED);// this is not a valid event to signal
-
 	const SDL_EventType sdl_type = sdl_event->type;
-	#warning make above the behaviour after input
-	// can consume input (returning true) actually thats probably just it
-
-
-	#warning need to query for highlighted object? (under mouse OR resulting from directional input)
 
 	// handle focused object
 	if(context->focused_object)
@@ -274,30 +336,33 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 	{
 		// could also be touch screen hover or similar
 		mouse_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);
-		#warning also do this if widgets have been reorganised? (will need to record latest mouse pos for this)
+		#warning also do this if widgets have been reorganised? (would need to record latest mouse pos for this, or query it from SDL) -- how to spook SDL event though??
 		object = sol_gui_object_hit_scan(context->root_container, mouse_location);
 
-		// if an object is present under the mouse cursor it must be highlightable, if one isn't then to unset we must not unset a navigated highlighted object
-		if(!context->highlighted_object_navigated || (object && (object->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE)))
+		// search up the heirarchy
+		while(object)
 		{
-			sol_gui_context_set_highlighted_object(context, object, false);
+			// only alter highlighted object when moving cursor over an object that is highlightable
+			if(object->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE)
+			{
+				break;
+			}
+			object = object->parent;
 		}
 
-
-		#warning could make mouse move scan more efficient by tracking currently hovered widget and only updating when its no longer highlighted or layout changed
-		// ^ this would replicate sublime behaviour of only changing highlighted widget when a DIFFERENT one gets hovered even if highlighted widget changes via keyboard input
+		sol_gui_context_change_highlighted_object(context, object, true);
 	}
 
 	// handle highlighted object, this can be set via mouse motion
 	if(context->highlighted_object)
 	{
-		#warning is this correct/desirable? probably; enter works on highlighted object...
 		object = context->highlighted_object;
 		result = object->input_action(object, input);
 		if(result)
 		{
 			return true;
 		}
+		#warning add default navigation for highlighted objects (arrow keys/joystick)
 	}
 
 	return false;

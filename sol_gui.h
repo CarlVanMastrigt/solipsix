@@ -21,6 +21,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/object.h"
 
-#include "gui/container.h"
-#include "gui/sequence.h"
-#include "gui/button.h"
+#include "gui/objects/container.h"
+#include "gui/objects/sequence.h"
+#include "gui/objects/button.h"

@@ -51,10 +51,15 @@ struct sol_gui_context
     // uint32_t double_click_time;//move to settings
 
     // if true, prominent object was set via GUI navigation (arrow keys not mouse) and so cannot be set to null with mouse
-    bool highlighted_object_navigated;// this needs a better name
+    // bool highlighted_object_navigated;// this needs a better name
+
+    // in principle highlight (probably not focus) could be PER mouse, but that an edge case and a PITA to implement
 
     struct sol_gui_object* highlighted_object;// highlighted when using directional (arrows/joystick) navigation, can/should probably change with mouse motion?
     struct sol_gui_object* focused_object;// limit interaction to only this object and its children, click away/cancel called when defocused?
+
+    bool highlight_removable;// instead of just replacable (highlight always replacable) if new highlight is non-null
+    struct sol_gui_object* previous_highlighted_object;// necessary/useful for re-entering highlight via keyboard actions
 
     /// used for double click detection
     struct sol_gui_object* previously_clicked_object;
@@ -78,8 +83,8 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
 // actually not sure how to handle these, they WILL retain objects though
-void sol_gui_context_set_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool navigated);
-void sol_gui_context_set_focused_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
+void sol_gui_context_change_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool removable);
+void sol_gui_context_change_focused_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
 
 
 /**

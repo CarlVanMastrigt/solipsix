@@ -19,9 +19,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
-#include "gui/button.h"
+#include "sol_input.h"
 #include "overlay/enums.h"
+#include "gui/objects/button.h"
 
 #include <stdio.h>
 
@@ -29,18 +31,45 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_context* context = obj->context;
+	s16_vec2 mouse_location;
 
 	// should activate only on release?
+	// dynamic case handling?
 
-	// switch(input->type)
-	// {
-	// 	case SOL_GUI_INPUT_SELECT_BEGIN:
-	// 		button->select_action(button->data);
-	// 		return true;
+	switch(input->sdl_event.type)
+	{
+		case SDL_MOUSEBUTTONDOWN:
+			//button->select_action(button->data);
+			sol_gui_context_change_focused_object(context, obj);
+			return true;
 
-	// 	default:
-	// 		return false;
-	// }
+		case SDL_MOUSEBUTTONUP:
+			sol_gui_context_change_focused_object(context, NULL);
+			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+			if(obj == sol_gui_object_hit_scan(context->root_container, mouse_location))
+			{
+				button->select_action(button->data);
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+
+
+		default:
+			if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+			{
+				return true;// must consume input if focused? seems stupid
+			}
+			// handle non-standard (custom) events
+			// if(event_type == context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END)
+			// {
+			// 	//do nothing here...
+			// }
+			return false;
+	}
 }
 
 void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void* data)
@@ -80,8 +109,8 @@ static inline const void* sol_gui_button_get_buffer_const(const struct sol_gui_b
 
 static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
 {
-	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
@@ -89,28 +118,28 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_vec2 offs
 }
 static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
-	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
 	if(theme->box_select(theme, obj->flags, obj->position, location))
 	{
-		puts(text);
 		return obj;
 	}
 	return NULL;
 }
 static s16_vec2 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 {
-	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	const struct sol_gui_context* context = obj->context;
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
+	s16_vec2 content_min_size;
 
-	s16_vec2 content_size = s16_vec2_set(0,0);
+	content_min_size = s16_vec2_set(0,0);
 
-	return theme->box_size(theme, obj->flags, content_size);
+	return theme->box_size(theme, obj->flags, content_min_size);
 }
 static const struct sol_gui_object_structure_functions sol_gui_text_button_structure_functions =
 {

@@ -36,6 +36,7 @@ struct sol_gui_theme_simple_data
 	s16_vec2 box_border;
 	s16_vec2 box_content_border;
 	s16_vec2 box_text_border;
+	s16_vec2 panel_border;
 	s16_vec2 panel_content_border;
 };
 
@@ -52,7 +53,18 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
-		colour = SOL_OVERLAY_COLOUR_MAIN;
+		if(flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+		{
+			colour = SOL_OVERLAY_COLOUR_FOCUSED;
+		}
+		else if (flags & SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED)
+		{
+			colour = SOL_OVERLAY_COLOUR_HIGHLIGHTED;
+		}
+		else
+		{
+			colour = SOL_OVERLAY_COLOUR_MAIN;
+		}
 	}
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
@@ -74,8 +86,6 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 	}
 
 	// printf("render box: %d %d  %d %d\n",rect.start.x, rect.start.y, rect.end.x,rect.end.y);
-
-
 }
 
 static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location)
@@ -99,6 +109,8 @@ static s16_rect sol_gui_theme_simple_box_place_content(struct sol_gui_theme* the
 		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
+	rect = s16_rect_sub_border(rect, simple_theme_data->box_content_border);
+
 	return rect;
 }
 
@@ -120,8 +132,37 @@ static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint3
 	return size;
 }
 
+
+
 static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch)
 {
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+
+	cvm_overlay_element_render_data* render_data = cvm_overlay_element_render_data_stack_append_ptr(&batch->render_elements);
+
+	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
+	{
+		#warning have panel be focusable if resizable? (somehow)
+		colour = SOL_OVERLAY_COLOUR_BACKGROUND;
+	}
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		rect = s16_rect_sub_border(rect, simple_theme_data->panel_border);
+	}
+
+	rect = s16_rect_intersect(rect, batch->current_render_bounds);
+
+	if(s16_rect_valid(rect))
+	{
+		#warning should also check rect is positive at this point
+		*render_data =(cvm_overlay_element_render_data)
+	    {
+	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
+	        {CVM_OVERLAY_ELEMENT_FILL, colour<<24},
+	        {0,0,0,0}
+	    };
+	}
 }
 
 static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location)
@@ -130,7 +171,7 @@ static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint3
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
+		rect = s16_rect_sub_border(rect, simple_theme_data->panel_border);
 	}
 
 	return s16_rect_contains_origin(rect);
@@ -138,14 +179,36 @@ static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint3
 
 static s16_rect sol_gui_theme_simple_panel_place_content(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
 {
-	return rect;/// needs review tbh, some way to tell if text offset is necessary &c.?
+	#warning needs review tbh, some way to tell if text offset is necessary &c.?
+
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		rect = s16_rect_sub_border(rect, simple_theme_data->panel_border);
+	}
+
+	rect = s16_rect_sub_border(rect, simple_theme_data->panel_content_border);
+
+	return rect;
 }
 
 static s16_vec2 sol_gui_theme_simple_panel_size(struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	return s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->panel_content_border, 2));
+	// min size is content with theme border
+	s16_vec2 size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->panel_content_border, 2));
+
+	#warning minimul panel size?
+	//size = s16_vec2_max(size, simple_theme_data->base_unit_size);
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size = s16_vec2_add(size, s16_vec2_mul_scalar(simple_theme_data->panel_border, 2));// added to either side
+	}
+
+	return size;
 }
 
 
@@ -169,6 +232,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 				.box_content_border   = s16_vec2_set(2, 2),
 				.box_text_border      = s16_vec2_set(6, 2),
 				.panel_content_border = s16_vec2_set(3, 3),
+				.panel_border         = s16_vec2_set(1, 1),
 			};
 			break;
 		default:
@@ -181,6 +245,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 				.box_content_border   = s16_vec2_set(2, 2),
 				.box_text_border      = s16_vec2_set(8, 2),
 				.panel_content_border = s16_vec2_set(4, 4),
+				.panel_border         = s16_vec2_set(1, 1),
 			};
 			break;
 		case 2: // large
@@ -192,6 +257,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 				.box_content_border   = s16_vec2_set(3, 3),
 				.box_text_border      = s16_vec2_set(12, 3),
 				.panel_content_border = s16_vec2_set(5, 5),
+				.panel_border         = s16_vec2_set(2, 2),
 			};
 			break;
 	}
