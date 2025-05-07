@@ -19,6 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include "gui/objects/panel.h"
 #include "overlay/enums.h"
@@ -28,7 +29,7 @@ struct sol_gui_panel
 {
 	struct sol_gui_object base;
 	struct sol_gui_object* child;
-	uint32_t separate_content_from_edges: 1;
+	uint32_t inset_content: 1;
 };
 
 void sol_gui_panel_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
@@ -45,7 +46,7 @@ void sol_gui_panel_render(struct sol_gui_object* obj, s16_vec2 offset, struct cv
 	offset = s16_vec2_add(offset, obj->position.start);
 	#warning surely the above can be moved into parent function!
 
-	if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		sol_gui_object_render(child, offset, batch);
 	}
@@ -58,7 +59,7 @@ struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_ve
 	struct sol_gui_object* child = panel->child;
 	struct sol_gui_object* result;
 
-	if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		// child location is relative to parent
 		result = sol_gui_object_hit_scan(child, s16_vec2_sub(location, obj->position.start));
@@ -85,9 +86,9 @@ static s16_vec2 sol_gui_panel_min_size(struct sol_gui_object* obj)
 	s16_vec2 content_min_size;
 	uint32_t position_flags;
 
-	position_flags = panel->separate_content_from_edges ? 0 : obj->flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
+	position_flags = panel->inset_content ? 0 : obj->flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
 
-	if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		content_min_size = sol_gui_object_min_size(child, position_flags);
 	}
@@ -113,7 +114,7 @@ static void sol_gui_panel_place_content(struct sol_gui_object* obj, s16_rect con
 	// child location is relative to parent
 	content_rect = theme->panel_place_content(theme, obj->flags, content_rect);
 
-	if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		sol_gui_object_place_content(child, content_rect);
 	}
@@ -122,7 +123,7 @@ void sol_gui_panel_add_child(struct sol_gui_object* obj, struct sol_gui_object* 
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 
-	assert(panel->child);
+	assert(panel->child == NULL);
 
 	panel->child = child;
 }
@@ -140,11 +141,12 @@ void sol_gui_panel_remove_child(struct sol_gui_object* obj, struct sol_gui_objec
 void sol_gui_panel_destroy(struct sol_gui_object* obj)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
+	struct sol_gui_object* child = panel->child;
 
-	if(panel->child)
+	if(child)
 	{
-		sol_gui_object_remove_child(obj, panel->child);
-		sol_gui_object_release(panel->child);
+		sol_gui_object_remove_child(obj, child);
+		sol_gui_object_release(child);
 		// ^ this line is responsible for recursive deletion of widgets, implicitly a panel "gains ownership" of it's child when they are added
 		// specifically they take implicit ownership of the initial reference all widgets start with
 	}
@@ -163,7 +165,7 @@ static const struct sol_gui_object_structure_functions sol_gui_panel_functions =
 	.destroy       = &sol_gui_panel_destroy,
 };
 
-void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered, bool separate_content_from_edges)
+void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered, bool inset_content)
 {
 	struct sol_gui_object* base = &panel->base;
 	sol_gui_object_construct(base, context);
@@ -175,15 +177,15 @@ void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context
 		base->flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 	}
 
-	panel->separate_content_from_edges = separate_content_from_edges;
+	panel->inset_content = inset_content;
 	panel->child = NULL;
 }
 
-struct sol_gui_object* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool separate_content_from_edges)
+struct sol_gui_object* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content)
 {
 	struct sol_gui_panel* panel = malloc(sizeof(struct sol_gui_panel));
 
-	sol_gui_panel_construct(panel, context, clear_bordered, separate_content_from_edges);
+	sol_gui_panel_construct(panel, context, clear_bordered, inset_content);
 
 
 

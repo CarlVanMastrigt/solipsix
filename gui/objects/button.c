@@ -114,7 +114,9 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_vec2 offs
 	struct sol_gui_theme* theme = context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
-	theme->box_render(theme, obj->flags, obj->position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+	s16_rect pos = s16_rect_add_offset(obj->position, offset);
+
+	theme->box_render(theme, obj->flags, pos, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 }
 static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
 {
@@ -123,7 +125,10 @@ static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object
 	struct sol_gui_theme* theme = context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
-	if(theme->box_select(theme, obj->flags, obj->position, location))
+	// s16_rect pos = s16_rect_sub_offset(obj->position, location);
+	s16_rect pos = obj->position;
+
+	if(theme->box_select(theme, obj->flags, pos, location))
 	{
 		return obj;
 	}

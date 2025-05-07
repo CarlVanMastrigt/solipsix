@@ -19,8 +19,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include "gui/context.h"
 #include "gui/object.h"
 
 #include "gui/objects/container.h"
 #include "gui/objects/sequence.h"
 #include "gui/objects/button.h"
+#include "gui/objects/panel.h"

@@ -256,7 +256,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 				.box_border           = s16_vec2_set(2, 2),
 				.box_content_border   = s16_vec2_set(3, 3),
 				.box_text_border      = s16_vec2_set(12, 3),
-				.panel_content_border = s16_vec2_set(5, 5),
+				.panel_content_border = s16_vec2_set(6, 6),
 				.panel_border         = s16_vec2_set(2, 2),
 			};
 			break;
