@@ -21,6 +21,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/object.h"
 
-struct sol_gui_object* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content);
+struct sol_gui_panel;
+
+struct sol_gui_panel* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content);
+struct sol_gui_object* sol_gui_panel_object_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content);
+
+struct sol_gui_object* sol_gui_panel_as_object(struct sol_gui_panel* panel);
+
+
 
 

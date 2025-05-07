@@ -21,6 +21,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/object.h"
 
-struct sol_gui_object* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution);
+struct sol_gui_sequence;
 
+struct sol_gui_sequence* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution);
+struct sol_gui_object* sol_gui_sequence_object_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution);
+
+struct sol_gui_object* sol_gui_sequence_as_object(struct sol_gui_sequence* sequence);
 

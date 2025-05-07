@@ -197,16 +197,13 @@ static s16_vec2 sol_gui_sequence_min_size_vertical_uniform(struct sol_gui_object
 
 #warning largest child must be calculated in order to accurately place content for uniformly sized sequences!
 
-static void sol_gui_sequence_place_content_horizontal_start(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_horizontal_start(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
-	child_rect.start = s16_vec2_set(0, 0);
-	child_rect.end = s16_rect_size(content_rect);
+	child_rect = s16_rect_at_origin_with_size(dimensions);
 
 	for(child = container->last_child; child; child = child->prev)
 	{
@@ -219,16 +216,13 @@ static void sol_gui_sequence_place_content_horizontal_start(struct sol_gui_objec
 	}
 }
 
-static void sol_gui_sequence_place_content_vertical_start(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_vertical_start(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
-	child_rect.start = s16_vec2_set(0, 0);
-	child_rect.end = s16_rect_size(content_rect);
+	child_rect = s16_rect_at_origin_with_size(dimensions);
 
 	for(child = container->last_child; child; child = child->prev)
 	{
@@ -241,16 +235,14 @@ static void sol_gui_sequence_place_content_vertical_start(struct sol_gui_object*
 	}
 }
 
-static void sol_gui_sequence_place_content_horizontal_end(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_horizontal_end(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
 	child_rect.start = s16_vec2_set(0, 0);
-	child_rect.end = s16_vec2_set(0, content_rect.end.y - content_rect.start.y);
+	child_rect.end = s16_vec2_set(0, dimensions.y);
 
 	for(child = container->first_child; child; child = child->next)
 	{
@@ -263,16 +255,14 @@ static void sol_gui_sequence_place_content_horizontal_end(struct sol_gui_object*
 	}
 }
 
-static void sol_gui_sequence_place_content_vertical_end(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_vertical_end(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
 	child_rect.start = s16_vec2_set(0, 0);
-	child_rect.end = s16_vec2_set(content_rect.end.x - content_rect.start.x, 0);
+	child_rect.end = s16_vec2_set(dimensions.x, 0);
 
 	for(child = container->first_child; child; child = child->next)
 	{
@@ -285,16 +275,13 @@ static void sol_gui_sequence_place_content_vertical_end(struct sol_gui_object* o
 	}
 }
 
-static void sol_gui_sequence_place_content_horizontal_first(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_horizontal_first(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
-	child_rect.start = s16_vec2_set(0, 0);
-	child_rect.end = s16_rect_size(content_rect);
+	child_rect = s16_rect_at_origin_with_size(dimensions);
 	child_rect.end.x -= obj->min_size.x;
 	// all unconsumed space goes to the first entry, (which will have it's min size added)
 	// above leaves just enough space for all children to be placed with minimum x size
@@ -310,16 +297,13 @@ static void sol_gui_sequence_place_content_horizontal_first(struct sol_gui_objec
 	}
 }
 
-static void sol_gui_sequence_place_content_vertical_first(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_vertical_first(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
-	child_rect.start = s16_vec2_set(0, 0);
-	child_rect.end = s16_rect_size(content_rect);
+	child_rect = s16_rect_at_origin_with_size(dimensions);
 	child_rect.end.y -= obj->min_size.y;
 	// all unconsumed space goes to the first entry, (which will have it's min size added)
 	// above leaves just enough space for all children to be placed with minimum y size
@@ -335,15 +319,13 @@ static void sol_gui_sequence_place_content_vertical_first(struct sol_gui_object*
 	}
 }
 
-static void sol_gui_sequence_place_content_horizontal_last(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_horizontal_last(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
-	child_rect.end = s16_rect_size(content_rect);
+	child_rect.end = dimensions;
 	child_rect.start = s16_vec2_set(obj->min_size.x, 0);
 	// current size of child rect is remaining space in obj, which will be "given" to "first" enabled child encountered
 	// because this iterates backwards the first enabled child encountered will be the last enabled widget
@@ -358,15 +340,13 @@ static void sol_gui_sequence_place_content_horizontal_last(struct sol_gui_object
 	}
 }
 
-static void sol_gui_sequence_place_content_vertical_last(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_vertical_last(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
 
-	container->base.position = content_rect;
-
-	child_rect.end = s16_rect_size(content_rect);
+	child_rect.end = dimensions;
 	child_rect.start = s16_vec2_set(0, obj->min_size.y);
 	// current size of child rect is remaining space in obj, which will be "given" to "first" enabled child encountered
 	// because this iterates backwards the first enabled child encountered will be the last enabled widget
@@ -382,26 +362,22 @@ static void sol_gui_sequence_place_content_vertical_last(struct sol_gui_object* 
 }
 
 
-static void sol_gui_sequence_place_content_horizontal_uniform(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_horizontal_uniform(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
-	s16_vec2 content_size;
 	int16_t child_count, child_index, width, remainder;
 
-	container->base.position = content_rect;
 
-	content_size = s16_rect_size(content_rect);
-
-	child_rect.end = s16_vec2_set(0, content_size.y);
+	child_rect.end = s16_vec2_set(0, dimensions.y);
 	child_rect.start = s16_vec2_set(0, 0);
 
 	child_count = sol_gui_container_enabled_child_count(container);
 	child_index = 0;
 
-	width = content_size.x / child_count;
-	remainder = content_size.x % child_count;
+	width = dimensions.x / child_count;
+	remainder = dimensions.x % child_count;
 
 	for(child = container->first_child; child; child = child->next)
 	{
@@ -414,30 +390,27 @@ static void sol_gui_sequence_place_content_horizontal_uniform(struct sol_gui_obj
 		}
 	}
 
-	assert(child_rect.start.x == content_size.x);
+	assert(child_rect.start.x == dimensions.x);
 	assert(child_index == child_count);
 }
 
-static void sol_gui_sequence_place_content_vertical_uniform(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_sequence_place_content_vertical_uniform(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 	s16_rect child_rect;
-	s16_vec2 content_size;
 	int16_t child_count, child_index, height, remainder;
 
-	container->base.position = content_rect;
 
-	content_size = s16_rect_size(content_rect);
 
-	child_rect.end = s16_vec2_set(content_size.x, 0);
+	child_rect.end = s16_vec2_set(dimensions.x, 0);
 	child_rect.start = s16_vec2_set(0, 0);
 
 	child_count = sol_gui_container_enabled_child_count(container);
 	child_index = 0;
 
-	height = content_size.y / child_count;
-	remainder = content_size.y % child_count;
+	height = dimensions.y / child_count;
+	remainder = dimensions.y % child_count;
 
 	for(child = container->first_child; child; child = child->next)
 	{
@@ -450,7 +423,7 @@ static void sol_gui_sequence_place_content_vertical_uniform(struct sol_gui_objec
 		}
 	}
 
-	assert(child_rect.start.y == content_size.y);
+	assert(child_rect.start.y == dimensions.y);
 	assert(child_index == child_count);
 }
 
@@ -610,11 +583,21 @@ void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gu
 	}
 }
 
-struct sol_gui_object* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution)
+struct sol_gui_sequence* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution)
 {
 	struct sol_gui_sequence* sequence = malloc(sizeof(struct sol_gui_sequence));
 
 	sol_gui_sequence_construct(sequence, context, layout, distribution);
 
+	return sequence;
+}
+
+struct sol_gui_object* sol_gui_sequence_object_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution)
+{
+	return sol_gui_sequence_as_object( sol_gui_sequence_create(context, layout, distribution) );
+}
+
+struct sol_gui_object* sol_gui_sequence_as_object(struct sol_gui_sequence* sequence)
+{
 	return &sequence->base.base;
 }

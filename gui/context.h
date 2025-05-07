@@ -98,6 +98,6 @@ bool sol_gui_context_update_screen_size(struct sol_gui_context* context, s16_vec
 bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
 
 void sol_gui_context_render(struct sol_gui_context* context, struct cvm_overlay_render_batch* batch);
+struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context, const s16_vec2 location);
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input);
-
 

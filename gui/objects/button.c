@@ -47,7 +47,7 @@ bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struc
 		case SDL_MOUSEBUTTONUP:
 			sol_gui_context_change_focused_object(context, NULL);
 			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
-			if(obj == sol_gui_object_hit_scan(context->root_container, mouse_location))
+			if(obj == sol_gui_context_hit_scan(context, mouse_location))
 			{
 				button->select_action(button->data);
 				return true;
@@ -84,6 +84,11 @@ void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_cont
 	button->data = data;
 }
 
+struct sol_gui_object* sol_gui_button_as_object(struct sol_gui_button* button)
+{
+	return &button->base;
+}
+
 
 
 
@@ -107,28 +112,22 @@ static inline const void* sol_gui_button_get_buffer_const(const struct sol_gui_b
 
 
 
-static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
+static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
-	s16_rect pos = s16_rect_add_offset(obj->position, offset);
-
-	theme->box_render(theme, obj->flags, pos, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 }
-static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
+static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
-	// s16_rect pos = s16_rect_sub_offset(obj->position, location);
-	s16_rect pos = obj->position;
-
-	if(theme->box_select(theme, obj->flags, pos, location))
+	if(theme->box_select(theme, obj->flags, position, location))
 	{
 		return obj;
 	}
@@ -137,8 +136,7 @@ static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object
 static s16_vec2 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 	s16_vec2 content_min_size;
 
@@ -152,7 +150,7 @@ static const struct sol_gui_object_structure_functions sol_gui_text_button_struc
 	.hit_scan = &sol_gui_text_button_hit_scan,
 	.min_size = &sol_gui_text_button_min_size,
 };
-struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
+struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
 {
 	size_t text_len = strlen(text) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + text_len);
@@ -165,21 +163,24 @@ struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* contex
 
 	memcpy(text_buf, text, text_len);
 
-	return &button->base;
+	return button;
+}
+struct sol_gui_object* sol_gui_text_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
+{
+	return sol_gui_button_as_object( sol_gui_text_button_create(context, select_action, data, text) );
 }
 
 
 
-static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
+static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
 {
 	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	const struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
-	theme->box_render(theme, obj->flags, obj->position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 }
-static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
+static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
 	#warning box_select not taking position is... not ideal
 	return obj;
@@ -187,8 +188,7 @@ static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_o
 static s16_vec2 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 {
 	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	const struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
 	s16_vec2 content_size = s16_vec2_set(0,0);
@@ -201,7 +201,7 @@ static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_
 	.hit_scan = &sol_gui_utf8_icon_button_hit_scan,
 	.min_size = &sol_gui_utf8_icon_button_min_size,
 };
-struct sol_gui_object* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
+struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
 {
 	size_t utf8_icon_len = strlen(utf8_icon) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + utf8_icon_len);
@@ -214,10 +214,12 @@ struct sol_gui_object* sol_gui_utf8_icon_button_create(struct sol_gui_context* c
 
 	memcpy(utf8_icon_buf, utf8_icon, utf8_icon_len);
 
-	return &button->base;
+	return button;
 }
-
-
+struct sol_gui_object* sol_gui_utf8_icon_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
+{
+	return sol_gui_button_as_object( sol_gui_utf8_icon_button_create(context, select_action, data, utf8_icon) );
+}
 
 
 

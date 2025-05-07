@@ -179,7 +179,7 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 		.SOL_GUI_EVENT_OBJECT_FOCUS_END       = SOL_GUI_EVENT_BASE + 3,
 	};
 
-	root_container = sol_gui_container_create(context);
+	root_container = sol_gui_container_object_create(context);
 
 	context->root_container = root_container;
 	root_container->flags |= SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT;
@@ -299,10 +299,22 @@ void sol_gui_context_render(struct sol_gui_context* context, struct cvm_overlay_
 
 	if(!m16_vec2_all(s16_vec2_cmp_eq(root_container->position.start, s16_vec2_set(0, 0))))
     {
-        fprintf(stderr, "overlay rendering expects the root widget to start at 0,0\n");
+        fprintf(stderr, "GUI rendering expects the root widget to start at 0,0\n");
     }
 
 	sol_gui_object_render(root_container, s16_vec2_set(0, 0), batch);
+}
+
+struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context, const s16_vec2 location)
+{
+	struct sol_gui_object* root_container = context->root_container;
+
+	if(!m16_vec2_all(s16_vec2_cmp_eq(root_container->position.start, s16_vec2_set(0, 0))))
+    {
+        fprintf(stderr, "GUI hit scan expects the root widget to start at 0,0\n");
+    }
+
+	return sol_gui_object_hit_scan(root_container, s16_vec2_set(0, 0), location);
 }
 
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input)
@@ -337,7 +349,7 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 		// could also be touch screen hover or similar
 		mouse_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);
 		#warning also do this if widgets have been reorganised? (would need to record latest mouse pos for this, or query it from SDL) -- how to spook SDL event though??
-		object = sol_gui_object_hit_scan(context->root_container, mouse_location);
+		object = sol_gui_context_hit_scan(context, mouse_location);
 
 		// search up the heirarchy
 		while(object)

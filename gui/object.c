@@ -94,18 +94,18 @@ void sol_gui_object_render(struct sol_gui_object* obj, s16_vec2 offset, struct c
 	if(obj->structure_functions && obj->structure_functions->render)
 	{
 		// offset = s16_vec2_add(offset, obj->position.start);
-		obj->structure_functions->render(obj, offset, batch);
+		obj->structure_functions->render(obj, s16_rect_add_offset(obj->position, offset), batch);
 	}
 }
 
-struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
+struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, s16_vec2 offset, const s16_vec2 location)
 {
 	assert(obj);
 
 	if(obj->structure_functions && obj->structure_functions->hit_scan)
 	{
 		// location = s16_vec2_sub(location, obj->position.start);
-		return obj->structure_functions->hit_scan(obj, location);
+		return obj->structure_functions->hit_scan(obj, s16_rect_add_offset(obj->position, offset), location);
 	}
 
 	return NULL;
@@ -134,9 +134,11 @@ void sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_r
 {
 	assert(obj);
 
+	obj->position = content_rect;
+
 	if(obj->structure_functions && obj->structure_functions->place_content)
 	{
-		obj->structure_functions->place_content(obj, content_rect);
+		obj->structure_functions->place_content(obj, s16_rect_size(content_rect));
 	}
 	else
 	{
@@ -201,3 +203,7 @@ bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_in
 }
 
 
+void sol_gui_object_reposition_contents(struct sol_gui_object* obj)
+{
+	sol_gui_object_place_content(obj, obj->position);
+}

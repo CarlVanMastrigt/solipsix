@@ -53,6 +53,14 @@ enum sol_gui_alignment
 };
 // also difficuly because we could need horizontal AND vertical alignment
 
+enum sol_gui_placement
+{
+    SOL_GUI_PLACEMENT_BEFORE,
+    SOL_GUI_PLACEMENT_AFTER,
+    SOL_GUI_PLACEMENT_START,
+    SOL_GUI_PLACEMENT_END
+};
+
 // SOL_GUI_REFERENCE_BIT_COUNT + SOL_GUI_OBJECT_STATUS_BIT_COUNT + SOL_GUI_OBJECT_PROPERTY_BIT_COUNT <= 32
 #define SOL_GUI_REFERENCE_BIT_COUNT 8
 

@@ -32,44 +32,38 @@ struct sol_gui_panel
 	uint32_t inset_content: 1;
 };
 
-void sol_gui_panel_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
+void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
-	struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
 
-	s16_rect offset_content = s16_rect_add_offset(obj->position, offset);
-	theme->panel_render(theme, obj->flags, offset_content, SOL_OVERLAY_COLOUR_DEFAULT, batch);
-
-	// child location is relative to parent
-	offset = s16_vec2_add(offset, obj->position.start);
-	#warning surely the above can be moved into parent function!
+	theme->panel_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
-		sol_gui_object_render(child, offset, batch);
+		sol_gui_object_render(child, position.start, batch);
 	}
 }
-struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_vec2 location)
+
+struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
-	struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
 	struct sol_gui_object* result;
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		// child location is relative to parent
-		result = sol_gui_object_hit_scan(child, s16_vec2_sub(location, obj->position.start));
+		result = sol_gui_object_hit_scan(child, position.start, location);
 		if(result)
 		{
 			return result;
 		}
 	}
 
-	if(theme->panel_select(theme, obj->flags, obj->position, location))
+	if(theme->panel_select(theme, obj->flags, position, location))
 	{
 		//panel is selectable
 		return obj;
@@ -80,8 +74,7 @@ struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_ve
 static s16_vec2 sol_gui_panel_min_size(struct sol_gui_object* obj)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
-	struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
 	s16_vec2 content_min_size;
 	uint32_t position_flags;
@@ -99,20 +92,13 @@ static s16_vec2 sol_gui_panel_min_size(struct sol_gui_object* obj)
 
 	return theme->panel_size(theme, obj->flags, content_min_size);
 }
-static void sol_gui_panel_place_content(struct sol_gui_object* obj, s16_rect content_rect)
+static void sol_gui_panel_place_content(struct sol_gui_object* obj, s16_vec2 dimensions)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
-	struct sol_gui_context* context = obj->context;
-	struct sol_gui_theme* theme = context->theme;
+	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
 
-	obj->position = content_rect;
-	#warning across all gui objects: this should probably be moved up a level (do this in sol_gui_object_place_content)
-
-	content_rect = s16_rect_move_start_to_origin(content_rect);
-
-	// child location is relative to parent
-	content_rect = theme->panel_place_content(theme, obj->flags, content_rect);
+	s16_rect content_rect = theme->panel_place_content(theme, obj->flags, s16_rect_at_origin_with_size(dimensions));
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
@@ -181,16 +167,21 @@ void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context
 	panel->child = NULL;
 }
 
-struct sol_gui_object* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content)
+struct sol_gui_panel* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content)
 {
 	struct sol_gui_panel* panel = malloc(sizeof(struct sol_gui_panel));
 
 	sol_gui_panel_construct(panel, context, clear_bordered, inset_content);
 
+	return panel;
+}
 
+struct sol_gui_object* sol_gui_panel_object_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content)
+{
+	return sol_gui_panel_as_object( sol_gui_panel_create(context, clear_bordered, inset_content) );
+}
 
-	#warning panel may separate its contents from edges (remove SOL_GUI_OBJECT_POSITION_FLAGS_ALL) based on an input variable!
-	// also make panel borderable?
-
+struct sol_gui_object* sol_gui_panel_as_object(struct sol_gui_panel* panel)
+{
 	return &panel->base;
 }

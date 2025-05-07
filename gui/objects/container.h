@@ -30,14 +30,24 @@ struct sol_gui_container
 };
 
 void sol_gui_container_construct(struct sol_gui_container* container, struct sol_gui_context* context);
-struct sol_gui_object* sol_gui_container_create(struct sol_gui_context* context);
-// min_size and place content should be varied by anything that would use this, the following however should be shared
+
+struct sol_gui_container* sol_gui_container_create(struct sol_gui_context* context);
+struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* context);
+
+struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container);
+
+// min_size and place content should be varied by anything that would use this, the following however may be shared
+void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch);
+struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location);
 void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_destroy(struct sol_gui_object* obj);
 
 
-void sol_gui_container_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_vec2 location);
+// moves a child (potentioaly) relative to a sibling
+// if placement is start/end sibling will be ignored (may be NULL)
+// if sibling is NULL before/after will move child relative to present sibling in the spot before/after itself (basically before becomes; move backwards and after; move forwards)
+// NOTE: placement is with respect to ALL objects in the container; not just active ones (could pass in ignore inactive but this raises too may questions IMO)
+void sol_gui_container_move_child(struct sol_gui_container* container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement);
 
 int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container);

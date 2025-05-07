@@ -33,10 +33,12 @@ void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_cont
 // struct sol_gui_object* sol_gui_button_create(struct sol_gui_context* context);
 
 
+
 // cannot construct these as they have flexible buffers
+struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text);
+struct sol_gui_object* sol_gui_text_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text);
 
-struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text);
+struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon);
+struct sol_gui_object* sol_gui_utf8_icon_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon);
 
-struct sol_gui_object* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon);
-
-
+struct sol_gui_object* sol_gui_button_as_object(struct sol_gui_button* button);
