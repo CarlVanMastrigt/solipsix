@@ -27,6 +27,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "vk/timeline_semaphore.h"
 
+#include "data_structures/stack.h"
+
 #ifndef CVM_VK_CHECK
 #define CVM_VK_CHECK(f)                                                         \
 {                                                                               \

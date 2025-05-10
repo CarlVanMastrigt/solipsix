@@ -35,8 +35,8 @@ vs
 ^ realloced segment array with alignment of relative (intended) indices/offsets
 
 
-iterating a queue
-for(i=0;i<q->count;i++) queue_get_ptr(q, q->front + i)
+iterating a queue:
+for(i=0;i<q->count;i++) function_prefix##_access_entry(q, q->front + i)
 */
 
 #define SOL_QUEUE(type, struct_name, function_prefix)                                                            \
@@ -168,7 +168,7 @@ static inline bool function_prefix##_access_back(struct struct_name* q, type** e
     }                                                                                                            \
     *entry_ptr = q->data + ((q->front + q->count - 1) & (q->space - 1));                                         \
     return true;                                                                                                 \
-}                                                                                                                \
+}
 
 
 

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -17,9 +17,19 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "solipsix.h"
+#include <assert.h>
+
+#include "data_structures/hash_map.h"
 
 
+struct sol_hash_map
+{
+	void* entry_data;
+	size_t entry_space;// number of entries
+	size_t entry_count;// number of entries
+	size_t entry_size;
 
-
-
+	uint64_t (*hash_function)(void*);// hash a a key (key/entry)
+	int (*compare_function)(void*, void*);// check whether 2 entries (with the same hash) are equal
+	// above should either return int and entries with the same has
+};

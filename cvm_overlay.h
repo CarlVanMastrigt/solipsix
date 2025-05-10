@@ -39,6 +39,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_gui_context;
 
 #include "math/s16_rect.h"
+#include "data_structures/stack.h"
 
 
 typedef struct overlay_theme overlay_theme;

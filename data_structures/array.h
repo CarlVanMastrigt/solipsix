@@ -32,8 +32,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-SOL_STACK(uint32_t, sol_available_indices_stack, sol_available_indices_stack)
-///used pretty universally, including below
 
 
 
@@ -118,8 +116,5 @@ static inline type function_prefix##_get_entry(const struct struct_name* a, uint
 static inline type* function_prefix##_access_entry(struct struct_name* a, uint32_t index)         \
 {                                                                                                 \
     return a->array + index;                                                                      \
-}                                                                                                 \
+}
 
-
-
-SOL_ARRAY(uint32_t, u32_array, u32_array)

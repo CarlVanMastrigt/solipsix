@@ -177,7 +177,7 @@ static inline bool function_prefix##_access_back(struct struct_name* q, type** e
     if(index > q->space) index -= q->space;                                                                                       \
     *entry_ptr = q->data + index;                                                                                                 \
     return true;                                                                                                                  \
-}                                                                                                                                 \
+}
 
 
 

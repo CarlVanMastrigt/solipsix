@@ -183,7 +183,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
             iter_backwards[1] = tmp;                                                                                   \
         }                                                                                                              \
     }                                                                                                                  \
-}                                                                                                                      \
+}
 
 
 
@@ -194,7 +194,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
  * it is recommended that this is a non-void const pointer
 */
 
-#define SOL_QUICKSORT_CONTEXT(TYPE, FUNCTION_NAME, THRESHOLD, CTX_TYPE)                                                \
+#define SOL_QUICKSORT_WITH_CONTEXT(TYPE, FUNCTION_NAME, THRESHOLD, CTX_TYPE)                                           \
 void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                                                            \
 {                                                                                                                      \
     const size_t chunk_size=THRESHOLD;                                                                                 \
@@ -343,7 +343,7 @@ void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                     
             iter_backwards[1] = tmp;                                                                                   \
         }                                                                                                              \
     }                                                                                                                  \
-}                                                                                                                      \
+}
 
 
 

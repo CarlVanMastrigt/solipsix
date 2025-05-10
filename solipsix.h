@@ -57,7 +57,6 @@ typedef union widget widget; // find a better place to put this?
 #include "cvm_utils.h"
 #include "cvm_math.h"
 #include "cvm_random.h"
-#include "cvm_data_structures.h"
 #include "cvm_directory.h"
 #include "cvm_vk.h"
 #include "cvm_overlay.h"

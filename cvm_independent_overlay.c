@@ -21,6 +21,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "overlay/enums.h"
 
+#include "data_structures/fixed_size_cache.h"
+#include "data_structures/queue.h"
+
 
 
 struct cvm_overlay_frame_resources
@@ -34,9 +37,9 @@ struct cvm_overlay_frame_resources
     VkFramebuffer framebuffer;
 };
 
-#define CVM_CACHE_CMP( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
-CVM_CACHE(struct cvm_overlay_frame_resources, struct cvm_overlay_target*, cvm_overlay_frame_resources)
-#undef CVM_CACHE_CMP
+#define SOL_CACHE_CMP( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
+SOL_FIXED_SIZE_CACHE(struct cvm_overlay_frame_resources, struct cvm_overlay_target*, cvm_overlay_frame_resources_cache, cvm_overlay_frame_resources_cache)
+#undef SOL_CACHE_CMP
 
 /// needs a better name
 struct cvm_overlay_target_resources
@@ -54,7 +57,7 @@ struct cvm_overlay_target_resources
     struct cvm_overlay_pipeline pipeline_;
 
     /// rely on all frame resources being deleted to ensure not in use
-    cvm_overlay_frame_resources_cache frame_resources;
+    struct cvm_overlay_frame_resources_cache frame_resources;
 
     /// moment when this cache entry is no longer in use and can thus be evicted
     struct sol_vk_timeline_semaphore_moment last_use_moment;

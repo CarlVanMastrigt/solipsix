@@ -25,6 +25,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_SWAPCHAIN_H
 #define CVM_VK_SWAPCHAIN_H
 
+#include "data_structures/queue.h"
+
 enum cvm_vk_presentable_image_state
 {
     CVM_VK_PRESENTABLE_IMAGE_STATE_READY = 0,/// basically uninitialised

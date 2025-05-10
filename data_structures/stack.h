@@ -112,5 +112,7 @@ static inline size_t function_prefix##_size(struct struct_name* s)              
 static inline void function_prefix##_copy(struct struct_name* s, void* dst)                                   \
 {                                                                                                             \
     memcpy(dst, s->data, sizeof(type) * s->count);                                                            \
-}                                                                                                             \
+}
 
+SOL_STACK(uint32_t, sol_available_indices_stack, sol_available_indices_stack)
+/// used pretty frequently, including in SOL_ARRAY
