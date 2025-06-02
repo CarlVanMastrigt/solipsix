@@ -50,9 +50,13 @@ struct sol_sync_barrier
 };
 
 
-
+// aquire a barrier that is ready to be used from the pool
+// must match a later call to `sol_sync_barrier_activate`
 struct sol_sync_barrier* sol_sync_barrier_prepare(struct sol_sync_barrier_pool* pool);
 
+// all initial setup has been done, barrier is considered "live" from here
+// after calling this refrences and conditions may only be added using an already held refence or condition respectively
+// must match an earlier call to `sol_sync_barrier_prepare`
 void sol_sync_barrier_activate(struct sol_sync_barrier* barrier);
 
 

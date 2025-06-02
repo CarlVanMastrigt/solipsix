@@ -65,7 +65,7 @@ enum sol_gui_placement
 #define SOL_GUI_REFERENCE_BIT_COUNT 8
 
 
-#define SOL_GUI_OBJECT_FLAGS_BIT_COUNT 24
+#define SOL_GUI_OBJECT_FLAGS_BIT_COUNT 16
 #define SOL_GUI_OBJECT_STATUS_FLAG_REGISTERED      0x00000001 /** used for validation, ensures the object base is only registered and constructed once */
 #define SOL_GUI_OBJECT_STATUS_FLAG_ENABLED         0x00000002 /* inactive objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
 #define SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT         0x00000004 /** used for validation in various places*/
@@ -78,6 +78,6 @@ enum sol_gui_placement
 #define SOL_GUI_OBJECT_POSITION_FLAG_LAST_Y        0x00000800
 #define SOL_GUI_OBJECT_POSITION_FLAGS_ALL          0x00000F00
 // properties should be immutable after being set at widget creation
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x00800000
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x00400000
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED      0x00200000 /** the object should have a border (size defined by the theme) applied to it */
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED      0x00002000 /** the object should have a border (size defined by the theme) applied to it */
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x00004000
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x00008000
