@@ -49,7 +49,7 @@ static inline void sol_sincosf(float angle, float* sin, float* cos)
 
 #define SOL_MAX(A,B) (((A)>(B))?(A):(B))
 #define SOL_MIN(A,B) (((A)<(B))?(A):(B))
-#define SOL_CLAMP(X,MIN,MAX) CVM_MAX(MIN,CVM_MIN(MAX,X))
+#define SOL_CLAMP(X,MIN,MAX) ((X)>(MAX)?(MAX):(((X)<(MIN))?(MIN):(X)))
 
 static inline uint64_t sol_u64_align(uint64_t size, uint64_t alignment)
 {

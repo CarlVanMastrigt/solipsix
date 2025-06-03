@@ -26,7 +26,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-
+#warning this could actually be the lowest bit! reduces required thinking a fair bit
 #define SOL_HASH_MAP_IDENTIFIER_EXIST_BIT 0x8000
 #define SOL_HASH_MAP_IDENTIFIER_HASH_MASK 0x7FFF
 // note: top bit being set indicates it's empty
@@ -159,7 +159,6 @@ static inline void sol_hash_map_resize(struct sol_hash_map* map)
 	const void* key_entry;
 
 	map->entry_space_exponent++;
-	map->entry_count = 0;
 	map->entries = malloc(map->entry_size << map->entry_space_exponent);
 	map->identifiers = malloc(sizeof(uint16_t) << map->entry_space_exponent);
 	memset(map->identifiers, 0x00, sizeof(uint16_t) << map->entry_space_exponent);
@@ -285,7 +284,7 @@ enum sol_map_result sol_hash_map_entry_obtain(struct sol_hash_map* map, void* ke
 	entry_space = (uint64_t)1 << map->entry_space_exponent;
 
 	// very unlikely, needed bacause map could be in a vlaid state while fully saturated, in which case the search for a vlaid slot would repeat indefinitely
-	if(map->entry_count == entry_space)
+	if(map->entry_count + 1 == entry_space)
 	{
 		if(map->entry_space_exponent == map->entry_space_exponent_limit)
 		{
