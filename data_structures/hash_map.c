@@ -25,11 +25,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "data_structures/hash_map.h"
 
 
-
 #define SOL_HASH_MAP_IDENTIFIER_EXIST_BIT 0x0001
 // note: top bit being set indicates it's empty
-#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS 7
-#define SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS 9
+#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS 8
+#define SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS 8
 // ^ bottom fractional bit will be repurposed (SOL_HASH_MAP_IDENTIFIER_EXIST_BIT)
 
 // if this bit is zero when subtracing the identifier of the key we're searching for <k>
@@ -38,8 +37,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // then <k> is greater than or equal to <c>
 // note: this only holds if the maximum offset (below) of the hash map is maintained/respectedSOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS
 #define SOL_HASH_MAP_DELTA_TEST_BIT 0x8000
-#define SOL_HASH_MAP_INDEX_DELTA_TEST_BIT (SOL_HASH_MAP_DELTA_TEST_BIT >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)
-// ^ is (SOL_HASH_MAP_DELTA_TEST_BIT >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)
 
 // maximum offset must use 1 bit less than the largest index identifier
 // if offset from actual location is equal to this (or greater than) then the necessary condition imposed on identifiers has been violated
@@ -66,12 +63,10 @@ static inline bool sol_hash_map_identifier_not_ordered_after_key(uint16_t key_id
 	return ((key_identifier-compare_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0;
 }
 
-// identifier must be greater than this to be placeable at index
-static inline bool sol_hash_map_identifier_exists_and_valid_at_index(uint64_t index, uint_fast16_t identifier)
+static inline bool sol_hash_map_identifier_exists_and_can_move_backwards(uint64_t current_index, uint_fast16_t identifier)
 {
-	return identifier && (((index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK) - (identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)) & SOL_HASH_MAP_INDEX_DELTA_TEST_BIT) == 0;
+	return identifier && (current_index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK) != (identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS);
 }
-#warning above could be faster as "can shift identifier backwards" and provide CURRENT index
 
 // can we move an identifier to this index? an offset will only become invalid due to map saturation, and this check only works if entries are moved one index at a time
 static inline bool sol_hash_map_identifier_offset_invalid(uint64_t index, uint_fast16_t identifier)
@@ -158,12 +153,14 @@ static inline void sol_hash_map_resize(struct sol_hash_map* map)
 			index = key_index;
 			while(map->identifiers[index])
 			{
-				index = (index + 1) & index_mask;
+				// index = (index + 1) & index_mask;
+				index = (index==index_mask) ? 0 : index+1;
 			}
 
 			while(index != key_index)
 			{
-				prev_index = (index - 1) & index_mask;
+				// prev_index = (index - 1) & index_mask;
+				prev_index = (index==0) ? index_mask : index-1;
 				// at this point prev must exist, only need to check ordering
 				if(sol_hash_map_identifier_not_ordered_after_key(key_identifier, map->identifiers[prev_index]))
 				{
@@ -197,7 +194,8 @@ static inline bool sol_hash_map_entry_locate(struct sol_hash_map* map, void* key
 
 	while(sol_hash_map_identifier_exists_and_ordered_before_key(key_identifier, map->identifiers[index]))
 	{
-		index = (index + 1) & index_mask;
+		// index = (index + 1) & index_mask;
+		index = (index==index_mask) ? 0 : index+1;
 	}
 
 	while(key_identifier == map->identifiers[index])
@@ -210,7 +208,8 @@ static inline bool sol_hash_map_entry_locate(struct sol_hash_map* map, void* key
 			return true;// precise entry found
 		}
 		// implicit else
-		index = (index + 1) & index_mask;
+		// index = (index + 1) & index_mask;
+		index = (index==index_mask) ? 0 : index+1;
 	}
 
 	*index_result = index;
@@ -282,7 +281,6 @@ enum sol_map_result sol_hash_map_entry_obtain(struct sol_hash_map* map, void* ke
 		index_mask = entry_space - 1;
 
 		key_index = key_hash >> (64 - map->entry_space_exponent);/// implicitly masked to index_mask
-		// max_index = (index + SOL_HASH_MAP_MAXIMUM_OFFSET) & index_mask;
 
 		key_identifier = (key_hash >> (64 - map->entry_space_exponent - SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
 		// ^ get the last SOL_HASH_MAP_INDEX_BITS of the hash's index with SOL_HASH_MAP_FRACTIONAL_BITS bits following it, also set "exist" bit
@@ -316,14 +314,16 @@ enum sol_map_result sol_hash_map_entry_obtain(struct sol_hash_map* map, void* ke
 			// note: yes, getting the identifier BEFORE changing the move_index, as its necessary to check that the new index is valid for every identifier
 			move_index = next_move_index;
 			move_identifier = map->identifiers[move_index];
-			next_move_index = (move_index + 1) & index_mask;
+			// next_move_index = (move_index + 1) & index_mask;
+			next_move_index = (move_index==index_mask) ? 0 : move_index+1;
 		}
 		while(move_identifier);// searching for a valid location to add
 
 		// this could be a (fairly complicated) memove instead... (would need to respect the potential for wrapping the buffer length)
 		while(move_index != key_index)
 		{
-			prev_move_index = (move_index - 1) & index_mask;
+			// prev_move_index = (move_index - 1) & index_mask;
+			prev_move_index = (move_index==0) ? index_mask : move_index-1;
 			memcpy(sol_hash_map_access_entry(map, move_index), sol_hash_map_access_entry(map, prev_move_index), map->entry_size);
 			map->identifiers[move_index] = map->identifiers[prev_move_index];
 			move_index = prev_move_index;
@@ -347,12 +347,13 @@ static inline void sol_hash_map_entry_evict_index(struct sol_hash_map* map, uint
 
 	sol_hash_map_entry_evict_index_shift_next_entry_backwards:
 	{
-		next_index = (index + 1) & index_mask;
+		// next_index = (index + 1) & index_mask;
+		next_index = (index==index_mask) ? 0 : index+1;
 		identifier = map->identifiers[next_index];
-		if(sol_hash_map_identifier_exists_and_valid_at_index(index, identifier))
+		if(sol_hash_map_identifier_exists_and_can_move_backwards(next_index, identifier))
 		{
 			memcpy(sol_hash_map_access_entry(map, index), sol_hash_map_access_entry(map, next_index), map->entry_size);
-			map->identifiers[index] = map->identifiers[next_index];
+			map->identifiers[index] = identifier;
 			index = next_index;
 			goto sol_hash_map_entry_evict_index_shift_next_entry_backwards;
 		}
