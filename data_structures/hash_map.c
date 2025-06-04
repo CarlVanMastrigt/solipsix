@@ -26,55 +26,39 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#warning this could actually be the lowest bit! reduces required thinking a fair bit
-#define SOL_HASH_MAP_IDENTIFIER_EXIST_BIT 0x8000
-#define SOL_HASH_MAP_IDENTIFIER_HASH_MASK 0x7FFF
+#define SOL_HASH_MAP_IDENTIFIER_EXIST_BIT 0x0001
 // note: top bit being set indicates it's empty
-#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS 8
-#define SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS 7
+#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS 7
+#define SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS 9
+// ^ bottom fractional bit will be repurposed (SOL_HASH_MAP_IDENTIFIER_EXIST_BIT)
 
 // if this bit is zero when subtracing the identifier of the key we're searching for <k>
 // from the existing (set) identifier we're comparing to <c>
 // [i.e. ((c-k) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0 ]
 // then <k> is greater than or equal to <c>
-// note: this only holds if the maximum offset (below) of the hash map is maintained/respected
-#define SOL_HASH_MAP_DELTA_TEST_BIT 0x4000
-#define SOL_HASH_MAP_INDEX_DELTA_TEST_BIT 0x0080
+// note: this only holds if the maximum offset (below) of the hash map is maintained/respectedSOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS
+#define SOL_HASH_MAP_DELTA_TEST_BIT 0x8000
+#define SOL_HASH_MAP_INDEX_DELTA_TEST_BIT (SOL_HASH_MAP_DELTA_TEST_BIT >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)
 // ^ is (SOL_HASH_MAP_DELTA_TEST_BIT >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)
 
 // maximum offset must use 1 bit less than the largest index identifier
 // if offset from actual location is equal to this (or greater than) then the necessary condition imposed on identifiers has been violated
-#define SOL_HASH_MAP_INVALID_OFFSET 0x80
+// #define SOL_HASH_MAP_INVALID_OFFSET 128
+#define SOL_HASH_MAP_INVALID_OFFSET (1 << (SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS - 1))
+#define SOL_HASH_MAP_INVALID_OFFSET_IN_IDENTIFIER (SOL_HASH_MAP_INVALID_OFFSET << SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)
 
 // in order to correctly compare, we must ensure this bit is set in the comparison index value to wrap comparisons correctly
 // #define SOL_HASH_MAP_IDENTIFIER_EXCLUSION_BIT 0x4000
 
-#define SOL_HASH_MAP_IDENTIFIER_INDEX_MASK 0xFF
+// #define SOL_HASH_MAP_IDENTIFIER_INDEX_MASK 0xFF
+#define SOL_HASH_MAP_IDENTIFIER_INDEX_MASK ((1 << SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS) - 1)
 
-// #define SOL_HASH_MAP_IDENTIFIER_EXTRACT_INDEX_BITS(v) (((v) >> SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_BITS) & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK)
-// ^ remove fractional bits and top bit (this is for checking that the maximum offset is not excceded)
 
-// #define SOL_HASH_MAP_IDENTIFIER_SEARCH_STOP(k, c) ( (c & SOL_HASH_MAP_IDENTIFIER_EXIST_BIT) == 0  ||  ((c-k) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0 )
 
-// function equivalent of macro provided for convenience
-// static inline bool sol_hash_map_identifier_search_stop(uint16_t key_identifier, uint16_t compare_identifier)
-// {
-// 	// stop searching if the identifier to check against does not exist (empty slot)
-// 	// or the key is greater than or equal to the identifier to check against (i.e. didnt wrap)
-// 	// note: it's not necessary to excluse the top (set) bit, as it will be present key and must exist in compare_identifier if the first condition isn't satisfied
-// 	return (compare_identifier & SOL_HASH_MAP_IDENTIFIER_EXIST_BIT) == 0  ||  ((compare_identifier-key_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0;
-// }
-
+// note: not equal to
 static inline bool sol_hash_map_identifier_exists_and_ordered_before_key(uint16_t key_identifier, uint16_t compare_identifier)
 {
 	return compare_identifier && ((compare_identifier-key_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT);
-	// return (compare_identifier & SOL_HASH_MAP_IDENTIFIER_EXIST_BIT) && ((compare_identifier-key_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT);
-}
-
-static inline bool sol_hash_map_identifier_exists_and_ordered_after_key(uint16_t key_identifier, uint16_t compare_identifier)
-{
-	return compare_identifier && ((compare_identifier-key_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0;
-	// return (compare_identifier & SOL_HASH_MAP_IDENTIFIER_EXIST_BIT) && ((compare_identifier-key_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0;
 }
 
 static inline bool sol_hash_map_identifier_not_ordered_after_key(uint16_t key_identifier, uint16_t compare_identifier)
@@ -85,24 +69,19 @@ static inline bool sol_hash_map_identifier_not_ordered_after_key(uint16_t key_id
 // identifier must be greater than this to be placeable at index
 static inline bool sol_hash_map_identifier_exists_and_valid_at_index(uint64_t index, uint_fast16_t identifier)
 {
-	uint_fast16_t index_identifier_threshold = (index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK);
-	identifier = identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS;
-	return identifier && ((index_identifier_threshold - identifier) & SOL_HASH_MAP_INDEX_DELTA_TEST_BIT) == 0;
+	return identifier && (((index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK) - (identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)) & SOL_HASH_MAP_INDEX_DELTA_TEST_BIT) == 0;
 }
+#warning above could be faster as "can shift identifier backwards" and provide CURRENT index
 
-// an offset will only become invalid due to map saturation
+// can we move an identifier to this index? an offset will only become invalid due to map saturation, and this check only works if entries are moved one index at a time
 static inline bool sol_hash_map_identifier_offset_invalid(uint64_t index, uint_fast16_t identifier)
 {
-	index = index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK;
-	identifier = ((identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) + SOL_HASH_MAP_INVALID_OFFSET) & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK;
+	index = (index - SOL_HASH_MAP_INVALID_OFFSET) & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK;
+	identifier = identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS;
 	return index == identifier;
-}
 
-static inline bool sol_hash_map_identifier_valid_for(uint64_t index, uint_fast16_t identifier)
-{
-	index = index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK;
-	identifier = ((identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) + SOL_HASH_MAP_INVALID_OFFSET) & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK;
-	return index == identifier;
+	// return ((index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK) - (identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)) == SOL_HASH_MAP_INVALID_OFFSET;
+	// return ((index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK) ^ (identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS)) == SOL_HASH_MAP_INVALID_OFFSET;// works if maxoffset is Po2
 }
 
 void sol_hash_map_initialise(struct sol_hash_map* map, size_t initial_size_exponent, size_t maximum_size_exponent, size_t entry_size, uint64_t(*hash_function)(const void*), bool(*compare_equal_function)(const void*, const void*))
@@ -368,7 +347,6 @@ static inline void sol_hash_map_entry_evict_index(struct sol_hash_map* map, uint
 
 	sol_hash_map_entry_evict_index_shift_next_entry_backwards:
 	{
-		//sol_hash_map_identifier_exists_and_ordered_after_key
 		next_index = (index + 1) & index_mask;
 		identifier = map->identifiers[next_index];
 		if(sol_hash_map_identifier_exists_and_valid_at_index(index, identifier))
