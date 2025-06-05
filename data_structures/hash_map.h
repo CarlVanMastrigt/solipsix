@@ -48,8 +48,8 @@ struct sol_hash_map
 {
 	void* entries;
 	uint16_t* identifiers;
-	size_t entry_space_exponent;
-	size_t entry_space_exponent_limit;
+	uint16_t entry_space_exponent;
+	uint16_t entry_space_exponent_limit;
 	size_t entry_count;
 	size_t entry_size;
 
