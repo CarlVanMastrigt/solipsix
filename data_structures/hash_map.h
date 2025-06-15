@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
