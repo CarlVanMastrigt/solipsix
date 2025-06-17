@@ -23,6 +23,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <vulkan/vulkan.h>
 
+#warning consider making this fixed size always
+
 struct sol_vk_shunt_buffer
 {
     /// multithreaded variant is WAY more complicated, harsher restrictions on memory usage &c.
@@ -46,7 +48,7 @@ void sol_vk_shunt_buffer_terminate(struct sol_vk_shunt_buffer* buffer);
 
 void sol_vk_shunt_buffer_reset(struct sol_vk_shunt_buffer* buffer);
 /// returns pointer to location which can be written, this pointer is only valid until next use, unless mltithreaded in which case it will return a persistently valid pointer or NULL
-void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize * offset);
+void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize* offset);
 
 VkDeviceSize sol_vk_shunt_buffer_get_space_used(struct sol_vk_shunt_buffer* buffer);
 void sol_vk_shunt_buffer_copy(struct sol_vk_shunt_buffer* buffer, void* dst);

@@ -28,34 +28,34 @@ struct sol_quicksort_node
 
 /**
  * must define SOL_COMPARE_LT macro before using this function which should be of the form:
- * SOL_COMPARE_LT(const type* a, const TYPE* b) and return `a < b` in desired order (must NOT return `a <= b`)
+ * SOL_COMPARE_LT(const type* a, const type* b) and return `a < b` in desired order (must NOT return `a <= b`)
  *
- * THRESHOLD is the threshold below which to use bubble sort, \
- * this alters performance characteristics, but 16, 32 & 64 are all reasonable
+ * bubble_sort_threshold alters performance characteristics, but 16, 32 & 64 are all reasonable
+ * function_keywords are provide in case static and or inline is desired
 */
 
-#define SOL_QUICKSORT(TYPE, FUNCTION_NAME, THRESHOLD)                                                                  \
-void FUNCTION_NAME(TYPE * data, size_t count)                                                                          \
+#define SOL_QUICKSORT(type, function_name, bubble_sort_threshold, function_keywords)                                   \
+function_keywords void function_name(type * data, size_t count)                                                        \
 {                                                                                                                      \
-    const size_t chunk_size=THRESHOLD;                                                                                 \
+    const size_t chunk_size = bubble_sort_threshold;                                                                   \
                                                                                                                        \
     struct sol_quicksort_node stack[64];                                                                               \
     size_t stack_size;                                                                                                 \
                                                                                                                        \
-    TYPE tmp;                                                                                                          \
-    TYPE pivot;                                                                                                        \
+    type tmp;                                                                                                          \
+    type pivot;                                                                                                        \
                                                                                                                        \
-    TYPE* start;                                                                                                       \
-    TYPE* end;                                                                                                         \
-    TYPE* iter_forwards;                                                                                               \
-    TYPE* iter_backwards;                                                                                              \
-    TYPE* middle;                                                                                                      \
-    TYPE* smallest;                                                                                                    \
+    type* start;                                                                                                       \
+    type* end;                                                                                                         \
+    type* iter_forwards;                                                                                               \
+    type* iter_backwards;                                                                                              \
+    type* middle;                                                                                                      \
+    type* smallest;                                                                                                    \
                                                                                                                        \
-    stack_size=0;                                                                                                      \
+    stack_size = 0;                                                                                                    \
                                                                                                                        \
-    start=data;                                                                                                        \
-    end=data+count-1;                                                                                                  \
+    start = data;                                                                                                      \
+    end = data + count - 1;                                                                                            \
                                                                                                                        \
     if(count>chunk_size) while(1)                                                                                      \
     {                                                                                                                  \
@@ -67,7 +67,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
             *end = tmp;                                                                                                \
         }                                                                                                              \
                                                                                                                        \
-        middle=start + ((end - start) >> 1);                                                                           \
+        middle = start + ((end - start) >> 1);                                                                         \
                                                                                                                        \
         /* sort middle relative to start and end, this also also sets the middle(valued) of the 3 as pivot */          \
         if(SOL_COMPARE_LT(end, middle))                                                                                \
@@ -84,7 +84,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
         }                                                                                                              \
         else                                                                                                           \
         {                                                                                                              \
-            pivot=*middle;                                                                                             \
+            pivot = *middle;                                                                                           \
         }                                                                                                              \
                                                                                                                        \
         iter_forwards = start;                                                                                         \
@@ -114,13 +114,13 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
             if((end - iter_forwards) < chunk_size)                                                                     \
             {                                                                                                          \
                 /* both parts of this range sufficiently sorted, get another range to sort (if any are left) */        \
-                if(stack_size==0)                                                                                      \
+                if(stack_size == 0)                                                                                    \
                 {                                                                                                      \
                     break;                                                                                             \
                 }                                                                                                      \
                 stack_size--;                                                                                          \
-                start=stack[stack_size].start;                                                                         \
-                end=stack[stack_size].end;                                                                             \
+                start = stack[stack_size].start;                                                                       \
+                end = stack[stack_size].end;                                                                           \
             }                                                                                                          \
             else                                                                                                       \
             {                                                                                                          \
@@ -138,12 +138,12 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
         else if((iter_backwards - start) > (end - iter_forwards))                                                      \
         {                                                                                                              \
             stack[stack_size++] = (struct sol_quicksort_node){.start=start,.end=iter_backwards};                       \
-            start=iter_forwards;                                                                                       \
+            start = iter_forwards;                                                                                     \
         }                                                                                                              \
         else                                                                                                           \
         {                                                                                                              \
             stack[stack_size++] = (struct sol_quicksort_node){.start=iter_forwards,.end=end};                          \
-            end=iter_backwards;                                                                                        \
+            end = iter_backwards;                                                                                      \
         }                                                                                                              \
     }                                                                                                                  \
                                                                                                                        \
@@ -159,7 +159,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
         }                                                                                                              \
     }                                                                                                                  \
     /* move smallest to start */                                                                                       \
-    if(data!=smallest)                                                                                                 \
+    if(data != smallest)                                                                                               \
     {                                                                                                                  \
         tmp = *smallest;                                                                                               \
         *smallest = *data;                                                                                             \
@@ -177,7 +177,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
             tmp = *iter_forwards;                                                                                      \
             do                                                                                                         \
             {                                                                                                          \
-                iter_backwards[1]=iter_backwards[0];                                                                   \
+                iter_backwards[1] = iter_backwards[0];                                                                 \
             }                                                                                                          \
             while(SOL_COMPARE_LT((&tmp), (--iter_backwards)));                                                         \
             iter_backwards[1] = tmp;                                                                                   \
@@ -190,32 +190,32 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
 
 /**
  * the same as SOL_QUICKSORT but SOL_COMPARE_LT takes a context argument
- * SOL_COMPARE_LT(const type* a, const TYPE* b, CTX_TYPE ctx) returning `a < b` NOT `a <= b`
- * it is recommended that this is a non-void const pointer
+ * SOL_COMPARE_LT(const type* a, const type* b, ctx_type ctx) returning `a < b` NOT `a <= b`
+ * it is recommended that ctx_type is a non-void const pointer
 */
 
-#define SOL_QUICKSORT_WITH_CONTEXT(TYPE, FUNCTION_NAME, THRESHOLD, CTX_TYPE)                                           \
-void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                                                            \
+#define SOL_QUICKSORT_WITH_CONTEXT(type, function_name, bubble_sort_threshold, function_keywords, ctx_type)            \
+function_keywords void function_name(type * data, size_t count, ctx_type ctx)                                          \
 {                                                                                                                      \
-    const size_t chunk_size=THRESHOLD;                                                                                 \
+    const size_t chunk_size = bubble_sort_threshold;                                                                   \
                                                                                                                        \
     struct sol_quicksort_node stack[64];                                                                               \
     size_t stack_size;                                                                                                 \
                                                                                                                        \
-    TYPE tmp;                                                                                                          \
-    TYPE pivot;                                                                                                        \
+    type tmp;                                                                                                          \
+    type pivot;                                                                                                        \
                                                                                                                        \
-    TYPE* start;                                                                                                       \
-    TYPE* end;                                                                                                         \
-    TYPE* iter_forwards;                                                                                               \
-    TYPE* iter_backwards;                                                                                              \
-    TYPE* middle;                                                                                                      \
-    TYPE* smallest;                                                                                                    \
+    type* start;                                                                                                       \
+    type* end;                                                                                                         \
+    type* iter_forwards;                                                                                               \
+    type* iter_backwards;                                                                                              \
+    type* middle;                                                                                                      \
+    type* smallest;                                                                                                    \
                                                                                                                        \
-    stack_size=0;                                                                                                      \
+    stack_size = 0;                                                                                                    \
                                                                                                                        \
-    start=data;                                                                                                        \
-    end=data+count-1;                                                                                                  \
+    start = data;                                                                                                      \
+    end = data + count - 1;                                                                                            \
                                                                                                                        \
     if(count>chunk_size) while(1)                                                                                      \
     {                                                                                                                  \
@@ -244,7 +244,7 @@ void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                     
         }                                                                                                              \
         else                                                                                                           \
         {                                                                                                              \
-            pivot=*middle;                                                                                             \
+            pivot = *middle;                                                                                           \
         }                                                                                                              \
                                                                                                                        \
         iter_forwards = start;                                                                                         \
@@ -274,13 +274,13 @@ void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                     
             if((end - iter_forwards) < chunk_size)                                                                     \
             {                                                                                                          \
                 /* both parts of this range sufficiently sorted, get another range to sort (if any are left) */        \
-                if(stack_size==0)                                                                                      \
+                if(stack_size == 0)                                                                                    \
                 {                                                                                                      \
                     break;                                                                                             \
                 }                                                                                                      \
                 stack_size--;                                                                                          \
-                start=stack[stack_size].start;                                                                         \
-                end=stack[stack_size].end;                                                                             \
+                start = stack[stack_size].start;                                                                       \
+                end = stack[stack_size].end;                                                                           \
             }                                                                                                          \
             else                                                                                                       \
             {                                                                                                          \
@@ -297,13 +297,13 @@ void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                     
         /* to avoid overflow of the stack record the larger side to the stack and sort the smaller immediately */      \
         else if((iter_backwards - start) > (end - iter_forwards))                                                      \
         {                                                                                                              \
-            stack[stack_size++] = (struct sol_quicksort_node){.start=start,.end=iter_backwards};                       \
-            start=iter_forwards;                                                                                       \
+            stack[stack_size++] = (struct sol_quicksort_node){.start = start,.end = iter_backwards};                   \
+            start = iter_forwards;                                                                                     \
         }                                                                                                              \
         else                                                                                                           \
         {                                                                                                              \
-            stack[stack_size++] = (struct sol_quicksort_node){.start=iter_forwards,.end=end};                          \
-            end=iter_backwards;                                                                                        \
+            stack[stack_size++] = (struct sol_quicksort_node){.start = iter_forwards,.end = end};                      \
+            end = iter_backwards;                                                                                      \
         }                                                                                                              \
     }                                                                                                                  \
                                                                                                                        \
@@ -337,7 +337,7 @@ void FUNCTION_NAME(TYPE * data, size_t count, CTX_TYPE ctx)                     
             tmp = *iter_forwards;                                                                                      \
             do                                                                                                         \
             {                                                                                                          \
-                iter_backwards[1]=iter_backwards[0];                                                                   \
+                iter_backwards[1] = iter_backwards[0];                                                                 \
             }                                                                                                          \
             while(SOL_COMPARE_LT((&tmp), (--iter_backwards), ctx));                                                    \
             iter_backwards[1] = tmp;                                                                                   \

@@ -100,7 +100,7 @@ static inline bool cvm_directory_sort_function(const struct cvm_directory_entry*
 }
 
 #define SOL_COMPARE_LT cvm_directory_sort_function
-SOL_QUICKSORT_WITH_CONTEXT(struct cvm_directory_entry, cvm_directory_sort, 8, const struct cvm_directory*);
+SOL_QUICKSORT_WITH_CONTEXT(struct cvm_directory_entry, cvm_directory_sort, 8, static, const struct cvm_directory*);
 #undef SOL_COMPARE_LT
 
 

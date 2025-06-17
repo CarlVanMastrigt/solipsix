@@ -22,6 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <assert.h>
 
 
 enum sol_map_result
@@ -167,6 +168,7 @@ enum sol_map_result function_prefix##_remove(struct struct_name* map, key_type* 
 void function_prefix##_delete_entry(struct struct_name* map, entry_type* entry_ptr);                                                            \
 
 
+
 /** required to define:
  *  `SOL_HASH_MAP_DECLARATION` with the same parameters
  *  `SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(const key_type*, const entry_type*)` returning a bool
@@ -174,6 +176,7 @@ void function_prefix##_delete_entry(struct struct_name* map, entry_type* entry_p
  *  `SOL_HASH_MAP_ENTRY_HASH(const entry_type*)` returning a uint64_t
  * 		^ the KEY_HASH and ENTRY_HASH must return the same hash for a given entry and key
  * 		^ they can be the same function taking `const void*` and acting on a polymorphic struct if desired
+ *  it's recommended to #undef these after SOL_HASH_MAP_IMPLEMENTATION
  * */
 #define SOL_HASH_MAP_IMPLEMENTATION(entry_type, key_type, struct_name, function_prefix)                                                         \
                                                                                                                                                 \

@@ -28,18 +28,16 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 /**
-SOL_BINARY_HEAP_CMP(A,B) must be declared, with true resulting in the value A moving UP the heap
-    ^ A and B are type*
-
-
-
-TODO: make any inputs to heap_cmp pointers and const (access top, paired with NULL in remove, append_ptr)
-
-TODO: use test sort heap performance improvements
-
-TODO: may be worth looking into adding support for random location deletion and heap
-location tracking to support that, though probably not as adaptable as might be desirable
-*/
+ * SOL_BINARY_HEAP_CMP(A,B) must be declared, with true resulting in the value A moving UP the heap
+ *     ^ A and B are type*
+ *
+ * TODO: make any inputs to heap_cmp pointers and const (access top, paired with NULL in remove, append_ptr)
+ *
+ * TODO: use test sort heap performance improvements
+ *
+ * TODO: may be worth looking into adding support for random location deletion and heap
+ * location tracking to support that, though probably not as adaptable as might be desirable
+ */
 
 #define SOL_BINARY_HEAP(type, struct_name, function_prefix)                                                     \
                                                                                                                 \

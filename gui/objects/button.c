@@ -39,36 +39,35 @@ bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struc
 
 	switch(input->sdl_event.type)
 	{
-		case SDL_MOUSEBUTTONDOWN:
-			//button->select_action(button->data);
-			sol_gui_context_change_focused_object(context, obj);
+	case SDL_MOUSEBUTTONDOWN:
+		//button->select_action(button->data);
+		sol_gui_context_change_focused_object(context, obj);
+		return true;
+
+	case SDL_MOUSEBUTTONUP:
+		sol_gui_context_change_focused_object(context, NULL);
+		mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+		if(obj == sol_gui_context_hit_scan(context, mouse_location))
+		{
+			button->select_action(button->data);
 			return true;
-
-		case SDL_MOUSEBUTTONUP:
-			sol_gui_context_change_focused_object(context, NULL);
-			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
-			if(obj == sol_gui_context_hit_scan(context, mouse_location))
-			{
-				button->select_action(button->data);
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-
-
-		default:
-			if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
-			{
-				return true;// must consume input if focused? seems stupid
-			}
-			// handle non-standard (custom) events
-			// if(event_type == context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END)
-			// {
-			// 	//do nothing here...
-			// }
+		}
+		else
+		{
 			return false;
+		}
+
+	default:
+		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+		{
+			return true;// must consume input if focused? seems stupid
+		}
+		// handle non-standard (custom) events
+		// if(event_type == context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END)
+		// {
+		// 	//do nothing here...
+		// }
+		return false;
 	}
 }
 

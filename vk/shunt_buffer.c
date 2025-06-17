@@ -62,7 +62,7 @@ void sol_vk_shunt_buffer_reset(struct sol_vk_shunt_buffer* buffer)
     }
 }
 
-void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize * offset)
+void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize* offset)
 {
     uint_fast64_t current_offset;
     byte_count = sol_vk_align(byte_count, buffer->alignment);
@@ -70,7 +70,7 @@ void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkD
     if(buffer->multithreaded)
     {
         /// this implementation is a little more expensive but ensures that anything that would consume the buffer can actually use it
-        current_offset=atomic_load_explicit(&buffer->atomic_offset, memory_order_relaxed);
+        current_offset = atomic_load_explicit(&buffer->atomic_offset, memory_order_relaxed);
         do
         {
             if(current_offset + byte_count > buffer->size)
@@ -88,17 +88,17 @@ void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkD
 
         if(buffer->offset > buffer->size)
         {
-            do buffer->size *= 2;
-            while(buffer->offset > buffer->size);
-
-            buffer->size = SOL_MIN(buffer->size, buffer->max_size);
-
-            if(buffer->offset > buffer->size)
+            if(buffer->offset > buffer->max_size)
             {
                 /// allocation cannot fit!
                 buffer->offset -= byte_count;
                 return NULL;
             }
+
+            do buffer->size *= 2;
+            while(buffer->offset > buffer->size);
+
+            buffer->size = SOL_MIN(buffer->size, buffer->max_size);
 
             buffer->backing = realloc(buffer->backing, buffer->size);
         }
