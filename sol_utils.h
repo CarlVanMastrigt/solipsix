@@ -22,7 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <math.h>
 
-
+#pragma once
 
 #ifndef _GNU_SOURCE
 static inline char* sol_strdup(const char * in)
@@ -77,3 +77,6 @@ static inline uint32_t sol_u32_exp_lt   (uint32_t v){ return (v==0) ? 0 : 31-__b
 static inline uint32_t sol_u32_ctz      (uint32_t v){ return (v==0) ? 0 :    __builtin_ctz(v  ); }
 static inline uint32_t sol_u32_clz      (uint32_t v){ return (v==0) ? 0 :    __builtin_clz(v  ); }
 static inline uint32_t sol_u32_bit_count(uint32_t v){ return            __builtin_popcount(v  ); }
+
+#define SOL_CONCAT_MACRO(A,B) A##B
+#define SOL_CONCATENATE(A,B) SOL_CONCAT_MACRO(A,B)
