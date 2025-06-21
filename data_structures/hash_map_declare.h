@@ -53,11 +53,19 @@ struct STRUCT_NAME
     ENTRY_TYPE* entries;
     uint16_t* identifiers;
 
+    #ifdef CONTEXT_TYPE
+    CONTEXT_TYPE context;
+    #endif
+
     uint64_t entry_count;
     uint64_t entry_limit;
 };
 
+#ifdef CONTEXT_TYPE
+FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor, CONTEXT_TYPE context);
+#else
 FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor);
+#endif
 
 FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_terminate)(struct STRUCT_NAME* map);
 

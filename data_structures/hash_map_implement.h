@@ -61,7 +61,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#ifndef DECLARATION_PRESENT
+#ifndef PRIOR_DECLARATION
 struct STRUCT_NAME
 {
     struct sol_hash_map_descriptor descriptor;
@@ -71,11 +71,15 @@ struct STRUCT_NAME
     ENTRY_TYPE* entries;
     uint16_t* identifiers;
 
+    #ifdef CONTEXT_TYPE
+    CONTEXT_TYPE context;
+    #endif
+
     uint64_t entry_count;
     uint64_t entry_limit;
 };
 #else
-#undef DECLARATION_PRESENT
+#undef PRIOR_DECLARATION
 #endif
 
 
@@ -117,7 +121,11 @@ static inline void SOL_CONCATENATE(FUNCTION_PREFIX,_resize__i)(struct STRUCT_NAM
         if(identifier)
         {
             entry_ptr = old_entries + old_index;
+            #ifdef CONTEXT_TYPE
+            entry_hash = ENTRY_HASH(entry_ptr, map->context);
+            #else
             entry_hash = ENTRY_HASH(entry_ptr);
+            #endif
             entry_index = (entry_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
             index = entry_index;
 
@@ -162,7 +170,11 @@ static inline bool SOL_CONCATENATE(FUNCTION_PREFIX,_locate__i)(struct STRUCT_NAM
 
     while(identifier == identifiers[index])
     {
+        #ifdef CONTEXT_TYPE
+        if(KEY_ENTRY_CMP_EQUAL(key_ptr, entries + index, map->context))
+        #else
         if(KEY_ENTRY_CMP_EQUAL(key_ptr, entries + index))
+        #endif
         {
             *index_result = index;
             return true;/** precise key/entry found */
@@ -203,8 +215,11 @@ static inline void SOL_CONCATENATE(FUNCTION_PREFIX,_evict_index__i)(struct STRUC
 
 
 
-
+#ifdef CONTEXT_TYPE
+FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor, CONTEXT_TYPE context)
+#else
 FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor)
+#endif
 {
     assert(descriptor.entry_space_exponent_limit <= 32-SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS);
     /** beyond this is probably unreasonable, used to catch this accidentally being treated as raw COUNT rather than power of 2 */
@@ -216,6 +231,10 @@ FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUC
 
     map->entries = malloc(sizeof(ENTRY_TYPE) << initial_entry_space_exponent);
     map->identifiers = malloc(sizeof(uint16_t) << initial_entry_space_exponent);
+
+    #ifdef CONTEXT_TYPE
+    map->context = context;
+    #endif
 
     map->entry_space_exponent = initial_entry_space_exponent;
     map->entry_count = 0;
@@ -248,7 +267,11 @@ FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(str
 {
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
+    #ifdef CONTEXT_TYPE
+    const uint64_t key_hash = KEY_HASH(key, map->context);
+    #else
     const uint64_t key_hash = KEY_HASH(key);
+    #endif
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
     uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
 
@@ -264,7 +287,11 @@ FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(str
 
 FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_obtain)(struct STRUCT_NAME* map, KEY_TYPE* key, ENTRY_TYPE** entry_ptr)
 {
+    #ifdef CONTEXT_TYPE
+    const uint64_t key_hash = KEY_HASH(key, map->context);
+    #else
     const uint64_t key_hash = KEY_HASH(key);
+    #endif
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
 
     uint64_t entry_space, index_mask, key_index, move_index, next_move_index, prev_move_index;
@@ -364,7 +391,11 @@ FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(s
 {
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
+    #ifdef CONTEXT_TYPE
+    const uint64_t key_hash = KEY_HASH(key, map->context);
+    #else
     const uint64_t key_hash = KEY_HASH(key);
+    #endif
 
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
     uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
@@ -387,8 +418,6 @@ FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_delete_entry)(struct STR
     const uint64_t index = entry_ptr - map->entries;
     SOL_CONCATENATE(FUNCTION_PREFIX,_evict_index__i)(map, index);
 }
-
-
 
 
 #undef STRUCT_NAME
