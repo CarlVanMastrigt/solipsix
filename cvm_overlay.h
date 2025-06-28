@@ -296,6 +296,7 @@ struct cvm_overlay_render_batch
     /// following are copies or transient data used only within the stages of overlay batch rendering
 
     struct sol_vk_staging_buffer_allocation staging_buffer_allocation;
+    struct sol_vk_staging_buffer* staging_buffer;/** staging buffer from which the above allocation was acquired, used to simplify interface */
 
     /// also record staging buffer itself here?
     VkDeviceSize element_offset;

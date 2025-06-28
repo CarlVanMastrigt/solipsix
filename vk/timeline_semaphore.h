@@ -48,3 +48,8 @@ VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct 
 void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
 bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
 /// ^ returns true if this moment has elapsed
+
+#define SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT 8
+
+void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device);
+bool sol_vk_timeline_semaphore_moment_query_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device);

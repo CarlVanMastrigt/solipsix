@@ -80,25 +80,25 @@ void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffe
 
     mtx_lock(&staging_buffer->access_mutex);
     staging_buffer->terminating = true;
-    /// wait for all memory uses to complete, must be externally synchronised to ensure buffer is not in use elsewhere
+    /** wait for all memory uses to complete, must be externally synchronised to ensure nothing is still attempting to allocate from staging buffer at this point */
     while(sol_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue, &oldest_active_segment))
     {
-        /// this allows cleanup to be initiated while dangling allocations have been made
-        if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
+        if(oldest_active_segment->release_moments_set)
         {
-            staging_buffer->threads_waiting_on_semaphore_setup = true;
-            cnd_wait(&staging_buffer->setup_stall_condition, &staging_buffer->access_mutex);
+            assert(oldest_active_segment->size);/** segment must occupy space */
+
+            sol_vk_timeline_semaphore_moment_wait_multiple(oldest_active_segment->release_moments, oldest_active_segment->release_moment_count, true, device);
+
+            /** this checks that the start of this segment is the end of the available space */
+            assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/** out of order free for some reason, or offset mismatch */
+
+            staging_buffer->remaining_space += oldest_active_segment->size;/** relinquish this segments space */
         }
         else
         {
-            assert(oldest_active_segment->size);///segment must occupy space
-
-            sol_vk_timeline_semaphore_moment_wait(&oldest_active_segment->moment_of_last_use, device);
-
-            /// this checks that the start of this segment is the end of the available space
-            assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/// out of order free for some reason, or offset mismatch
-
-            staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
+            /** this segment has been reserved but not completed, need to wait for release moments(condition) to be set */
+            staging_buffer->threads_waiting_on_semaphore_setup = true;
+            cnd_wait(&staging_buffer->setup_stall_condition, &staging_buffer->access_mutex);
         }
     }
 
@@ -121,23 +121,31 @@ static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging
 
     while(sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue, &oldest_active_segment))
     {
-        if(oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE) return; /// oldest segment has not been "completed"
+        if(!oldest_active_segment->release_moments_set)
+        {
+            /** oldest segment has not had its release condition set (release function called) so it cannot be pruned */
+            return;
+        }
 
-        assert(oldest_active_segment->size);///segment must occupy space
+        assert(oldest_active_segment->size);/** segment must occupy space */
 
-        if(!sol_vk_timeline_semaphore_moment_query(&oldest_active_segment->moment_of_last_use, device)) return; /// oldest segment is still in use by some command_buffer/queue
+        if(!sol_vk_timeline_semaphore_moment_query_multiple(oldest_active_segment->release_moments, oldest_active_segment->release_moment_count, true, device))
+        {
+            /** oldest segment is still in use by some command_buffer/queue */
+            return;
+        }
 
-        /// this checks that the start of this segment is the end of the available space
-        assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/// out of order free for some reason, or offset mismatch
+        /** this checks that the start of this segment is the end of the available space */
+        assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/** out of order free for some reason, or offset mismatch */
 
-        staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
+        staging_buffer->remaining_space += oldest_active_segment->size;/** relinquish this segments space */
 
-        sol_vk_staging_buffer_segment_queue_prune_front(&staging_buffer->segment_queue);/// remove oldest_active_segment from the queue
+        sol_vk_staging_buffer_segment_queue_prune_front(&staging_buffer->segment_queue);/** remove oldest_active_segment from the queue */
 
         if(staging_buffer->remaining_space == staging_buffer->buffer_size)
         {
             assert(staging_buffer->segment_queue.count==0);
-            /// should the whole buffer become available, reset offset to 0 so that we can use the buffer more efficiently (try to avoid wrap)
+            /** should the whole buffer become available, reset offset to 0 so that we can use the buffer more efficiently (try to avoid wrap) */
             staging_buffer->current_offset=0;
         }
     }
@@ -150,7 +158,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     bool existing_segment;
     struct sol_vk_staging_buffer_segment* oldest_active_segment;
     struct sol_vk_staging_buffer_segment* new_segment;
-    struct sol_vk_timeline_semaphore_moment oldest_moment;
+    struct sol_vk_staging_buffer_segment oldest_active_segment_copy;
     uint32_t segment_index,segment_count,masked_first_segment_index;
     VkDeviceSize acquired_offset;
     char* mapping;
@@ -175,45 +183,50 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 
         assert(required_space < staging_buffer->buffer_size);
 
-        /// check that the reserved high priority space will be preserved when processing low priority requests
+        /** check that the reserved high priority space will be preserved when processing low priority requests */
         if(required_space + (high_priority ? 0 : staging_buffer->reserved_high_priority_space) <= staging_buffer->remaining_space)
         {
-            break;/// request will fit, we're done
+            /**  request will fit, we're done */
+            break;
         }
 
-        /// otherwise; more space required
+        /** otherwise; more space required; need to wait for space to become free */
         existing_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue, &oldest_active_segment);
         assert(existing_segment); ///should not need more space if there are no active segments
 
-        if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
-        {
-            /// wait on semaphore to be set up (if necessary) -- this is a particularly bad situation
-            /// must be while loop to handle spurrious wakeup
-            /// must be signalled by thread that sets this semaphore moment
-            staging_buffer->threads_waiting_on_semaphore_setup = true;
-            cnd_wait(&staging_buffer->setup_stall_condition, &staging_buffer->access_mutex);
-            /// when this actually regains the lock the actual first segment may have progressed, thus we need to start again (don't try to wait here)
-        }
-        else
+        if(oldest_active_segment->release_moments_set)
         {
             /// wait on semaphore, many threads may actually do this, but that should be fine as long as timeline semaphore waiting on many threads isnt an issue
-            ///need to retrieve all mutex controlled data used outside mutex, before unlocking mutex
-            oldest_moment = oldest_active_segment->moment_of_last_use;
+            /// need to retrieve all mutex controlled data used outside mutex, before unlocking mutex (the pointer may become invalid after the mutex is unlocked)
+            oldest_active_segment_copy = *oldest_active_segment;
 
-            /// isn't ideal b/c we now have to check this moment again inside the mutex
+            /// isn't ideal b/c we will have to check this moment again after the mutex is locked again
             mtx_unlock(&staging_buffer->access_mutex);
             /// wait for semaphore outside of mutex so as to not block inside the mutex
-            sol_vk_timeline_semaphore_moment_wait(&oldest_moment, device);
+            sol_vk_timeline_semaphore_moment_wait_multiple(oldest_active_segment_copy.release_moments, oldest_active_segment_copy.release_moment_count, true, device);
 
             mtx_lock(&staging_buffer->access_mutex);
         }
+        else
+        {
+            /**
+            this segment has been reserved but not completed, need to wait for release moments(condition) to be set
+            this is a particularly bad situation
+            must be while loop to handle spurrious wakeup
+            must be signalled by thread that sets this semaphore moment
+            */
+            staging_buffer->threads_waiting_on_semaphore_setup = true;
+            cnd_wait(&staging_buffer->setup_stall_condition, &staging_buffer->access_mutex);
+            /** when this actually regains the lock the actual first segment may have progressed, thus we need to start again (don't try to wait here) */
+        }
     }
 
-    /// note active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid
+    /** NOTE: active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid */
     sol_vk_staging_buffer_segment_queue_enqueue_ptr(&staging_buffer->segment_queue, &new_segment, &segment_index);
     *new_segment = (struct sol_vk_staging_buffer_segment)
     {
-        .moment_of_last_use = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL,
+        .release_moment_count = 0,
+        .release_moments_set = false,
         .offset = staging_buffer->current_offset,
         .size = required_space,
     };
@@ -234,7 +247,6 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 
     return (struct sol_vk_staging_buffer_allocation)
     {
-        .parent = staging_buffer,
         .acquired_offset = acquired_offset,
         .mapping = mapping,
         .segment_index = segment_index,
@@ -246,7 +258,7 @@ void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_bu
 {
     VkResult flush_result;
 
-    if( ! staging_buffer->mapping_coherent)
+    if(!staging_buffer->mapping_coherent)
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
@@ -264,20 +276,25 @@ void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_bu
     allocation->flushed = true;
 }
 
-void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment moment_of_last_use)
+void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* staging_buffer, struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count)
 {
-    struct sol_vk_staging_buffer* staging_buffer = allocation->parent;
     struct sol_vk_staging_buffer_segment* segment;
     
     assert(allocation->flushed);
+    assert(release_moment_count > 0);
+    assert(release_moment_count <= SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT);
+
     mtx_lock(&staging_buffer->access_mutex);
 
     segment = sol_vk_staging_buffer_segment_queue_access_entry(&staging_buffer->segment_queue, allocation->segment_index);
-    segment->moment_of_last_use = moment_of_last_use;
+
+    memcpy(segment->release_moments, release_moments, sizeof(struct sol_vk_timeline_semaphore_moment) * release_moment_count);
+    segment->release_moment_count = release_moment_count;
+    segment->release_moments_set = true;
 
     if(staging_buffer->threads_waiting_on_semaphore_setup)
     {
-        staging_buffer->threads_waiting_on_semaphore_setup=false;
+        staging_buffer->threads_waiting_on_semaphore_setup = false;
         cnd_broadcast(&staging_buffer->setup_stall_condition);
     }
 

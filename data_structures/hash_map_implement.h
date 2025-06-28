@@ -416,6 +416,8 @@ FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(s
 FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_delete_entry)(struct STRUCT_NAME* map, ENTRY_TYPE* entry_ptr)
 {
     const uint64_t index = entry_ptr - map->entries;
+    assert(entry_ptr >= map->entries);
+    assert(entry_ptr < map->entries + (1 << map->entry_space_exponent));
     SOL_CONCATENATE(FUNCTION_PREFIX,_evict_index__i)(map, index);
 }
 
@@ -428,3 +430,7 @@ FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_delete_entry)(struct STR
 #undef KEY_ENTRY_CMP_EQUAL
 #undef KEY_HASH
 #undef ENTRY_HASH
+
+#ifdef CONTEXT_TYPE
+#undef CONTEXT_TYPE
+#endif

@@ -24,24 +24,22 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "vk/utils.h"
 
 
-void sol_vk_shunt_buffer_initialise(struct sol_vk_shunt_buffer* buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded)
+void sol_vk_shunt_buffer_initialise(struct sol_vk_shunt_buffer* buffer, VkDeviceSize alignment, VkDeviceSize size, bool multithreaded)
 {
-    assert((alignment & (alignment-1)) == 0);///alignment must be a power of 2
+    assert((alignment & (alignment-1)) == 0);/** alignment must be a power of 2 */
+    assert((size & (alignment-1)) == 0 && size >= alignment);/** size must be a multiple of alignment */
     buffer->alignment = alignment;
     buffer->multithreaded = multithreaded;
-    buffer->max_size = sol_vk_align(max_size, alignment);
+    buffer->size = size;
     if(multithreaded)
     {
         atomic_init(&buffer->atomic_offset, 0);
-        buffer->size = buffer->max_size;
     }
     else
     {
         buffer->offset=0;
-        buffer->size = SOL_MAX(16384, alignment * 4);
-        assert(buffer->size <= buffer->max_size);/// specified size too small
     }
-    buffer->backing = malloc(buffer->size);
+    buffer->backing = malloc(size);
 }
 
 void sol_vk_shunt_buffer_terminate(struct sol_vk_shunt_buffer* buffer)
@@ -58,7 +56,7 @@ void sol_vk_shunt_buffer_reset(struct sol_vk_shunt_buffer* buffer)
     }
     else
     {
-        buffer->offset=0;
+        buffer->offset = 0;
     }
 }
 
@@ -67,9 +65,11 @@ void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkD
     uint_fast64_t current_offset;
     byte_count = sol_vk_align(byte_count, buffer->alignment);
 
+    assert(byte_count < buffer->size);/** is invalid to request space greter than the shunt buffers size */
+
     if(buffer->multithreaded)
     {
-        /// this implementation is a little more expensive but ensures that anything that would consume the buffer can actually use it
+        /** this implementation is a little more expensive but ensures that anything that would consume buffer space can actually use it (i.e. don't consume space only to fail) */
         current_offset = atomic_load_explicit(&buffer->atomic_offset, memory_order_relaxed);
         do
         {
@@ -83,25 +83,13 @@ void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkD
     }
     else
     {
+        if(buffer->offset + byte_count > buffer->size)
+        {
+            return NULL;
+        }
+
         *offset = buffer->offset;
         buffer->offset += byte_count;
-
-        if(buffer->offset > buffer->size)
-        {
-            if(buffer->offset > buffer->max_size)
-            {
-                /// allocation cannot fit!
-                buffer->offset -= byte_count;
-                return NULL;
-            }
-
-            do buffer->size *= 2;
-            while(buffer->offset > buffer->size);
-
-            buffer->size = SOL_MIN(buffer->size, buffer->max_size);
-
-            buffer->backing = realloc(buffer->backing, buffer->size);
-        }
     }
 
     return buffer->backing + *offset;
@@ -123,7 +111,4 @@ void sol_vk_shunt_buffer_copy(struct sol_vk_shunt_buffer* buffer, void* dst)
 {
     memcpy(dst, buffer->backing, sol_vk_shunt_buffer_get_space_used(buffer));
 }
-
-
-
 

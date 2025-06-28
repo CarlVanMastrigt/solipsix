@@ -23,6 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 void sol_vk_timeline_semaphore_initialise(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device)
 {
+    /** TODO: instead have a cache in device to pull from */
     VkSemaphoreCreateInfo timeline_semaphore_create_info=(VkSemaphoreCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -74,16 +75,39 @@ VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct 
 
 void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
 {
+    sol_vk_timeline_semaphore_moment_wait_multiple(moment, 1, true, device);
+}
+
+bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
+{
+    return sol_vk_timeline_semaphore_moment_query_multiple(moment, 1, true, device);
+}
+
+void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device)
+{
+    uint32_t i;
     VkResult result;
-    /// should this check non-null?
+    VkSemaphore semaphores[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
+    uint64_t values[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
+
+    assert(moment_count > 0);
+    assert(moment_count <= SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT);
+
+    /** split moments into semaphore and value arrays */
+    for(i = 0; i < moment_count; i++)
+    {
+        semaphores[i] = moments[i].semaphore;
+        values[i]     = moments[i].value;
+    }
+
     VkSemaphoreWaitInfo wait =
     {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .semaphoreCount=1,
-        .pSemaphores=&moment->semaphore,
-        .pValues=&moment->value,
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .pNext = NULL,
+        .flags = wait_on_all ? 0 : VK_SEMAPHORE_WAIT_ANY_BIT,
+        .semaphoreCount = moment_count,
+        .pSemaphores = semaphores,
+        .pValues = values,
     };
 
     do
@@ -91,28 +115,42 @@ void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphor
         result = vkWaitSemaphores(device->device, &wait, CVM_VK_DEFAULT_TIMEOUT);
         if(result == VK_TIMEOUT)
         {
-            fprintf(stderr,"timeline semaphore seems to be stalling");
+            fprintf(stderr, "timeline semaphore seems to be stalling");
         }
     }
     while(result == VK_TIMEOUT);
     assert(result == VK_SUCCESS);
 }
 
-bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
+bool sol_vk_timeline_semaphore_moment_query_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device)
 {
+    uint32_t i;
     VkResult result;
-    /// should this check non-null?
+    VkSemaphore semaphores[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
+    uint64_t values[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
+
+    assert(moment_count > 0);
+    assert(moment_count <= SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT);
+
+    /** split moments into semaphore and value arrays */
+    for(i = 0; i < moment_count; i++)
+    {
+        semaphores[i] = moments[i].semaphore;
+        values[i]     = moments[i].value;
+    }
+
     VkSemaphoreWaitInfo wait =
     {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .semaphoreCount=1,
-        .pSemaphores=&moment->semaphore,
-        .pValues=&moment->value,
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .pNext = NULL,
+        .flags = wait_on_all ? 0 : VK_SEMAPHORE_WAIT_ANY_BIT,
+        .semaphoreCount = moment_count,
+        .pSemaphores = semaphores,
+        .pValues = values,
     };
 
     result = vkWaitSemaphores(device->device, &wait, 0);
     assert(result == VK_SUCCESS || result == VK_TIMEOUT);
     return result == VK_SUCCESS;
 }
+

@@ -477,6 +477,9 @@ void cvm_overlay_render_batch_initialise(struct cvm_overlay_render_batch* batch,
 
     cvm_vk_buffer_image_copy_stack_initialise(&batch->alpha_atlas_copy_actions, 64);
     cvm_vk_buffer_image_copy_stack_initialise(&batch->colour_atlas_copy_actions, 64);
+
+    /** set for debug checking */
+    batch->staging_buffer = NULL;
 }
 
 void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)
@@ -491,7 +494,6 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)
 
 
 /// can actually easily sub in/out atlases, will just require re-filling them from cpu data (or can even manually copy over data between atlases, which would defragment in the process)
-#warning replace atlases with cvm_overlay_image_atlases
 void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent)
 {
     /// copy actions should be reset when copied, this must have been done before resetting the batch (overlay system relies on these entries having been staged and uploaded)
@@ -515,7 +517,6 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, stru
     }
 
     sol_gui_context_render(gui_context, batch);
-    // render_widget_overlay(batch, root_widget);
 }
 
 void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)
@@ -528,6 +529,8 @@ void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, cons
     elements_offset = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + sol_vk_shunt_buffer_get_space_used(&batch->upload_shunt_buffer));
     staging_space   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, elements_offset + cvm_overlay_element_render_data_stack_size(&batch->render_elements));
 
+    assert(batch->staging_buffer == NULL);
+    batch->staging_buffer = staging_buffer;
     batch->staging_buffer_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, staging_space, true);
 
     char* const staging_mapping = batch->staging_buffer_allocation.mapping;
@@ -550,7 +553,7 @@ void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, cons
 /// `var` copy staged data and apply barriers to atlas images
 void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer)
 {
-    const VkBuffer staging_buffer = batch->staging_buffer_allocation.parent->buffer;
+    const VkBuffer staging_buffer = batch->staging_buffer->buffer;
     cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->colour_atlas, command_buffer, staging_buffer, batch->upload_offset, &batch->colour_atlas_copy_actions);
     cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->alpha_atlas , command_buffer, staging_buffer, batch->upload_offset, &batch->alpha_atlas_copy_actions);
 }
@@ -570,6 +573,8 @@ descriptor set (from batch): must come from managed per-frame resources, dynamic
 */
 void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer)
 {
+    assert(batch->staging_buffer != NULL);
+
     if(pipeline->extent.width != batch->final_target_extent.width || pipeline->extent.height != batch->final_target_extent.height)
     {
         fprintf(stderr, "overlay pipeline must be built with the same extent as the batch");
@@ -584,14 +589,16 @@ void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, str
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rendering_resources->pipeline_layout, 0, 1, &batch->descriptor_set, 0, NULL);
 
     vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
-    vkCmdBindVertexBuffers(command_buffer, 0, 1, &batch->staging_buffer_allocation.parent->buffer, &batch->element_offset);///little bit of hacky stuff to create lvalue
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, &batch->staging_buffer->buffer, &batch->element_offset);
     vkCmdDraw(command_buffer, 4, batch->render_elements.count, 0, 0);
 }
 
 
 void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment)
 {
-    sol_vk_staging_buffer_allocation_release(&batch->staging_buffer_allocation, completion_moment);
+    assert(batch->staging_buffer != NULL);
+    sol_vk_staging_buffer_allocation_release(batch->staging_buffer, &batch->staging_buffer_allocation, &completion_moment, 1);
+    batch->staging_buffer = NULL; /** reset to NULL as this should not be used past here */
 }
 
 

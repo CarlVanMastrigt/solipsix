@@ -23,31 +23,30 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <vulkan/vulkan.h>
 
-#warning consider making this fixed size always
+/** this is a super simple structure for building up data to copy into a staging buffer, mostly just utility
+note: even if multithreaded requires external synchronization to ensure
+    no reservations or modifications to the buffers contents are made after the buffer is copied (presumably to a staging buffer)
+*/
 
 struct sol_vk_shunt_buffer
 {
-    /// multithreaded variant is WAY more complicated, harsher restrictions on memory usage &c.
     bool multithreaded;
     char* backing;
     VkDeviceSize alignment;
     VkDeviceSize size;
-    VkDeviceSize max_size;
     union
     {
-        VkDeviceSize offset;/// non-multithreaded
-        atomic_uint_fast64_t atomic_offset;/// multithreaded
+        VkDeviceSize offset;/** non-multithreaded */
+        atomic_uint_fast64_t atomic_offset;/** multithreaded */
     };
-
-    /// add check to make sure nothing added after buffer gets copied?
 };
 
-void sol_vk_shunt_buffer_initialise(struct sol_vk_shunt_buffer* buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded);
+void sol_vk_shunt_buffer_initialise(struct sol_vk_shunt_buffer* buffer, VkDeviceSize alignment, VkDeviceSize size, bool multithreaded);
 void sol_vk_shunt_buffer_terminate(struct sol_vk_shunt_buffer* buffer);
 
-
 void sol_vk_shunt_buffer_reset(struct sol_vk_shunt_buffer* buffer);
-/// returns pointer to location which can be written, this pointer is only valid until next use, unless mltithreaded in which case it will return a persistently valid pointer or NULL
+
+/** returned pointer is valid until shunt_buffer is reset, will return NULL if no space remains */
 void * sol_vk_shunt_buffer_reserve_bytes(struct sol_vk_shunt_buffer* buffer, VkDeviceSize byte_count, VkDeviceSize* offset);
 
 VkDeviceSize sol_vk_shunt_buffer_get_space_used(struct sol_vk_shunt_buffer* buffer);
