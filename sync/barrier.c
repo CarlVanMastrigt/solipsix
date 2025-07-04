@@ -59,7 +59,7 @@ static void sol_sync_barrier_initialise(void* entry, void* data)
     barrier->primitive.sync_functions = &barrier_sync_functions;
     barrier->pool = pool;
 
-    sol_lockfree_hopper_initialise(&barrier->successor_hopper, &pool->successor_pool);
+    sol_lockfree_hopper_initialise(&barrier->successor_hopper);
 
     atomic_init(&barrier->condition_count, 0);
     atomic_init(&barrier->reference_count, 0);
@@ -68,7 +68,7 @@ static void sol_sync_barrier_initialise(void* entry, void* data)
 void sol_sync_barrier_pool_initialise(struct sol_sync_barrier_pool* pool, size_t total_barrier_exponent, size_t total_successor_exponent)
 {
     sol_lockfree_pool_initialise(&pool->barrier_pool, total_barrier_exponent, sizeof(struct sol_sync_barrier));
-    sol_lockfree_pool_initialise(&pool->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive**));
+    sol_lockfree_pool_initialise(&pool->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive*));
 }
 
 void sol_sync_barrier_pool_terminate(struct sol_sync_barrier_pool* pool)
@@ -126,6 +126,7 @@ void sol_sync_barrier_signal_conditions(struct sol_sync_barrier* barrier, uint_f
         first_successor_index = sol_lockfree_hopper_close(&barrier->successor_hopper);
         successor_ptr = sol_lockfree_pool_get_entry_pointer(&pool->successor_pool, first_successor_index);
 
+        // is important for deterministic barrier pool usage to release the barrier BEFORE actually signalling successors
         sol_sync_barrier_release_references(barrier, 1);
 
         successor_index = first_successor_index;
@@ -171,7 +172,7 @@ void sol_sync_barrier_attach_successor(struct sol_sync_barrier* barrier, struct 
     assert(atomic_load_explicit(&barrier->reference_count, memory_order_relaxed));
     /// barrier must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    if(sol_lockfree_hopper_check_if_closed(&barrier->successor_hopper))
+    if(sol_lockfree_hopper_is_closed(&barrier->successor_hopper))
     {
         /// if hopper already locked then barrier has had all conditions satisfied/signalled, so can signal this successor
         sol_sync_primitive_signal_condition(successor);

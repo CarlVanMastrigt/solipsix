@@ -26,6 +26,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "data_structures/queue.h"
 #include "vk/timeline_semaphore.h"
+#include "cvm_vk.h"
+
+#warning separate out backed buffer from cvm_vk
 
 struct cvm_vk_device;
 
@@ -56,20 +59,14 @@ SOL_QUEUE(struct sol_vk_staging_buffer_segment, sol_vk_staging_buffer_segment_qu
 
 struct sol_vk_staging_buffer
 {
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-
-    VkBufferUsageFlags usage;
-
-    bool mapping_coherent;
+    struct sol_vk_backed_buffer backing;
 
     bool threads_waiting_on_semaphore_setup;
 
     bool terminating;/** for debug */
 
-    char * mapping;
+    VkDeviceSize buffer_size;/** also present in backing description, but more convenient to access like this */
     VkDeviceSize alignment;
-    VkDeviceSize buffer_size;
     VkDeviceSize reserved_high_priority_space;
 
     VkDeviceSize current_offset;

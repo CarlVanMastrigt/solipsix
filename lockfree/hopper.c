@@ -24,7 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #define SOL_LOCKFREE_HOPPER_CLOSED_BIT  ((uint_fast64_t)0x8000000000000000llu)
 
-void sol_lockfree_hopper_initialise(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool)
+void sol_lockfree_hopper_initialise(struct sol_lockfree_hopper* hopper)
 {
     atomic_init(&hopper->head, SOL_LOCKFREE_HOPPER_CLOSED_BIT);
 }
@@ -73,7 +73,7 @@ bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_loc
     return true;
 }
 
-bool sol_lockfree_hopper_check_if_closed(struct sol_lockfree_hopper * hopper)
+bool sol_lockfree_hopper_is_closed(struct sol_lockfree_hopper * hopper)
 {
     return atomic_load_explicit(&hopper->head, memory_order_relaxed) & SOL_LOCKFREE_HOPPER_CLOSED_BIT;
 }

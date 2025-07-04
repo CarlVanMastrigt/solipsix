@@ -17,14 +17,29 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <stdatomic.h>
+#include <threads.h>
 #include <stdbool.h>
 #include <assert.h>
+
 
 #include "sync/gate.h"
 
 #define SOL_GATE_WAITING_FLAG   ((uint_fast32_t)0x80000000)
 #define SOL_GATE_SIGNAL_STATUS  ((uint_fast32_t)0x80000001) /**would be last condition to signal AND thread is waiting*/
 #define SOL_GATE_CONDITION_MASK ((uint_fast32_t)0x7FFFFFFF)
+
+struct sol_sync_gate
+{
+    struct sol_sync_primitive primitive;
+
+    struct sol_sync_gate_pool* pool;
+
+    atomic_uint_fast32_t status;
+
+    mtx_t* mutex;
+    cnd_t* condition;
+};
 
 
 static void sol_sync_gate_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
@@ -65,16 +80,16 @@ static void sol_sync_gate_initialise(void* entry, void* data)
     gate->primitive.sync_functions = &gate_sync_functions;
     gate->pool = pool;
 
-    gate->condition=NULL;
-    gate->mutex=NULL;
+    gate->condition = NULL;
+    gate->mutex = NULL;
     atomic_init(&gate->status, 0);
 }
 
 static void sol_sync_gate_terminate(void* entry, void* data)
 {
     struct sol_sync_gate* gate = entry;
-    assert(gate->mutex==NULL);
-    assert(gate->condition==NULL);
+    assert(gate->mutex == NULL);
+    assert(gate->condition == NULL);
 }
 
 
@@ -120,8 +135,8 @@ void sol_sync_gate_wait(struct sol_sync_gate * gate)
         mtx_init(&mutex,mtx_plain);
         cnd_init(&condition);
 
-        assert(gate->mutex==NULL);
-        assert(gate->condition==NULL);
+        assert(gate->mutex == NULL);
+        assert(gate->condition == NULL);
 
         gate->mutex=&mutex;
         gate->condition=&condition;
@@ -206,6 +221,11 @@ void sol_sync_gate_signal_conditions(struct sol_sync_gate* gate, uint_fast32_t c
         cnd_signal(gate->condition);
         mtx_unlock(gate->mutex);
     }
+}
+
+struct sol_sync_primitive* sol_sync_gate_primitive(struct sol_sync_gate* gate)
+{
+    return &gate->primitive;
 }
 
 

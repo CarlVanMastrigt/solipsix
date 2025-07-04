@@ -395,7 +395,7 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
 
 
         acquire_semaphore = sol_vk_device_object_pool_semaphore_acquire(device);
-        acquire_result = vkAcquireNextImageKHR(device->device, instance->swapchain, CVM_VK_DEFAULT_TIMEOUT, acquire_semaphore, swapchain->metering_fence, &image_index);
+        acquire_result = vkAcquireNextImageKHR(device->device, instance->swapchain, SOL_VK_DEFAULT_TIMEOUT, acquire_semaphore, swapchain->metering_fence, &image_index);
         instance->acquired_image_count++;
 
         if(acquire_result==VK_SUCCESS || acquire_result==VK_SUBOPTIMAL_KHR)

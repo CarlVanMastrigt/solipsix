@@ -20,8 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include <inttypes.h>
-#include <stdatomic.h>
-#include <threads.h>
+
 
 #include "lockfree/pool.h"
 
@@ -35,17 +34,7 @@ struct sol_sync_gate_pool
 void sol_sync_gate_pool_initialise(struct sol_sync_gate_pool* pool, size_t capacity_exponent);
 void sol_sync_gate_pool_terminate(struct sol_sync_gate_pool* pool);
 
-struct sol_sync_gate
-{
-    struct sol_sync_primitive primitive;
-
-    struct sol_sync_gate_pool* pool;
-
-    atomic_uint_fast32_t status;
-
-    mtx_t* mutex;
-    cnd_t* condition;
-};
+struct sol_sync_gate;
 
 struct sol_sync_gate* sol_sync_gate_prepare(struct sol_sync_gate_pool* pool);
 
@@ -59,4 +48,6 @@ void sol_sync_gate_impose_conditions(struct sol_sync_gate* gate, uint_fast32_t c
 
 /// must be called once for every dependency added by a call to sol_sync_gate_impose_conditions
 void sol_sync_gate_signal_conditions(struct sol_sync_gate* gate, uint_fast32_t count);
+
+struct sol_sync_primitive* sol_sync_gate_primitive(struct sol_sync_gate* gate);
 

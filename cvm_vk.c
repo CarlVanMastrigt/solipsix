@@ -1050,6 +1050,8 @@ static inline void cvm_vk_pipeline_cache_terminate(struct cvm_vk_pipeline_cache*
     free(pipeline_cache->file_name);
 }
 
+
+#warning move object pools to their own file?
 static inline struct sol_vk_object_pools* sol_vk_object_pools_create(const struct cvm_vk_device * device)
 {
     struct sol_vk_object_pools* object_pools = malloc(sizeof(struct sol_vk_object_pools));
@@ -1138,6 +1140,8 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup* 
 
     cvm_vk_create_defaults_old();
 
+    sol_vk_sync_manager_initialise(&device->sync_manager, device);
+
     return 0;
 }
 
@@ -1146,6 +1150,8 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
     /// is the following necessary???
     /// shouldnt we have waited on all things using this device before we terminate it?
     vkDeviceWaitIdle(device->device);
+
+    sol_vk_sync_manager_terminate(&device->sync_manager, device);
 
     cvm_vk_destroy_defaults_old();
 
@@ -1203,7 +1209,7 @@ void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence)
 
 void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device, VkFence fence)
 {
-    CVM_VK_CHECK(vkWaitForFences(device->device, 1, &fence, VK_TRUE,CVM_VK_DEFAULT_TIMEOUT));
+    CVM_VK_CHECK(vkWaitForFences(device->device, 1, &fence, VK_TRUE, SOL_VK_DEFAULT_TIMEOUT));
     vkResetFences(device->device, 1, &fence);
 }
 
@@ -1896,65 +1902,72 @@ VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, 
     return alignment;
 }
 
-VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup)
+
+
+VkResult sol_vk_backed_buffer_create(const cvm_vk_device * device, const struct sol_vk_backed_buffer_description* description, struct sol_vk_backed_buffer* buffer)
 {
     VkMemoryRequirements memory_requirements;
     uint32_t memory_type_index;
     VkResult result;
     VkMemoryPropertyFlags required_properties, desired_properties;
 
-    required_properties = setup->required_properties | (setup->map_memory ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT : 0);
-    desired_properties = required_properties | setup->desired_properties;
+    required_properties = description->required_properties;
+    desired_properties = required_properties | description->desired_properties;
 
-    /// set mapping fallback values
-    setup->buffer = VK_NULL_HANDLE;
-    setup->memory = VK_NULL_HANDLE;
-    setup->mapping = NULL;
-    setup->mapping_coherent = false;
-    setup->acquired_properties = 0;
-
-
+    /** set buffers default values */
+    *buffer = (struct sol_vk_backed_buffer)
+    {
+        .description = *description,
+        .buffer = VK_NULL_HANDLE,
+        .memory = VK_NULL_HANDLE,
+        .mapping = NULL,
+        .memory_properties = 0,
+        .memory_type_index = SOL_U32_INVALID,
+    };
 
     VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
     {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .size = setup->buffer_size,
-        .usage = setup->usage,
+        .size = description->size,
+        .usage = description->usage,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices = NULL,
     };
 
-    result = vkCreateBuffer(device->device, &buffer_create_info, device->host_allocator, &setup->buffer);
+    result = vkCreateBuffer(device->device, &buffer_create_info, device->host_allocator, &buffer->buffer);
 
+    /** try to get allocation for the buffer if it was created */
     if(result == VK_SUCCESS)
     {
-        vkGetBufferMemoryRequirements(device->device, setup->buffer, &memory_requirements);
+        vkGetBufferMemoryRequirements(device->device, buffer->buffer, &memory_requirements);
 
         memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, desired_properties);
 
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        if(memory_type_index == SOL_U32_INVALID)
         {
-            ///try again with only required properties
+            /** try again with only required properties */
             memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, required_properties);
         }
 
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        if(memory_type_index == SOL_U32_INVALID)
         {
             //fprintf(stderr,"CVM VK ERROR - memory with required properties not found in buffer allocation\n");
+            /** no VK error to represent that no memory types have the required properties */
             result = VK_RESULT_MAX_ENUM;
         }
         else
         {
-            setup->acquired_properties = device->memory_properties.memoryTypes[memory_type_index].propertyFlags;
+            buffer->memory_properties = device->memory_properties.memoryTypes[memory_type_index].propertyFlags;
+            buffer->memory_type_index = memory_type_index;
         }
     }
 
     if(result == VK_SUCCESS)
     {
-        VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+        VkMemoryAllocateInfo memory_allocate_info = (VkMemoryAllocateInfo)
         {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             .pNext = NULL,
@@ -1962,55 +1975,83 @@ VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_b
             .memoryTypeIndex = memory_type_index
         };
 
-        result = vkAllocateMemory(device->device, &memory_allocate_info, device->host_allocator, &setup->memory);
+        result = vkAllocateMemory(device->device, &memory_allocate_info, device->host_allocator, &buffer->memory);
     }
 
     if(result == VK_SUCCESS)
     {
-        result = vkBindBufferMemory(device->device, setup->buffer, setup->memory, 0);
+        result = vkBindBufferMemory(device->device, buffer->buffer, buffer->memory, 0);
     }
 
-    if(result == VK_SUCCESS && setup->map_memory)
+    /** if VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT is required also map the buffer */
+    if(result == VK_SUCCESS && (required_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
     {
-        result = vkMapMemory(device->device, setup->memory, 0, VK_WHOLE_SIZE, 0, &setup->mapping);
-
-        if(result == VK_SUCCESS)
-        {
-            setup->mapping_coherent = (cvm_vk_.memory_properties.memoryTypes[memory_type_index].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        }
+        result = vkMapMemory(device->device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &buffer->mapping);
     }
 
-    /// failure handling
+    /** failure handling (clean up created resources)*/
     if(result != VK_SUCCESS)
     {
-        if(setup->buffer != VK_NULL_HANDLE)
+        if(buffer->mapping)
         {
-            vkDestroyBuffer(device->device, setup->buffer, NULL);
-            setup->buffer = VK_NULL_HANDLE;
+            vkUnmapMemory(device->device, buffer->memory);
         }
-        if(setup->memory != VK_NULL_HANDLE)
+        if(buffer->buffer != VK_NULL_HANDLE)
         {
-            vkFreeMemory(device->device, setup->memory, NULL);
-            setup->memory = VK_NULL_HANDLE;
+            vkDestroyBuffer(device->device, buffer->buffer, device->host_allocator);
+        }
+        if(buffer->memory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device->device, buffer->memory, device->host_allocator);
         }
 
-        setup->mapping = NULL;
-        setup->mapping_coherent = false;
-        setup->acquired_properties = 0;
+        *buffer = (struct sol_vk_backed_buffer)
+        {
+            .buffer = VK_NULL_HANDLE,
+            .memory = VK_NULL_HANDLE,
+            .mapping = NULL,
+            .memory_properties = 0,
+            .memory_type_index = SOL_U32_INVALID,
+        };
     }
 
     return result;
 }
 
-void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped)
+void sol_vk_backed_buffer_destroy(const cvm_vk_device * device, struct sol_vk_backed_buffer* buffer)
 {
-    if(memory_was_mapped)
+    if(buffer->mapping)
     {
-        vkUnmapMemory(device->device,memory);
+        vkUnmapMemory(device->device, buffer->memory);
     }
 
-    vkDestroyBuffer(device->device,buffer,NULL);
-    vkFreeMemory(device->device,memory,NULL);
+    vkDestroyBuffer(device->device, buffer->buffer, device->host_allocator);
+    vkFreeMemory(device->device, buffer->memory, device->host_allocator);
+}
+
+void sol_vk_backed_buffer_flush_range(const cvm_vk_device * device, const struct sol_vk_backed_buffer* buffer, VkDeviceSize offset, VkDeviceSize size)
+{
+    VkResult flush_result;
+
+    assert(buffer->mapping);/** invalid to flush a range on an unmapped buffer */
+
+    if(buffer->memory_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+    {
+        /** don't need to flush coherent mappings */
+        return;
+    }
+
+    VkMappedMemoryRange flush_range = (VkMappedMemoryRange)
+    {
+        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .pNext = NULL,
+        .memory = buffer->memory,
+        .offset = offset,
+        .size = size,
+    };
+
+    flush_result = vkFlushMappedMemoryRanges(device->device, 1, &flush_range);
+    assert(flush_result == VK_SUCCESS);
 }
 
 

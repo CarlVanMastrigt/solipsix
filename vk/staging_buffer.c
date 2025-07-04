@@ -28,41 +28,27 @@ VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_
 
     buffer_size = cvm_vk_align(buffer_size, alignment);/// round to multiple of alignment
 
-    cvm_vk_buffer_memory_pair_setup buffer_setup=(cvm_vk_buffer_memory_pair_setup)
+    struct sol_vk_backed_buffer_description backing_description =
     {
-        /// in
-        .buffer_size=buffer_size,
-        .usage=usage,
-        .required_properties=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        .desired_properties=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        .map_memory=true,
-        /// out starts uninit
+        .size = buffer_size,
+        .usage = usage,
+        .required_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        .desired_properties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
     };
 
-    result = cvm_vk_buffer_memory_pair_create(device, &buffer_setup);
+    result = sol_vk_backed_buffer_create(device, &backing_description, &staging_buffer->backing);
 
     if(result == VK_SUCCESS)
     {
-        *staging_buffer = (struct sol_vk_staging_buffer)
-        {
-            #warning buffer setup needs work, quite bad honestly
-            .buffer = buffer_setup.buffer,
-            .memory = buffer_setup.memory,
-            .mapping = buffer_setup.mapping,
-            .mapping_coherent = buffer_setup.mapping_coherent,
+        staging_buffer->threads_waiting_on_semaphore_setup = false;
+        staging_buffer->terminating = false;
 
-            .usage = usage,
-            .alignment = alignment,
+        staging_buffer->buffer_size = buffer_size;
+        staging_buffer->alignment = alignment;
+        staging_buffer->reserved_high_priority_space = reserved_high_priority_space;
 
-            .threads_waiting_on_semaphore_setup = false,
-
-            .terminating = false,
-
-            .buffer_size = buffer_size,
-            .reserved_high_priority_space = reserved_high_priority_space,
-            .current_offset = 0,
-            .remaining_space = buffer_size,
-        };
+        staging_buffer->current_offset = 0;
+        staging_buffer->remaining_space = buffer_size;
 
         mtx_init(&staging_buffer->access_mutex, mtx_plain);
         cnd_init(&staging_buffer->setup_stall_condition);
@@ -90,7 +76,7 @@ void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffe
             sol_vk_timeline_semaphore_moment_wait_multiple(oldest_active_segment->release_moments, oldest_active_segment->release_moment_count, true, device);
 
             /** this checks that the start of this segment is the end of the available space */
-            assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/** out of order free for some reason, or offset mismatch */
+            assert(oldest_active_segment->offset == (staging_buffer->current_offset + staging_buffer->remaining_space) % staging_buffer->buffer_size);/** out of order free for some reason, or offset mismatch */
 
             staging_buffer->remaining_space += oldest_active_segment->size;/** relinquish this segments space */
         }
@@ -104,17 +90,16 @@ void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffe
 
     mtx_unlock(&staging_buffer->access_mutex);
 
-    assert(staging_buffer->remaining_space==staging_buffer->buffer_size);
+    assert(staging_buffer->remaining_space == staging_buffer->buffer_size);
 
     mtx_destroy(&staging_buffer->access_mutex);
     cnd_destroy(&staging_buffer->setup_stall_condition);
     sol_vk_staging_buffer_segment_queue_terminate(&staging_buffer->segment_queue);
 
-    cvm_vk_buffer_memory_pair_destroy(device, staging_buffer->buffer, staging_buffer->memory, true);
+    sol_vk_backed_buffer_destroy(device, &staging_buffer->backing);
 }
 
 
-#warning consider moving this back into the main function?
 static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
 {
     struct sol_vk_staging_buffer_segment * oldest_active_segment;
@@ -136,7 +121,7 @@ static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging
         }
 
         /** this checks that the start of this segment is the end of the available space */
-        assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/** out of order free for some reason, or offset mismatch */
+        assert(oldest_active_segment->offset == (staging_buffer->current_offset + staging_buffer->remaining_space) % staging_buffer->buffer_size);/** out of order free for some reason, or offset mismatch */
 
         staging_buffer->remaining_space += oldest_active_segment->size;/** relinquish this segments space */
 
@@ -153,6 +138,7 @@ static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging
 
 struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device * device, VkDeviceSize requested_space, bool high_priority)
 {
+    #warning this functions structure is a bit fucky; cleanup would be good
     VkDeviceSize required_space;
     bool wrap;
     bool existing_segment;
@@ -173,26 +159,27 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     while(true)
     {
         assert(!staging_buffer->terminating);
-        /// try to free up space
+
+        /** try to free up space */
         sol_vk_staging_buffer_prune_allocations(staging_buffer,device);
 
-        wrap = staging_buffer->current_offset+requested_space > staging_buffer->buffer_size;
+        wrap = (staging_buffer->current_offset + requested_space) > staging_buffer->buffer_size;
 
-        /// if this request must wrap then we need to consume the unused section of the buffer that remains
-        required_space = requested_space + wrap * (staging_buffer->buffer_size - staging_buffer->current_offset);
+        /** if this request must wrap then we need to consume the unused section of the buffer that remains */
+        required_space = requested_space + (wrap ? (staging_buffer->buffer_size - staging_buffer->current_offset) : 0);
 
         assert(required_space < staging_buffer->buffer_size);
 
         /** check that the reserved high priority space will be preserved when processing low priority requests */
         if(required_space + (high_priority ? 0 : staging_buffer->reserved_high_priority_space) <= staging_buffer->remaining_space)
         {
-            /**  request will fit, we're done */
+            /**  request will fit, we're done checking for space*/
             break;
         }
 
         /** otherwise; more space required; need to wait for space to become free */
         existing_segment = sol_vk_staging_buffer_segment_queue_access_front(&staging_buffer->segment_queue, &oldest_active_segment);
-        assert(existing_segment); ///should not need more space if there are no active segments
+        assert(existing_segment); /** should not need more space if there are no active segments */
 
         if(oldest_active_segment->release_moments_set)
         {
@@ -221,7 +208,6 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
         }
     }
 
-    /** NOTE: active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid */
     sol_vk_staging_buffer_segment_queue_enqueue_ptr(&staging_buffer->segment_queue, &new_segment, &segment_index);
     *new_segment = (struct sol_vk_staging_buffer_segment)
     {
@@ -232,14 +218,14 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     };
 
     acquired_offset = wrap ? 0 : staging_buffer->current_offset;
-    mapping = staging_buffer->mapping + acquired_offset;
+    mapping = staging_buffer->backing.mapping + acquired_offset;
 
-    staging_buffer->remaining_space-=required_space;
-    staging_buffer->current_offset+=required_space;
+    staging_buffer->remaining_space -= required_space;
+    staging_buffer->current_offset  += required_space;
 
     if(staging_buffer->current_offset > staging_buffer->buffer_size)
     {
-        /// wrap the current offset if necessary
+        /** wrap the current offset if necessary */
         staging_buffer->current_offset -= staging_buffer->buffer_size;
     }
 
@@ -256,21 +242,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 
 void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size)
 {
-    VkResult flush_result;
-
-    if(!staging_buffer->mapping_coherent)
-    {
-        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-        {
-            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-            .pNext = NULL,
-            .memory = staging_buffer->memory,
-            .offset = allocation->acquired_offset + relative_offset,
-            .size = size,
-        };
-
-        flush_result = vkFlushMappedMemoryRanges(device->device, 1, &flush_range);
-    }
+    sol_vk_backed_buffer_flush_range(device, &staging_buffer->backing, allocation->acquired_offset + relative_offset, size);
 
     assert(!allocation->flushed);/// only want to flush once
     allocation->flushed = true;

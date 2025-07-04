@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022,2023,2024 Carl van Mastrigt
+Copyright 2020,2021,2022,2023,2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -28,6 +28,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "vk/timeline_semaphore.h"
 
 #include "data_structures/stack.h"
+#include "vk/sync_manager.h"
 
 #ifndef CVM_VK_CHECK
 #define CVM_VK_CHECK(f)                                                         \
@@ -40,8 +41,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 
-#define CVM_VK_DEFAULT_TIMEOUT 1000000000
-/// ^ 1 second
+#define SOL_VK_DEFAULT_TIMEOUT ((uint64_t)1000000000)
+/// ^ in nanoseconds (1 second)
 
 #define CVM_VK_MAX_QUEUE_FAMILY_COUNT 64
 
@@ -231,6 +232,8 @@ struct cvm_vk_device
     // move this somewhere else maybe?
     // set of default data types that are recyclable within different objects in the device
     struct sol_vk_object_pools* object_pools;
+
+    struct sol_vk_sync_manager sync_manager;
 };
 
 #include "vk/command_pool.h"
@@ -250,6 +253,11 @@ void cvm_vk_instance_terminate(struct cvm_vk_instance* instance);
 VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance* instance, SDL_Window * window);
 void cvm_vk_destroy_surface(const struct cvm_vk_instance* instance, VkSurfaceKHR surface);
 
+/** perhaps should make this conditional on sol_sync_primitive being included/defined ? */
+static inline void sol_vk_devive_impose_timeline_semaphore_moment_condition(struct cvm_vk_device* device, struct sol_vk_timeline_semaphore_moment moment, struct sol_sync_primitive* successor)
+{
+    sol_vk_sync_manager_impose_timeline_semaphore_moment_condition(&device->sync_manager, moment, successor);
+}
 
 
 
@@ -331,27 +339,35 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage);
 
-#warning probably better to split this, create struct and return/result type
-typedef struct cvm_vk_buffer_memory_pair_setup
+
+
+
+struct sol_vk_backed_buffer_description
 {
-    /// in
-    VkDeviceSize buffer_size;
+    VkDeviceSize size;
     VkBufferUsageFlags usage;
+    /** if VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT is set in required_properties the buffer will be mapped*/
     VkMemoryPropertyFlags required_properties;
     VkMemoryPropertyFlags desired_properties;
-    bool map_memory;
+};
 
-    /// out
+struct sol_vk_backed_buffer
+{
+    struct sol_vk_backed_buffer_description description;
+
     VkBuffer buffer;
     VkDeviceMemory memory;
-    void * mapping;
-    bool mapping_coherent;
-    VkMemoryPropertyFlags acquired_properties;
-}
-cvm_vk_buffer_memory_pair_setup;
+    void* mapping;
+    VkMemoryPropertyFlags memory_properties;
+    uint32_t memory_type_index;
+};
 
-VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup);
-void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped);
+VkResult sol_vk_backed_buffer_create(const cvm_vk_device * device, const struct sol_vk_backed_buffer_description* description, struct sol_vk_backed_buffer* buffer);
+void sol_vk_backed_buffer_destroy(const cvm_vk_device * device, struct sol_vk_backed_buffer* buffer);
+
+void sol_vk_backed_buffer_flush_range(const cvm_vk_device * device, const struct sol_vk_backed_buffer* buffer, VkDeviceSize offset, VkDeviceSize size);
+
+
 
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);

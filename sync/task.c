@@ -76,7 +76,8 @@ static int sol_sync_task_worker_thread_function(void* in)
         first_successor_index = sol_lockfree_hopper_close(&task->successor_hopper);
         successor_ptr = sol_lockfree_pool_get_entry_pointer(&task_system->successor_pool, first_successor_index);
 
-        sol_sync_task_release_references(task, 1);// the sucessors dont require the hopper anymore, task is done with, so can release
+        // is important for deterministic task pool usage to release the task BEFORE actually signalling successors
+        sol_sync_task_release_references(task, 1);
 
         successor_index = first_successor_index;
 
@@ -130,7 +131,7 @@ static void sol_sync_task_initialise(void* entry, void* data)
     task->primitive.sync_functions = &task_sync_functions;
     task->task_system = task_system;
 
-    sol_lockfree_hopper_initialise(&task->successor_hopper,&task_system->successor_pool);
+    sol_lockfree_hopper_initialise(&task->successor_hopper);
 
     atomic_init(&task->condition_count, 0);
     atomic_init(&task->reference_count, 0);
@@ -141,7 +142,7 @@ void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, u
     uint32_t i;
 
     sol_lockfree_pool_initialise(&task_system->task_pool, total_task_exponent, sizeof(struct sol_sync_task));
-    sol_lockfree_pool_initialise(&task_system->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive**));
+    sol_lockfree_pool_initialise(&task_system->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive*));
 
     sol_lockfree_pool_call_for_every_entry(&task_system->task_pool, &sol_sync_task_initialise, task_system);
 
@@ -252,7 +253,7 @@ void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t c
     struct sol_sync_task_system* task_system = task->task_system;
 
     /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
-    old_count=atomic_fetch_sub_explicit(&task->condition_count, count, memory_order_acq_rel);
+    old_count = atomic_fetch_sub_explicit(&task->condition_count, count, memory_order_acq_rel);
     assert(old_count >= count);///must not make dep. count go negative
 
     if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
@@ -303,7 +304,7 @@ void sol_sync_task_attach_successor(struct sol_sync_task* task, struct sol_sync_
     assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
     /// task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    if(sol_lockfree_hopper_check_if_closed(&task->successor_hopper))
+    if(sol_lockfree_hopper_is_closed(&task->successor_hopper))
     {
         /// if hopper already locked then task has been completed, can signal
         sol_sync_primitive_signal_condition(successor);

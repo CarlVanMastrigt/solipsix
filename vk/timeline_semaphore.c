@@ -73,17 +73,7 @@ VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct 
     };
 }
 
-void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
-{
-    sol_vk_timeline_semaphore_moment_wait_multiple(moment, 1, true, device);
-}
-
-bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
-{
-    return sol_vk_timeline_semaphore_moment_query_multiple(moment, 1, true, device);
-}
-
-void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device)
+static inline bool sol_vk_timeline_semaphore_moment_wait_multiple_timed(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, bool repeatedly_wait, uint64_t timeout, const struct cvm_vk_device* device)
 {
     uint32_t i;
     VkResult result;
@@ -112,45 +102,34 @@ void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline
 
     do
     {
-        result = vkWaitSemaphores(device->device, &wait, CVM_VK_DEFAULT_TIMEOUT);
-        if(result == VK_TIMEOUT)
+        result = vkWaitSemaphores(device->device, &wait, timeout);
+        if(result == VK_TIMEOUT && timeout)
         {
             fprintf(stderr, "timeline semaphore seems to be stalling");
         }
     }
-    while(result == VK_TIMEOUT);
-    assert(result == VK_SUCCESS);
+    while(result == VK_TIMEOUT && repeatedly_wait);
+    assert(result == VK_SUCCESS || result == VK_TIMEOUT);
+    return result == VK_SUCCESS;
+}
+
+void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
+{
+    sol_vk_timeline_semaphore_moment_wait_multiple_timed(moment, 1, true, true, SOL_VK_DEFAULT_TIMEOUT, device);
+}
+
+bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
+{
+    return sol_vk_timeline_semaphore_moment_wait_multiple_timed(moment, 1, true, false, 0, device);
+}
+
+void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device)
+{
+    sol_vk_timeline_semaphore_moment_wait_multiple_timed(moments, moment_count, wait_on_all, true, SOL_VK_DEFAULT_TIMEOUT, device);
 }
 
 bool sol_vk_timeline_semaphore_moment_query_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device)
 {
-    uint32_t i;
-    VkResult result;
-    VkSemaphore semaphores[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
-    uint64_t values[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
-
-    assert(moment_count > 0);
-    assert(moment_count <= SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT);
-
-    /** split moments into semaphore and value arrays */
-    for(i = 0; i < moment_count; i++)
-    {
-        semaphores[i] = moments[i].semaphore;
-        values[i]     = moments[i].value;
-    }
-
-    VkSemaphoreWaitInfo wait =
-    {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .pNext = NULL,
-        .flags = wait_on_all ? 0 : VK_SEMAPHORE_WAIT_ANY_BIT,
-        .semaphoreCount = moment_count,
-        .pSemaphores = semaphores,
-        .pValues = values,
-    };
-
-    result = vkWaitSemaphores(device->device, &wait, 0);
-    assert(result == VK_SUCCESS || result == VK_TIMEOUT);
-    return result == VK_SUCCESS;
+    return sol_vk_timeline_semaphore_moment_wait_multiple_timed(moments, moment_count, wait_on_all, false, 0, device);
 }
 
