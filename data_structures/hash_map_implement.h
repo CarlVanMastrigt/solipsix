@@ -51,12 +51,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef KEY_HASH
 #error must define KEY_HASH(const KEY_TYPE*)` returning a uint64_t
-#define KEY_HASH(K) ((uint64_t)(*K))
+#define KEY_HASH(K) (*K)
 #endif
 
 #ifndef ENTRY_HASH
 #error must define ENTRY_HASH(const KEY_TYPE*)` returning a uint64_t
-#define ENTRY_HASH(E) ((uint64_t)(*E))
+#define ENTRY_HASH(E) (*E)
 #endif
 
 

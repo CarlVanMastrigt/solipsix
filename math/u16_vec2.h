@@ -21,58 +21,59 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #include "math/m16_vec2.h"
 
-typedef struct s16_vec2
+typedef struct u16_vec2
 {
-    int16_t x;
-    int16_t y;
+    uint16_t x;
+    uint16_t y;
 }
-s16_vec2;
+u16_vec2;
 
 ///rectangle
-static inline s16_vec2 s16_vec2_set(int16_t x,int16_t y)
+static inline u16_vec2 u16_vec2_set(uint16_t x,uint16_t y)
 {
-    return (s16_vec2){.x=x, .y=y};
+    return (u16_vec2){.x=x, .y=y};
 }
-static inline s16_vec2 s16_vec2_add(s16_vec2 lhs, s16_vec2 rhs)
+static inline u16_vec2 u16_vec2_add(u16_vec2 lhs, u16_vec2 rhs)
 {
-    return (s16_vec2){.x=lhs.x+rhs.x, .y=lhs.y+rhs.y};
+    return (u16_vec2){.x=lhs.x+rhs.x, .y=lhs.y+rhs.y};
 }
-static inline s16_vec2 s16_vec2_sub(s16_vec2 lhs, s16_vec2 rhs)
+static inline u16_vec2 u16_vec2_sub(u16_vec2 lhs, u16_vec2 rhs)
 {
-    return (s16_vec2){.x=lhs.x-rhs.x, .y=lhs.y-rhs.y};
+    return (u16_vec2){.x=lhs.x-rhs.x, .y=lhs.y-rhs.y};
 }
-static inline s16_vec2 s16_vec2_mul(s16_vec2 lhs, s16_vec2 rhs)
+static inline u16_vec2 u16_vec2_mul(u16_vec2 lhs, u16_vec2 rhs)
 {
-    return (s16_vec2){.x=lhs.x*rhs.x, .y=lhs.y*rhs.y};
+    return (u16_vec2){.x=lhs.x*rhs.x, .y=lhs.y*rhs.y};
 }
-static inline s16_vec2 s16_vec2_mul_scalar(s16_vec2 v, int16_t s)
+static inline u16_vec2 u16_vec2_mul_scalar(u16_vec2 v, uint16_t s)
 {
-    return (s16_vec2){.x=v.x*s, .y=v.y*s};
+    return (u16_vec2){.x=v.x*s, .y=v.y*s};
 }
-static inline s16_vec2 s16_vec2_mask(s16_vec2 v, m16_vec2 m)
+static inline u16_vec2 u16_vec2_mask(u16_vec2 v, m16_vec2 m)
 {
-    return (s16_vec2){.x=v.x&m.x, .y=v.y&m.y};
+    return (u16_vec2){.x=v.x&m.x, .y=v.y&m.y};
 }
-static inline s16_vec2 s16_vec2_min(s16_vec2 lhs, s16_vec2 rhs)
+static inline u16_vec2 u16_vec2_min(u16_vec2 lhs, u16_vec2 rhs)
 {
-    return (s16_vec2)
+    return (u16_vec2)
     {
         .x = lhs.x<rhs.x ? lhs.x : rhs.x,
         .y = lhs.y<rhs.y ? lhs.y : rhs.y,
     };
 }
-static inline s16_vec2 s16_vec2_max(s16_vec2 lhs, s16_vec2 rhs)
+static inline u16_vec2 u16_vec2_max(u16_vec2 lhs, u16_vec2 rhs)
 {
-    return (s16_vec2)
+    return (u16_vec2)
     {
         .x = lhs.x>rhs.x ? lhs.x : rhs.x,
         .y = lhs.y>rhs.y ? lhs.y : rhs.y,
     };
 }
-static inline m16_vec2 s16_vec2_cmp_eq(s16_vec2 lhs, s16_vec2 rhs)
+static inline m16_vec2 u16_vec2_cmp_eq(u16_vec2 lhs, u16_vec2 rhs)
 {
     return (m16_vec2)
     {
@@ -80,7 +81,7 @@ static inline m16_vec2 s16_vec2_cmp_eq(s16_vec2 lhs, s16_vec2 rhs)
         .y = (lhs.y == rhs.y) ? UINT16_MAX : 0,
     };
 }
-static inline m16_vec2 s16_vec2_cmp_lt(s16_vec2 lhs, s16_vec2 rhs)
+static inline m16_vec2 u16_vec2_cmp_lt(u16_vec2 lhs, u16_vec2 rhs)
 {
     return (m16_vec2)
     {
@@ -88,7 +89,7 @@ static inline m16_vec2 s16_vec2_cmp_lt(s16_vec2 lhs, s16_vec2 rhs)
         .y = (lhs.y < rhs.y) ? UINT16_MAX : 0,
     };
 }
-static inline m16_vec2 s16_vec2_cmp_lte(s16_vec2 lhs, s16_vec2 rhs)
+static inline m16_vec2 u16_vec2_cmp_lte(u16_vec2 lhs, u16_vec2 rhs)
 {
     return (m16_vec2)
     {
@@ -96,7 +97,7 @@ static inline m16_vec2 s16_vec2_cmp_lte(s16_vec2 lhs, s16_vec2 rhs)
         .y = (lhs.y <= rhs.y) ? UINT16_MAX : 0,
     };
 }
-static inline m16_vec2 s16_vec2_cmp_gt(s16_vec2 lhs, s16_vec2 rhs)
+static inline m16_vec2 u16_vec2_cmp_gt(u16_vec2 lhs, u16_vec2 rhs)
 {
     return (m16_vec2)
     {
@@ -104,7 +105,7 @@ static inline m16_vec2 s16_vec2_cmp_gt(s16_vec2 lhs, s16_vec2 rhs)
         .y = (lhs.y > rhs.y) ? UINT16_MAX : 0,
     };
 }
-static inline m16_vec2 s16_vec2_cmp_gte(s16_vec2 lhs, s16_vec2 rhs)
+static inline m16_vec2 u16_vec2_cmp_gte(u16_vec2 lhs, u16_vec2 rhs)
 {
     return (m16_vec2)
     {

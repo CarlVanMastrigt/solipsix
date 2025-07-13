@@ -41,8 +41,6 @@ struct sol_vk_staging_buffer_allocation
     bool flushed;/** internal debugging use */
 };
 
-#define SOL_STAGING_BUFFER_MAX_RELEASE_MOMENTS 8
-
 struct sol_vk_staging_buffer_segment
 {
     struct sol_vk_timeline_semaphore_moment release_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];

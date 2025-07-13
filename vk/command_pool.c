@@ -115,9 +115,9 @@ struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
     const cvm_vk_device_queue_family * queue_family;
     cvm_vk_device_queue * queue;
 
-    queue_family=device->queue_families+pool->device_queue_family_index;
-    assert(pool->device_queue_index<queue_family->queue_count);
-    queue=queue_family->queues+pool->device_queue_index;
+    queue_family = device->queue_families + pool->device_queue_family_index;
+    assert(pool->device_queue_index < queue_family->queue_count);
+    queue = queue_family->queues + pool->device_queue_index;
 
     CVM_VK_CHECK(vkEndCommandBuffer(command_buffer->buffer));
 

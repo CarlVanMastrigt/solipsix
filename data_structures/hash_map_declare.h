@@ -18,7 +18,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "data_structures/hash_map.h"
-#include "sol_utils.h"
 
 #ifndef STRUCT_NAME
 #error must define STRUCT_NAME

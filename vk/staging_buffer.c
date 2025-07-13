@@ -278,5 +278,3 @@ VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_s
     return cvm_vk_align(offset, staging_buffer->alignment);
 }
 
-
-
