@@ -31,7 +31,7 @@ static int sol_vk_sync_thread_function(void* in)
 {
     struct sol_vk_sync_manager* manager = in;
     VkResult result;
-    uint32_t i;
+    uint32_t entry_index;
 
 
     VkDevice vk_device = manager->device->device;
@@ -65,11 +65,12 @@ static int sol_vk_sync_thread_function(void* in)
         if(result == VK_SUCCESS)
         {
             /** wait on all entries individually; signal and remove as necessary */
-            for(i = 1; i < manager->entry_count; i++)
+            entry_index = 1;
+            while(entry_index < manager->entry_count)
             {
                 wait_info.semaphoreCount = 1;
-                wait_info.pSemaphores    = manager->semaphores + i;
-                wait_info.pValues        = manager->values + i;
+                wait_info.pSemaphores    = manager->semaphores + entry_index;
+                wait_info.pValues        = manager->values     + entry_index;
 
                 result = vkWaitSemaphores(vk_device, &wait_info, 0);
 
@@ -77,12 +78,17 @@ static int sol_vk_sync_thread_function(void* in)
                 if(result == VK_SUCCESS)
                 {
                     assert(manager->entry_count > 1);
-                    sol_sync_primitive_signal_condition(manager->primitives[i]);
+                    sol_sync_primitive_signal_condition(manager->primitives[entry_index]);
 
                     manager->entry_count--;
-                    manager->primitives[i] = manager->primitives[manager->entry_count];
-                    manager->semaphores[i] = manager->semaphores[manager->entry_count];
-                    manager->values    [i] = manager->values[manager->entry_count];
+                    manager->primitives[entry_index] = manager->primitives[manager->entry_count];
+                    manager->semaphores[entry_index] = manager->semaphores[manager->entry_count];
+                    manager->values    [entry_index] = manager->values    [manager->entry_count];
+                }
+                else
+                {
+                    assert(result == VK_TIMEOUT);
+                    entry_index++;
                 }
             }
 
