@@ -19,85 +19,85 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "data_structures/hash_map.h"
 
-#ifndef STRUCT_NAME
-#error must define STRUCT_NAME
-#define STRUCT_NAME placeholder_hash_map
+#ifndef SOL_HASH_MAP_STRUCT_NAME
+#error must define SOL_HASH_MAP_STRUCT_NAME
+#define SOL_HASH_MAP_STRUCT_NAME placeholder_hash_map
 #endif
 
-#ifndef FUNCTION_PREFIX
-#error must define FUNCTION_PREFIX
-#define FUNCTION_PREFIX placeholder_hash_map
+#ifndef SOL_HASH_MAP_FUNCTION_PREFIX
+#error must define SOL_HASH_MAP_FUNCTION_PREFIX
+#define SOL_HASH_MAP_FUNCTION_PREFIX placeholder_hash_map
 #endif
 
-#ifndef KEY_TYPE
-#error must define KEY_TYPE
-#define KEY_TYPE int
+#ifndef SOL_HASH_MAP_KEY_TYPE
+#error must define SOL_HASH_MAP_KEY_TYPE
+#define SOL_HASH_MAP_KEY_TYPE int
 #endif
 
-#ifndef ENTRY_TYPE
-#error must define ENTRY_TYPE
-#define ENTRY_TYPE int
+#ifndef SOL_HASH_MAP_ENTRY_TYPE
+#error must define SOL_HASH_MAP_ENTRY_TYPE
+#define SOL_HASH_MAP_ENTRY_TYPE int
 #endif
 
-#ifndef FUNCTION_KEYWORDS
-#define FUNCTION_KEYWORDS
+#ifndef SOL_HASH_MAP_FUNCTION_KEYWORDS
+#define SOL_HASH_MAP_FUNCTION_KEYWORDS
 #endif
 
-struct STRUCT_NAME
+struct SOL_HASH_MAP_STRUCT_NAME
 {
     struct sol_hash_map_descriptor descriptor;
 
     uint8_t entry_space_exponent;
 
-    ENTRY_TYPE* entries;
+    SOL_HASH_MAP_ENTRY_TYPE* entries;
     uint16_t* identifiers;
 
-    #ifdef CONTEXT_TYPE
-    CONTEXT_TYPE context;
+    #ifdef SOL_HASH_MAP_CONTEXT_TYPE
+    SOL_HASH_MAP_CONTEXT_TYPE context;
     #endif
 
     uint64_t entry_count;
     uint64_t entry_limit;
 };
 
-#ifdef CONTEXT_TYPE
-FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor, CONTEXT_TYPE context);
+#ifdef SOL_HASH_MAP_CONTEXT_TYPE
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context);
 #else
-FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_initialise)(struct STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor);
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor);
 #endif
 
-FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_terminate)(struct STRUCT_NAME* map);
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_terminate)(struct SOL_HASH_MAP_STRUCT_NAME* map);
 
 /** completely empties the hash map, effectively removing all entries */
-FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_clear)(struct STRUCT_NAME* map);
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_clear)(struct SOL_HASH_MAP_STRUCT_NAME* map);
 
 /** searches for key; then if found sets entry to allow direct access to it (if entry non null) then returns true
  *  pointer returned with entry becomes invalid after any other map functions are executed */
-FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(struct STRUCT_NAME* map, KEY_TYPE* key, ENTRY_TYPE** entry_ptr);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
 
 /** find that upon failure assigns space based key, returns true if insertion was performed
  *  pointer returned with entry becomes invalid after any other map functions are executed
  *  effectively "find or insert" */
-FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_obtain)(struct STRUCT_NAME* map, KEY_TYPE* key, ENTRY_TYPE** entry_ptr);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
 
 /** assumes entry does not exist, returns false if (equivalent) entry already present (in which case it will copy contents) */
-FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_insert)(struct STRUCT_NAME* map, ENTRY_TYPE* entry);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_ENTRY_TYPE* entry);
 
 /** if key found copies it into entry (if entry nonnull) then returns true
  *  effectively: find() and delete() with (conditional) memcpy() in between */
-FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(struct STRUCT_NAME* map, KEY_TYPE* key, ENTRY_TYPE* entry);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE* entry);
 
 /** entry MUST be EXACTLY the result of a prior successful `find()` or `obtain()` with no other map functions called in between
  *  will directly remove an entry from the map if it exists */
-FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_delete_entry)(struct STRUCT_NAME* map, ENTRY_TYPE* entry_ptr);
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_delete_entry)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_ENTRY_TYPE* entry_ptr);
 
 
-#undef STRUCT_NAME
-#undef FUNCTION_PREFIX
-#undef KEY_TYPE
-#undef ENTRY_TYPE
-#undef FUNCTION_KEYWORDS
+#undef SOL_HASH_MAP_STRUCT_NAME
+#undef SOL_HASH_MAP_FUNCTION_PREFIX
+#undef SOL_HASH_MAP_KEY_TYPE
+#undef SOL_HASH_MAP_ENTRY_TYPE
+#undef SOL_HASH_MAP_FUNCTION_KEYWORDS
 
-#ifdef CONTEXT_TYPE
-#undef CONTEXT_TYPE
+#ifdef SOL_HASH_MAP_CONTEXT_TYPE
+#undef SOL_HASH_MAP_CONTEXT_TYPE
 #endif
