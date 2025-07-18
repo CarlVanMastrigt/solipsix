@@ -17,14 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+/** maybe move this to utils folder with hash_map.h ? */
+
+
 #pragma once
 
-#include <inttypes.h>
-
-struct sol_overlay_render_element
-{
-    int16_t pos_rect[4];/// start(x,y), end(x,y)
-    uint16_t tex_coords[4];/// base_tex(x,y), mask_tex(x,y)
-    uint32_t data1[4];// extra data: texture_id{2}
-};
+#define SOL_STACK_TYPE uint32_t
+#define SOL_STACK_FUNCTION_PREFIX sol_available_indices_stack
+#define SOL_STACK_STRUCT_NAME sol_available_indices_stack
+#include "data_structures/stack.h"
 

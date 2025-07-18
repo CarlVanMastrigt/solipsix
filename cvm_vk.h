@@ -26,8 +26,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_H
 
 #include "vk/timeline_semaphore.h"
-
-#include "data_structures/stack.h"
 #include "vk/sync_manager.h"
 
 #ifndef CVM_VK_CHECK
@@ -49,10 +47,25 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
+#define SOL_STACK_TYPE VkBufferMemoryBarrier2
+#define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_barrier_stack
+#define SOL_STACK_STRUCT_NAME cvm_vk_buffer_barrier_stack
+#include "data_structures/stack.h"
 
+#define SOL_STACK_TYPE VkBufferCopy
+#define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_copy_stack
+#define SOL_STACK_STRUCT_NAME cvm_vk_buffer_copy_stack
+#include "data_structures/stack.h"
 
-SOL_STACK(VkBufferMemoryBarrier2, cvm_vk_buffer_barrier_stack, cvm_vk_buffer_barrier_stack)
-SOL_STACK(VkBufferCopy, cvm_vk_buffer_copy_stack, cvm_vk_buffer_copy_stack)
+#define SOL_STACK_TYPE VkBufferImageCopy
+#define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_image_copy_stack
+#define SOL_STACK_STRUCT_NAME cvm_vk_buffer_image_copy_stack
+#include "data_structures/stack.h"
+
+#define SOL_STACK_TYPE VkSemaphore
+#define SOL_STACK_FUNCTION_PREFIX sol_vk_semaphore_stack
+#define SOL_STACK_STRUCT_NAME sol_vk_semaphore_stack
+#include "data_structures/stack.h"
 
 
 typedef struct cvm_vk_managed_buffer cvm_vk_managed_buffer;
@@ -99,8 +112,6 @@ static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignmen
 }
 
 
-SOL_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy_stack, cvm_vk_buffer_image_copy_stack)
-SOL_STACK(VkSemaphore, sol_vk_semaphore_stack, sol_vk_semaphore_stack)
 
 
 

@@ -18,333 +18,226 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 
+#include <stdlib.h>
 
-struct sol_quicksort_node
+#ifndef SOL_SORT_TYPE
+#error must define SOL_SORT_TYPE
+#define SOL_SORT_TYPE int
+#endif
+
+#ifndef SOL_SORT_FUNCTION_NAME
+#error must define SOL_SORT_FUNCTION_NAME
+#define SOL_SORT_FUNCTION_NAME placeholder_quicksort
+#endif
+
+#ifndef SOL_SORT_COMPARE_LT
+#error must define SOL_SORT_COMPARE_LT(const SOL_SORT_TYPE* a, const SOL_SORT_TYPE* b)
+#define SOL_SORT_COMPARE_LT(A, B) ((A) < (B))
+#endif
+
+/** is a very good idea to set this based on type and expense of comparison */
+#ifndef SOL_SORT_BUBBLE_THRESHOLD
+#define SOL_SORT_BUBBLE_THRESHOLD 16
+#endif
+
+#ifdef SOL_SORT_CONTEXT_TYPE
+static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count, SOL_SORT_CONTEXT_TYPE ctx)
+#else
+static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
+#endif
 {
-    void* start;
-    void* end;
-};
+    struct
+    {
+        SOL_SORT_TYPE* start;
+        SOL_SORT_TYPE* end;
+    }
+    stack[48];
 
+    size_t stack_size;
 
-/**
- * must define SOL_COMPARE_LT macro before using this function which should be of the form:
- * SOL_COMPARE_LT(const type* a, const type* b) and return `a < b` in desired order (must NOT return `a <= b`)
- *
- * bubble_sort_threshold alters performance characteristics, but 16, 32 & 64 are all reasonable
- * function_keywords are provide in case static and or inline is desired
-*/
+    SOL_SORT_TYPE tmp;
+    SOL_SORT_TYPE pivot;
 
-#define SOL_QUICKSORT(type, function_name, bubble_sort_threshold, function_keywords)                                   \
-function_keywords void function_name(type * data, size_t count)                                                        \
-{                                                                                                                      \
-    const size_t chunk_size = bubble_sort_threshold;                                                                   \
-                                                                                                                       \
-    struct sol_quicksort_node stack[64];                                                                               \
-    size_t stack_size;                                                                                                 \
-                                                                                                                       \
-    type tmp;                                                                                                          \
-    type pivot;                                                                                                        \
-                                                                                                                       \
-    type* start;                                                                                                       \
-    type* end;                                                                                                         \
-    type* iter_forwards;                                                                                               \
-    type* iter_backwards;                                                                                              \
-    type* middle;                                                                                                      \
-    type* smallest;                                                                                                    \
-                                                                                                                       \
-    stack_size = 0;                                                                                                    \
-                                                                                                                       \
-    start = data;                                                                                                      \
-    end = data + count - 1;                                                                                            \
-                                                                                                                       \
-    if(count>chunk_size) while(1)                                                                                      \
-    {                                                                                                                  \
-        /* pre-sort start and end of range */                                                                          \
-        if(SOL_COMPARE_LT(end, start))                                                                                 \
-        {                                                                                                              \
-            tmp = *start;                                                                                              \
-            *start = *end;                                                                                             \
-            *end = tmp;                                                                                                \
-        }                                                                                                              \
-                                                                                                                       \
-        middle = start + ((end - start) >> 1);                                                                         \
-                                                                                                                       \
-        /* sort middle relative to start and end, this also also sets the middle(valued) of the 3 as pivot */          \
-        if(SOL_COMPARE_LT(end, middle))                                                                                \
-        {                                                                                                              \
-            pivot = *end;                                                                                              \
-            *end = *middle;                                                                                            \
-            *middle = pivot;                                                                                           \
-        }                                                                                                              \
-        else if(SOL_COMPARE_LT(middle, start))                                                                         \
-        {                                                                                                              \
-            pivot = *start;                                                                                            \
-            *start = *middle;                                                                                          \
-            *middle = pivot;                                                                                           \
-        }                                                                                                              \
-        else                                                                                                           \
-        {                                                                                                              \
-            pivot = *middle;                                                                                           \
-        }                                                                                                              \
-                                                                                                                       \
-        iter_forwards = start;                                                                                         \
-        iter_backwards = end;                                                                                          \
-                                                                                                                       \
-        while(1)                                                                                                       \
-        {                                                                                                              \
-            /* we want the iters after these while loops to be the first positions that violate pivot sorting */       \
-            /* note: we don't specially handle the pivot, so it may end up on either side of range */                  \
-            while(SOL_COMPARE_LT((++iter_forwards), (&pivot)));                                                        \
-            while(SOL_COMPARE_LT((&pivot), (--iter_backwards)));                                                       \
-                                                                                                                       \
-            if(iter_backwards<iter_forwards)                                                                           \
-            {                                                                                                          \
-                break;                                                                                                 \
-            }                                                                                                          \
-                                                                                                                       \
-            tmp = *iter_forwards;                                                                                      \
-            *iter_forwards = *iter_backwards;                                                                          \
-            *iter_backwards = tmp;                                                                                     \
-        }                                                                                                              \
-                                                                                                                       \
-        /* any chunk (either side of pivot after above sort) that is smaller than the `chunk_size` is "sorted" */      \
-        /* otherwise one or both of these ranges need processing */                                                    \
-        if((iter_backwards - start) < chunk_size)                                                                      \
-        {                                                                                                              \
-            if((end - iter_forwards) < chunk_size)                                                                     \
-            {                                                                                                          \
-                /* both parts of this range sufficiently sorted, get another range to sort (if any are left) */        \
-                if(stack_size == 0)                                                                                    \
-                {                                                                                                      \
-                    break;                                                                                             \
-                }                                                                                                      \
-                stack_size--;                                                                                          \
-                start = stack[stack_size].start;                                                                       \
-                end = stack[stack_size].end;                                                                           \
-            }                                                                                                          \
-            else                                                                                                       \
-            {                                                                                                          \
-                /* after pivot sufficiently sorted, before pivot NOT, so sort that range */                            \
-                start = iter_forwards;                                                                                 \
-            }                                                                                                          \
-        }                                                                                                              \
-        else if((end - iter_forwards) < chunk_size)                                                                    \
-        {                                                                                                              \
-            /* before pivot sufficiently sorted, after pivot unsorted so sort that range next */                       \
-            end = iter_backwards;                                                                                      \
-        }                                                                                                              \
-        /* otherwise both chunks (before and after the pivot) are unsorted and must be sufficiently sorted */          \
-        /* to avoid overflow of the stack record the larger side to the stack and sort the smaller immediately */      \
-        else if((iter_backwards - start) > (end - iter_forwards))                                                      \
-        {                                                                                                              \
-            stack[stack_size++] = (struct sol_quicksort_node){.start=start,.end=iter_backwards};                       \
-            start = iter_forwards;                                                                                     \
-        }                                                                                                              \
-        else                                                                                                           \
-        {                                                                                                              \
-            stack[stack_size++] = (struct sol_quicksort_node){.start=iter_forwards,.end=end};                          \
-            end = iter_backwards;                                                                                      \
-        }                                                                                                              \
-    }                                                                                                                  \
-                                                                                                                       \
-    /* find smallest in (at least) first chunk */                                                                      \
-    smallest = data;                                                                                                   \
-    /* non-inclusive end */                                                                                            \
-    end = data + ((chunk_size > count) ? count : chunk_size);                                                          \
-    for(iter_forwards = data + 1; iter_forwards < end ; iter_forwards++)                                               \
-    {                                                                                                                  \
-        if(SOL_COMPARE_LT(iter_forwards, smallest))                                                                    \
-        {                                                                                                              \
-            smallest = iter_forwards;                                                                                  \
-        }                                                                                                              \
-    }                                                                                                                  \
-    /* move smallest to start */                                                                                       \
-    if(data != smallest)                                                                                               \
-    {                                                                                                                  \
-        tmp = *smallest;                                                                                               \
-        *smallest = *data;                                                                                             \
-        *data = tmp;                                                                                                   \
-    }                                                                                                                  \
-                                                                                                                       \
-    /* bubble sort the whole list, shouldnt have to move any element more than `chunk_size` elements back */           \
-    /* inclusive end */                                                                                                \
-    end = data + count - 1;                                                                                            \
-    for(iter_forwards = data+2; iter_forwards <= end; iter_forwards++)                                                 \
-    {                                                                                                                  \
-        iter_backwards = iter_forwards - 1;                                                                            \
-        if(SOL_COMPARE_LT(iter_forwards, iter_backwards))                                                              \
-        {                                                                                                              \
-            tmp = *iter_forwards;                                                                                      \
-            do                                                                                                         \
-            {                                                                                                          \
-                iter_backwards[1] = iter_backwards[0];                                                                 \
-            }                                                                                                          \
-            while(SOL_COMPARE_LT((&tmp), (--iter_backwards)));                                                         \
-            iter_backwards[1] = tmp;                                                                                   \
-        }                                                                                                              \
-    }                                                                                                                  \
+    SOL_SORT_TYPE* start;
+    SOL_SORT_TYPE* end;
+    SOL_SORT_TYPE* iter_forwards;
+    SOL_SORT_TYPE* iter_backwards;
+    SOL_SORT_TYPE* middle;
+    SOL_SORT_TYPE* smallest;
+
+    stack_size = 0;
+
+    start = data;
+    end = data + count - 1;
+
+    if(count >SOL_SORT_BUBBLE_THRESHOLD) while(1)
+    {
+        /* pre-sort start and end of range */
+        #ifdef SOL_SORT_CONTEXT_TYPE
+        if(SOL_SORT_COMPARE_LT(end, start, ctx))
+        #else
+        if(SOL_SORT_COMPARE_LT(end, start))
+        #endif
+        {
+            tmp = *start;
+            *start = *end;
+            *end = tmp;
+        }
+
+        middle = start + ((end - start) >> 1);
+
+        /* sort middle relative to start and end, this also also sets the middle(valued) of the 3 as pivot */
+        #ifdef SOL_SORT_CONTEXT_TYPE
+        if(SOL_SORT_COMPARE_LT(end, middle, ctx))
+        #else
+        if(SOL_SORT_COMPARE_LT(end, middle))
+        #endif
+        {
+            pivot = *end;
+            *end = *middle;
+            *middle = pivot;
+        }
+        #ifdef SOL_SORT_CONTEXT_TYPE
+        else if(SOL_SORT_COMPARE_LT(middle, start, ctx))
+        #else
+        else if(SOL_SORT_COMPARE_LT(middle, start))
+        #endif
+        {
+            pivot = *start;
+            *start = *middle;
+            *middle = pivot;
+        }
+        else
+        {
+            pivot = *middle;
+        }
+
+        iter_forwards = start;
+        iter_backwards = end;
+
+        while(1)
+        {
+            /* we want the iters after these while loops to be the first positions that violate pivot sorting */
+            /* note: we don't specially handle the pivot, so it may end up on either side of range */
+            #ifdef SOL_SORT_CONTEXT_TYPE
+            while(SOL_SORT_COMPARE_LT((++iter_forwards), (&pivot) , ctx));
+            while(SOL_SORT_COMPARE_LT((&pivot), (--iter_backwards), ctx));
+            #else
+            while(SOL_SORT_COMPARE_LT((++iter_forwards), (&pivot) ));
+            while(SOL_SORT_COMPARE_LT((&pivot), (--iter_backwards)));
+            #endif
+
+            if(iter_backwards<iter_forwards)
+            {
+                break;
+            }
+
+            tmp = *iter_forwards;
+            *iter_forwards = *iter_backwards;
+            *iter_backwards = tmp;
+        }
+
+        /* any chunk (either side of pivot after above sort) that is smaller than the `SOL_SORT_BUBBLE_THRESHOLD` is "sorted" */
+        /* otherwise one or both of these ranges need processing */
+        if((iter_backwards - start) < SOL_SORT_BUBBLE_THRESHOLD)
+        {
+            if((end - iter_forwards) < SOL_SORT_BUBBLE_THRESHOLD)
+            {
+                /* both parts of this range sufficiently sorted, get another range to sort (if any are left) */
+                if(stack_size == 0)
+                {
+                    break;
+                }
+                stack_size--;
+                start = stack[stack_size].start;
+                end = stack[stack_size].end;
+            }
+            else
+            {
+                /* after pivot sufficiently sorted, before pivot NOT, so sort that range */
+                start = iter_forwards;
+            }
+        }
+        else if((end - iter_forwards) < SOL_SORT_BUBBLE_THRESHOLD)
+        {
+            /* before pivot sufficiently sorted, after pivot unsorted so sort that range next */
+            end = iter_backwards;
+        }
+        /* otherwise both chunks (before and after the pivot) are unsorted and must be sufficiently sorted */
+        /* to avoid overflow of the stack record the larger side to the stack and sort the smaller immediately */
+        else if((iter_backwards - start) > (end - iter_forwards))
+        {
+            stack[stack_size].start = start;
+            stack[stack_size].end   = iter_backwards;
+            stack_size++;
+            start = iter_forwards;
+        }
+        else
+        {
+            stack[stack_size].start = iter_forwards;
+            stack[stack_size].end   = end;
+            stack_size++;
+            end = iter_backwards;
+        }
+    }
+
+    /* find smallest in (at least) first chunk */
+    smallest = data;
+    /* non-inclusive end */
+    end = data + ((SOL_SORT_BUBBLE_THRESHOLD > count) ? count : SOL_SORT_BUBBLE_THRESHOLD);
+    for(iter_forwards = data + 1; iter_forwards < end ; iter_forwards++)
+    {
+        #ifdef SOL_SORT_CONTEXT_TYPE
+        if(SOL_SORT_COMPARE_LT(iter_forwards, smallest, ctx))
+        #else
+        if(SOL_SORT_COMPARE_LT(iter_forwards, smallest))
+        #endif
+        {
+            smallest = iter_forwards;
+        }
+    }
+    /* move smallest to start */
+    if(data != smallest)
+    {
+        tmp = *smallest;
+        *smallest = *data;
+        *data = tmp;
+    }
+
+    /* bubble sort the whole list, shouldnt have to move any element more than `SOL_SORT_BUBBLE_THRESHOLD` elements back */
+    /* inclusive end */
+    end = data + count - 1;
+    for(iter_forwards = data+2; iter_forwards <= end; iter_forwards++)
+    {
+        iter_backwards = iter_forwards - 1;
+        #ifdef SOL_SORT_CONTEXT_TYPE
+        if(SOL_SORT_COMPARE_LT(iter_forwards, iter_backwards, ctx))
+        #else
+        if(SOL_SORT_COMPARE_LT(iter_forwards, iter_backwards))
+        #endif
+        {
+            tmp = *iter_forwards;
+            do
+            {
+                iter_backwards[1] = iter_backwards[0];
+            }
+            #ifdef SOL_SORT_CONTEXT_TYPE
+            while(SOL_SORT_COMPARE_LT((&tmp), (--iter_backwards), ctx));
+            #else
+            while(SOL_SORT_COMPARE_LT((&tmp), (--iter_backwards)));
+            #endif
+
+            iter_backwards[1] = tmp;
+        }
+    }
 }
 
+#undef SOL_SORT_TYPE
+#undef SOL_SORT_FUNCTION_NAME
+#undef SOL_SORT_BUBBLE_THRESHOLD
+#undef SOL_SORT_COMPARE_LT
 
-
-
-/**
- * the same as SOL_QUICKSORT but SOL_COMPARE_LT takes a context argument
- * SOL_COMPARE_LT(const type* a, const type* b, ctx_type ctx) returning `a < b` NOT `a <= b`
- * it is recommended that ctx_type is a non-void const pointer
-*/
-
-#define SOL_QUICKSORT_WITH_CONTEXT(type, function_name, bubble_sort_threshold, function_keywords, ctx_type)            \
-function_keywords void function_name(type * data, size_t count, ctx_type ctx)                                          \
-{                                                                                                                      \
-    const size_t chunk_size = bubble_sort_threshold;                                                                   \
-                                                                                                                       \
-    struct sol_quicksort_node stack[64];                                                                               \
-    size_t stack_size;                                                                                                 \
-                                                                                                                       \
-    type tmp;                                                                                                          \
-    type pivot;                                                                                                        \
-                                                                                                                       \
-    type* start;                                                                                                       \
-    type* end;                                                                                                         \
-    type* iter_forwards;                                                                                               \
-    type* iter_backwards;                                                                                              \
-    type* middle;                                                                                                      \
-    type* smallest;                                                                                                    \
-                                                                                                                       \
-    stack_size = 0;                                                                                                    \
-                                                                                                                       \
-    start = data;                                                                                                      \
-    end = data + count - 1;                                                                                            \
-                                                                                                                       \
-    if(count>chunk_size) while(1)                                                                                      \
-    {                                                                                                                  \
-        /* pre-sort start and end of range */                                                                          \
-        if(SOL_COMPARE_LT(end, start, ctx))                                                                            \
-        {                                                                                                              \
-            tmp = *start;                                                                                              \
-            *start = *end;                                                                                             \
-            *end = tmp;                                                                                                \
-        }                                                                                                              \
-                                                                                                                       \
-        middle=start + ((end - start) >> 1);                                                                           \
-                                                                                                                       \
-        /* sort middle relative to start and end, this also also sets the middle(valued) of the 3 as pivot */          \
-        if(SOL_COMPARE_LT(end, middle, ctx))                                                                           \
-        {                                                                                                              \
-            pivot = *end;                                                                                              \
-            *end = *middle;                                                                                            \
-            *middle = pivot;                                                                                           \
-        }                                                                                                              \
-        else if(SOL_COMPARE_LT(middle, start, ctx))                                                                    \
-        {                                                                                                              \
-            pivot = *start;                                                                                            \
-            *start = *middle;                                                                                          \
-            *middle = pivot;                                                                                           \
-        }                                                                                                              \
-        else                                                                                                           \
-        {                                                                                                              \
-            pivot = *middle;                                                                                           \
-        }                                                                                                              \
-                                                                                                                       \
-        iter_forwards = start;                                                                                         \
-        iter_backwards = end;                                                                                          \
-                                                                                                                       \
-        while(1)                                                                                                       \
-        {                                                                                                              \
-            /* we want the iters after these while loops to be the first positions that violate pivot sorting */       \
-            /* note: we don't specially handle the pivot, so it may end up on either side of range */                  \
-            while(SOL_COMPARE_LT((++iter_forwards), (&pivot), ctx));                                                   \
-            while(SOL_COMPARE_LT((&pivot), (--iter_backwards), ctx));                                                  \
-                                                                                                                       \
-            if(iter_backwards<iter_forwards)                                                                           \
-            {                                                                                                          \
-                break;                                                                                                 \
-            }                                                                                                          \
-                                                                                                                       \
-            tmp = *iter_forwards;                                                                                      \
-            *iter_forwards = *iter_backwards;                                                                          \
-            *iter_backwards = tmp;                                                                                     \
-        }                                                                                                              \
-                                                                                                                       \
-        /* any chunk (either side of pivot after above sort) that is smaller than the `chunk_size` is "sorted" */      \
-        /* otherwise one or both of these ranges need processing */                                                    \
-        if((iter_backwards - start) < chunk_size)                                                                      \
-        {                                                                                                              \
-            if((end - iter_forwards) < chunk_size)                                                                     \
-            {                                                                                                          \
-                /* both parts of this range sufficiently sorted, get another range to sort (if any are left) */        \
-                if(stack_size == 0)                                                                                    \
-                {                                                                                                      \
-                    break;                                                                                             \
-                }                                                                                                      \
-                stack_size--;                                                                                          \
-                start = stack[stack_size].start;                                                                       \
-                end = stack[stack_size].end;                                                                           \
-            }                                                                                                          \
-            else                                                                                                       \
-            {                                                                                                          \
-                /* after pivot sufficiently sorted, before pivot NOT, so sort that range */                            \
-                start = iter_forwards;                                                                                 \
-            }                                                                                                          \
-        }                                                                                                              \
-        else if((end - iter_forwards) < chunk_size)                                                                    \
-        {                                                                                                              \
-            /* before pivot sufficiently sorted, after pivot unsorted so sort that range next */                       \
-            end = iter_backwards;                                                                                      \
-        }                                                                                                              \
-        /* otherwise both chunks (before and after the pivot) are unsorted and must be sufficiently sorted */          \
-        /* to avoid overflow of the stack record the larger side to the stack and sort the smaller immediately */      \
-        else if((iter_backwards - start) > (end - iter_forwards))                                                      \
-        {                                                                                                              \
-            stack[stack_size++] = (struct sol_quicksort_node){.start = start,.end = iter_backwards};                   \
-            start = iter_forwards;                                                                                     \
-        }                                                                                                              \
-        else                                                                                                           \
-        {                                                                                                              \
-            stack[stack_size++] = (struct sol_quicksort_node){.start = iter_forwards,.end = end};                      \
-            end = iter_backwards;                                                                                      \
-        }                                                                                                              \
-    }                                                                                                                  \
-                                                                                                                       \
-    /* find smallest in (at least) first chunk */                                                                      \
-    smallest = data;                                                                                                   \
-    /* non-inclusive end */                                                                                            \
-    end = data + ((chunk_size > count) ? count : chunk_size);                                                          \
-    for(iter_forwards = data + 1; iter_forwards < end ; iter_forwards++)                                               \
-    {                                                                                                                  \
-        if(SOL_COMPARE_LT(iter_forwards, smallest, ctx))                                                               \
-        {                                                                                                              \
-            smallest = iter_forwards;                                                                                  \
-        }                                                                                                              \
-    }                                                                                                                  \
-    /* move smallest to start */                                                                                       \
-    if(data!=smallest)                                                                                                 \
-    {                                                                                                                  \
-        tmp = *smallest;                                                                                               \
-        *smallest = *data;                                                                                             \
-        *data = tmp;                                                                                                   \
-    }                                                                                                                  \
-                                                                                                                       \
-    /* bubble sort the whole list, shouldnt have to move any element more than `chunk_size` elements back */           \
-    /* inclusive end */                                                                                                \
-    end = data + count - 1;                                                                                            \
-    for(iter_forwards = data+2; iter_forwards <= end; iter_forwards++)                                                 \
-    {                                                                                                                  \
-        iter_backwards = iter_forwards - 1;                                                                            \
-        if(SOL_COMPARE_LT(iter_forwards, iter_backwards, ctx))                                                         \
-        {                                                                                                              \
-            tmp = *iter_forwards;                                                                                      \
-            do                                                                                                         \
-            {                                                                                                          \
-                iter_backwards[1] = iter_backwards[0];                                                                 \
-            }                                                                                                          \
-            while(SOL_COMPARE_LT((&tmp), (--iter_backwards), ctx));                                                    \
-            iter_backwards[1] = tmp;                                                                                   \
-        }                                                                                                              \
-    }                                                                                                                  \
-}
-
-
-
+#ifdef SOL_SORT_CONTEXT_TYPE
+#undef SOL_SORT_CONTEXT_TYPE
+#endif
 

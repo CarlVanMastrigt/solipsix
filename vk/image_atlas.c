@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
+
 /** should the image atlas vend monotonic identifiers which are then mapped externally?
  	that way fonts can track their contents with a map as they would likely need to anyway (to store glyph specific data)
 
@@ -61,26 +62,61 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 
-#warning need to figure out if having reference to entries in accessor array is actually better (in terms of perf and size)
-/** below requires a fuck ton of memory accesses that are almost guaranteed to be cache misses (e.g. prev/next linked list changes will likely cause cache misses) */
+/** for now: atlas is singularly ordered for all individual resources (all resources must be externally synchronized between init and use)
+		^ this handles [write -> use -> use] by putting onus on caller
+	really need a plan for defragmentation though, would like it to run completely asynchronously (only update locations when CPU is notified of copy op completing)
+	current access complete useful for this, don't defragment until first use is complete (technically unnecessary wait as write *likely* happens before read use)
+	perhaps its better to not to "deframent" at all and instead force resource recreation by invalidating entries when thier placement becomes particularly egregious
+	possibly block access to these resources so they leave the active section of the queue? or put onus on caller to copy as part of request (where it would otherwise have to load if it were invalidated)
+	this avoids recreation while allowing access to the old location for other uses
+
+	similar approach could also be used for ensuring value is initialised; write access (either implicitly on obtain because missing or explicitly on request)
+	forces subsequent uses to wait on that accesses request (should they wish to use it, make optional part of request that forces a dependency)
+	similar could then be used to handle defragmentation without shifting onus on caller to copy
+		^ though: start with no defrag; just invalidate
+
+	important to allow external writing of resources, this MAY be paired with immediate invalidation (only transient resources written externally) or locked in accessor "owner" for resources
+	important to allow immediate/controlled instantiation of resources even if that means access cannot be multi-threaded/multi-accessor <- this may actually be a (massive) benefit ??
+		^ allows internal abstracted defragmentation controlled CPU side in simple fashion(?)
+
+		need a map of which re
+	*/
+
+#warning the single wait on latest moment when acquiring is sufficient for ensuring defragmentation works (need to ensure latest location is vended), \
+but not great for having dedicated loaders or really any good mechanism for sharing resources between accessors, \
+at the moment a novel resource must not be used by another accessor as there is no way to guarantee synchronization of filling its contents (leading to UB)
+// ^ MAYBE find for texture resources, but definitely bad for buffer resources
+
+#warning prefer to use only 20 bits for accessor index...
+
+
+enum sol_image_atlas_queue_index_type
+{
+	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_BASE                = 0,/** index is irrelevant in this case */
+	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_ENTRY               = 1,
+	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_ACCESS_MARKER_READ  = 2,
+	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_ACCESS_MARKER_WRITE = 3,
+};
 
 struct sol_image_atlas_queue_index
 {
-	#warning index needing to not be a full u32 is massively problematic; sol_queue requires u32 index to work properly; may need to add a mask to queue to permit this
-	uint32_t index:31;
-	uint32_t is_accessor_marker:1;
+	/** note: this will reference accessors in a queue by index, it IS valid to use fewer bits to store the index than the full 32
+		so long as fewer than that many are actually used at once (half that many in this case because checking order with modular arithmetic)
+		supporting 10^9 max elements should be enough... */
+	uint32_t index:30;// only 20 bits used for access_marker
+	uint32_t type:2;/** enum sol_image_atlas_queue_index_type */
 };
 
-// #define SOL_IMAGE_ATLAS_QUEUE_INDEX_NULL (struct sol_image_atlas_queue_index) {.index = 0x7FFFFFFF, .is_accessor_marker = 0}
-// bool sol_image_atlas_queue_index_is_null(struct sol_image_atlas_queue_index)
-// {
 
-// }
+#define SOL_IMAGE_ATLAS_QUEUE_INDEX_NULL (struct sol_image_atlas_queue_index) {.index = 0x3FFFFFFFu, .type = 0}
+bool sol_image_atlas_queue_index_is_null(struct sol_image_atlas_queue_index queue_index)
+{
+	return (queue_index.type == 0) && (queue_index.index == 0x3FFFFFFFu);
+}
 
 /** how best to pack? */
 struct sol_image_atlas_entry
 {
-	#warning need to put identifier for whether this is an accessor marker along with prev/next index (really pack type with index...?)
 	/** prev/next indices in linked list of entries my order of use */
 	struct sol_image_atlas_queue_index prev;
 	struct sol_image_atlas_queue_index next;
@@ -90,7 +126,8 @@ struct sol_image_atlas_entry
 
 	/** z-tile location is in terms of minimum entry pixel dimension (4)
 		packed in such a way to order entries by layer first then top left -> bottom right
-		i.e. packed like: | array layer (8) | z-tile location (24) | */
+		i.e. packed like: | array layer (8) | z-tile location (24) |
+		this is used to sort/order entries (lower value means better placed) */
 	uint32_t packed_location;
 
 	/** size class is power of 2 times entry pixel dimension (4)
@@ -106,38 +143,48 @@ struct sol_image_atlas_entry
 	/** index in queue of accessors (does need to be a u32 for compatibility)
 		used to ensure an entry is only moved forward in the least recently used queue when necessary and to a point that correctly reflects its usage
 		(should be put just after the accessor marker)  */
-	uint32_t accessor_index;
+	uint32_t access_index : 20;
+	/** ^ just making sure this matches index held in sol_image_atlas_queue_index (shouldn't matter given queue implementation though) */
+
+	/** must be set appropriately on "creation" this indicates that the contents should NOT be copied when this tile is deframented
+		(possibly just immediately free this location instead of deframenting it)
+		(and) the location should be discarded/relinquished immediately after accessor release ?
+		if request differs from this property then the old location should be treated as different (possibly same goes with size?) */
+	uint32_t transient_contents : 1;
 };
 
 /** marker in queue of accessors vended, basically needs to be used in a queue */
-struct sol_image_atlas_accessor_marker
+struct sol_image_atlas_access_marker
 {
 	struct sol_image_atlas_queue_index prev;
 	struct sol_image_atlas_queue_index next;
 
-	/** active then are still waiting on accessor to be released, so cannot wait on moments */
-	bool active;
+	// uint8_t access_complete_moment_count;
+	// struct sol_vk_timeline_semaphore_moment access_complete_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
+	struct sol_vk_timeline_semaphore_moment access_complete_moment;
 
-	uint8_t access_complete_moment_count;
-	struct sol_vk_timeline_semaphore_moment access_complete_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
+	#warning entries can back-refernce this by index, possibly good to do this to allow dependencies between accesses?
+	/** a more reliable way to accomplish this is to have dedicated loading for */
 };
 
 struct sol_image_atlas_map_entry
 {
 	uint64_t identifier;/** hash map key */
-	uint32_t entry_index;
+	uint32_t entry_index;/** must be an index because its index is used to navigate the linked list */
 	/* wasted space... */
 };
 
+#define SOL_ARRAY_TYPE struct sol_image_atlas_entry
+#define SOL_ARRAY_FUNCTION_PREFIX sol_image_atlas_entry_array
+#define SOL_ARRAY_STRUCT_NAME sol_image_atlas_entry_array
+#include "solipsix/data_structures/array.h"
+
 struct sol_image_atlas
 {
-	mtx_t mutex;
-	bool multithreaded;
+	struct sol_image_atlas_queue_index first;
+	struct sol_image_atlas_queue_index last;
 
-	// in flight accessors
-	uint64_t active_accessor_mask;
-
-	struct sol_image_atlas_entry* entries;
+	struct sol_image_atlas_entry_array entries;
 };
 
 

@@ -18,103 +18,114 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 
-
-#pragma once
-
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <string.h>
 #include <assert.h>
 
+#include "sol_utils.h"
 
-#include "data_structures/stack.h"
-
-
-
+#include "data_structures/available_indices_stack.h"
 
 
 
+#ifndef SOL_ARRAY_TYPE
+#error must define SOL_ARRAY_TYPE
+#define SOL_ARRAY_TYPE int
+#endif
+
+#ifndef SOL_ARRAY_FUNCTION_PREFIX
+#error must define SOL_ARRAY_FUNCTION_PREFIX
+#define SOL_ARRAY_FUNCTION_PREFIX placeholder_array
+#endif
+
+#ifndef SOL_ARRAY_STRUCT_NAME
+#error must define SOL_ARRAY_STRUCT_NAME
+#define SOL_ARRAY_STRUCT_NAME placeholder_stack
+#endif
 
 
-#define SOL_ARRAY(type, struct_name, function_prefix)                                             \
-                                                                                                  \
-struct struct_name                                                                                \
-{                                                                                                 \
-    struct sol_available_indices_stack available_indices;                                         \
-    type* array;                                                                                  \
-    uint32_t space;                                                                               \
-    uint32_t count;                                                                               \
-};                                                                                                \
-                                                                                                  \
-                                                                                                  \
-static inline void function_prefix##_initialise(struct struct_name* a, uint32_t initial_size)     \
-{                                                                                                 \
-    assert((initial_size & (initial_size - 1)) == 0);                                             \
-    sol_available_indices_stack_initialise(&a->available_indices, initial_size);                  \
-    a->array = malloc(sizeof(type) * initial_size);                                               \
-    a->space = initial_size;                                                                      \
-    a->count = 0;                                                                                 \
-}                                                                                                 \
-                                                                                                  \
-static inline void function_prefix##_terminate(struct struct_name* a)                             \
-{                                                                                                 \
-    sol_available_indices_stack_terminate(&a->available_indices);                                 \
-    free(a->array);                                                                               \
-}                                                                                                 \
-                                                                                                  \
-static inline type* function_prefix##_append_ptr(struct struct_name* a, uint32_t* index_ptr)      \
-{                                                                                                 \
-    uint32_t i;                                                                                   \
-    if(!sol_available_indices_stack_remove(&a->available_indices, &i))                            \
-    {                                                                                             \
-        if(a->count == a->space)                                                                  \
-        {                                                                                         \
-            a->space *= 2;                                                                        \
-            a->array = realloc(a->array, sizeof(type) * a->space);                                \
-        }                                                                                         \
-        i = a->count++;                                                                           \
-    }                                                                                             \
-    if(index_ptr)                                                                                 \
-    {                                                                                             \
-    	*index_ptr = i;                                                                           \
-    }                                                                                             \
-    return a->array + i;                                                                          \
-}                                                                                                 \
-                                                                                                  \
-static inline uint32_t function_prefix##_append(struct struct_name* a, type value)                \
-{                                                                                                 \
-	uint32_t i;                                                                                   \
-    *function_prefix##_append_ptr(a, &i) = value;                                                 \
-    return i;                                                                                     \
-}                                                                                                 \
-                                                                                                  \
-/** returned pointer cannot be used after any other operation has occurred*/                      \
-static inline const type * function_prefix##_remove_ptr(struct struct_name* a, uint32_t index)    \
-{                                                                                                 \
-    sol_available_indices_stack_append(&a->available_indices, index);                             \
-    return a->array + index;                                                                      \
-}                                                                                                 \
-                                                                                                  \
-static inline type function_prefix##_remove(struct struct_name* a, uint32_t index)                \
-{                                                                                                 \
-    sol_available_indices_stack_append(&a->available_indices, index);                             \
-    return a->array[index];                                                                       \
-}                                                                                                 \
-                                                                                                  \
-static inline void function_prefix##_reset(struct struct_name* a)                                 \
-{                                                                                                 \
-    sol_available_indices_stack_reset(&a->available_indices);                                     \
-    a->count=0;                                                                                   \
-}                                                                                                 \
-                                                                                                  \
-static inline type function_prefix##_get_entry(const struct struct_name* a, uint32_t index)       \
-{                                                                                                 \
-    return a->array[index];                                                                       \
-}                                                                                                 \
-                                                                                                  \
-static inline type* function_prefix##_access_entry(struct struct_name* a, uint32_t index)         \
-{                                                                                                 \
-    return a->array + index;                                                                      \
+
+struct SOL_ARRAY_STRUCT_NAME
+{
+    struct sol_available_indices_stack available_indices;
+    SOL_ARRAY_TYPE* array;
+    uint32_t space;
+    uint32_t count;
+};
+
+static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_initialise)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t initial_size)
+{
+    assert((initial_size & (initial_size - 1)) == 0);
+    sol_available_indices_stack_initialise(&a->available_indices, initial_size);
+    a->array = malloc(sizeof(SOL_ARRAY_TYPE) * initial_size);
+    a->space = initial_size;
+    a->count = 0;
 }
+
+static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_terminate)(struct SOL_ARRAY_STRUCT_NAME* a)
+{
+    sol_available_indices_stack_terminate(&a->available_indices);
+    free(a->array);
+}
+
+static inline SOL_ARRAY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t* index_ptr)
+{
+    uint32_t i;
+    if(!sol_available_indices_stack_remove(&a->available_indices, &i))
+    {
+        if(a->count == a->space)
+        {
+            a->space *= 2;
+            a->array = realloc(a->array, sizeof(SOL_ARRAY_TYPE) * a->space);
+        }
+        i = a->count++;
+    }
+    if(index_ptr)
+    {
+    	*index_ptr = i;
+    }
+    return a->array + i;
+}
+
+static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct SOL_ARRAY_STRUCT_NAME* a, SOL_ARRAY_TYPE value)
+{
+	uint32_t i;
+    *(SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(a, &i)) = value;
+    return i;
+}
+
+/** returned pointer cannot be used after any other operation has occurred*/
+static inline const SOL_ARRAY_TYPE * SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+{
+    sol_available_indices_stack_append(&a->available_indices, index);
+    return a->array + index;
+}
+
+static inline SOL_ARRAY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+{
+    sol_available_indices_stack_append(&a->available_indices, index);
+    return a->array[index];
+}
+
+static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_reset)(struct SOL_ARRAY_STRUCT_NAME* a)
+{
+    sol_available_indices_stack_reset(&a->available_indices);
+    a->count=0;
+}
+
+static inline SOL_ARRAY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_get_entry)(const struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+{
+    return a->array[index];
+}
+
+static inline SOL_ARRAY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_access_entry)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+{
+    return a->array + index;
+}
+
+
+#undef SOL_ARRAY_TYPE
+#undef SOL_ARRAY_FUNCTION_PREFIX
+#undef SOL_ARRAY_STRUCT_NAME
 

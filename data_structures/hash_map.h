@@ -25,7 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include "sol_utils.h"
-/** all includes put here instead of implement file to take advantage of pragme once */
+/** all includes put here instead of implement file to take advantage of pragma once */
 
 enum sol_map_result
 {

@@ -39,8 +39,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_gui_context;
 
 #include "math/s16_rect.h"
-#include "data_structures/stack.h"
-
 
 typedef struct overlay_theme overlay_theme;
 
@@ -89,8 +87,10 @@ typedef struct cvm_overlay_element_render_data
 }
 cvm_overlay_element_render_data;
 
-SOL_STACK(cvm_overlay_element_render_data, cvm_overlay_element_render_data_stack, cvm_overlay_element_render_data_stack)
-/// make starting size bigger
+#define SOL_STACK_TYPE cvm_overlay_element_render_data
+#define SOL_STACK_FUNCTION_PREFIX cvm_overlay_element_render_data_stack
+#define SOL_STACK_STRUCT_NAME cvm_overlay_element_render_data_stack
+#include "data_structures/stack.h"
 
 struct cvm_overlay_render_batch;
 

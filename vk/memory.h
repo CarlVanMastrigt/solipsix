@@ -25,10 +25,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_MEMORY_H
 #define CVM_VK_MEMORY_H
 
-#include "data_structures/stack.h"
-
-SOL_STACK(uint32_t, u32_stack, u32_stack)
-#warning try to remove above
 
 
 typedef struct cvm_vk_staging_buffer_region
@@ -197,6 +193,13 @@ void * cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(cvm_vk_ma
 /// high priority would just copy inline immediately, taking command buffer or payload as parameters instead of queue_transfer_synchronization_data (which is essentially responsible for managing that copy and associated QFOT/sync)
 
 
+
+#define SOL_STACK_TYPE uint32_t
+#define SOL_STACK_FUNCTION_PREFIX u32_stack
+#define SOL_STACK_STRUCT_NAME u32_stack
+#include "data_structures/stack.h"
+
+#warning remove above!
 
 ///splitting this in particular out from managed buffer allows different types of work to SHARE space in a managed buffer! (specifically when those types of work have differing "frames in flight")
 struct cvm_vk_managed_buffer_dismissal_list
