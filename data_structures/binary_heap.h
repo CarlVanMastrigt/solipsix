@@ -26,12 +26,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 /**
- * SOL_BINARY_HEAP_ENTRY_CMP_LESS(A,B) must be declared, with true resulting in the value A moving UP the heap
+ * SOL_BINARY_HEAP_ENTRY_CMP_LT(A,B) must be declared, with true resulting in the value A moving UP the heap
  *     ^ A and B are SOL_BINARY_HEAP_ENTRY_TYPE*
- *
- * TODO: make any inputs to heap_cmp pointers and const (access top, paired with NULL in remove, append_ptr)
- *
- * TODO: use test sort heap performance improvements
  *
  * TODO: may be worth looking into adding support for random location deletion and heap
  * location tracking to support that, though probably not as adaptable as might be desirable
@@ -53,12 +49,25 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_BINARY_HEAP_FUNCTION_PREFIX placeholder_hash_map
 #endif
 
-#ifndef SOL_BINARY_HEAP_ENTRY_CMP_LESS
-#error must define SOL_BINARY_HEAP_ENTRY_CMP_LESS(const SOL_BINARY_HEAP_ENTRY_TYPE*, const SOL_BINARY_HEAP_ENTRY_TYPE*) returning a bool
-#define SOL_BINARY_HEAP_ENTRY_CMP_LESS(A,B) ((*A)<(*B))
+#ifndef SOL_BINARY_HEAP_ENTRY_CMP_LT
+#error must define SOL_BINARY_HEAP_ENTRY_CMP_LT(const SOL_BINARY_HEAP_ENTRY_TYPE* A, const SOL_BINARY_HEAP_ENTRY_TYPE* B) returning a bool (A < B) with context as param if provided
+#define SOL_BINARY_HEAP_ENTRY_CMP_LT(A,B) ((*A)<(*B))
 #endif
 
 
+#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
+    #ifndef SOL_BINARY_HEAP_SET_ENTRY_INDEX
+    #define SOL_BINARY_HEAP_SET_ENTRY_INDEX(E, IDX, CTX)
+    #endif
+    #define SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT(A, B) SOL_BINARY_HEAP_ENTRY_CMP_LT(A, B, context)
+    #define SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT(E, IDX) SOL_BINARY_HEAP_SET_ENTRY_INDEX(E, IDX, context)
+#else
+    #ifndef SOL_BINARY_HEAP_SET_ENTRY_INDEX
+    #define SOL_BINARY_HEAP_SET_ENTRY_INDEX(E, IDX)
+    #endif
+    #define SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT(A, B) SOL_BINARY_HEAP_ENTRY_CMP_LT(A, B)
+    #define SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT(E, IDX) SOL_BINARY_HEAP_SET_ENTRY_INDEX(E, IDX)
+#endif
 
 
 struct SOL_BINARY_HEAP_STRUCT_NAME
@@ -80,7 +89,11 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_terminate)(s
     free(heap->heap);
 }
 
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE data)
+#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
+#else
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
+#endif
 {
     uint32_t u,d;
 
@@ -94,55 +107,44 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(stru
 
     while(d)
     {
-        u = (d-1) >> 1;
+        u = (d - 1) >> 1;
 
-        if(SOL_BINARY_HEAP_ENTRY_CMP_LESS((heap->heap + u), (&data)))
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + u), (entry)))
         {
             break;
         }
 
         heap->heap[d] = heap->heap[u];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + d), d);
         d = u;
     }
 
-    heap->heap[d] = data;
+    heap->heap[d] = *entry;
+    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + d), d);
 }
 
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE* restrict data)
+#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
 {
-    uint32_t u,d;
-
-    if(heap->count == heap->space)
-    {
-        heap->space *= 2;
-        heap->heap = realloc(heap->heap, sizeof(SOL_BINARY_HEAP_ENTRY_TYPE) * heap->space);
-    }
-
-    d = heap->count++;
-
-    while(d)
-    {
-        u = (d-1) >> 1;
-
-        if(SOL_BINARY_HEAP_ENTRY_CMP_LESS((heap->heap + u), (data)))
-        {
-            break;
-        }
-
-        heap->heap[d] = heap->heap[u];
-        d = u;
-    }
-
-    heap->heap[d] = *data;
+    SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(heap, &entry, context);
 }
-
+#else
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE entry)
+{
+    SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(heap, &entry);
+}
+#endif
 
 static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_clear)(struct SOL_BINARY_HEAP_STRUCT_NAME* heap)
 {
     heap->count = 0;
 }
 
-static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict data )
+#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
+static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
+#else
+static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
+#endif
 {
     uint32_t u,d,count;
     const SOL_BINARY_HEAP_ENTRY_TYPE* r;
@@ -152,7 +154,7 @@ static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(stru
         return false;
     }
 
-    *data = heap->heap[0];
+    *entry = heap->heap[0];
     count = --heap->count;
     r = heap->heap + count;
     u = 0;
@@ -160,29 +162,38 @@ static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(stru
 
     while(d < count)
     {
-        d -= SOL_BINARY_HEAP_ENTRY_CMP_LESS((heap->heap + d - 1), (heap->heap + d));
-        if(SOL_BINARY_HEAP_ENTRY_CMP_LESS((r), (heap->heap + d)))
+        d -= SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + d - 1), (heap->heap + d));
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((r), (heap->heap + d)))
         {
             break;
         }
         heap->heap[u] = heap->heap[d];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + u), u);
         u = d;
-        d = (d << 1) + 2;
+        d = (d + 1) << 1;
     }
-    if(d == count && SOL_BINARY_HEAP_ENTRY_CMP_LESS((heap->heap + d - 1), r))
+    if(d == count && (SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + d - 1), r)))
     {
-        heap->heap[u] = heap->heap[d-1];
-        u = d-1;
+        heap->heap[u] = heap->heap[d - 1];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + u), u);
+        u = d - 1;
     }
 
     heap->heap[u] = *r;
+    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + u), u);
     return true;
 }
-
 
 
 #undef SOL_BINARY_HEAP_ENTRY_TYPE
 #undef SOL_BINARY_HEAP_STRUCT_NAME
 #undef SOL_BINARY_HEAP_FUNCTION_PREFIX
-#undef SOL_BINARY_HEAP_ENTRY_CMP_LESS
+#undef SOL_BINARY_HEAP_ENTRY_CMP_LT
+#undef SOL_BINARY_HEAP_SET_ENTRY_INDEX
 
+#undef SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT
+#undef SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT
+
+#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
+#undef SOL_BINARY_HEAP_CONTEXT_TYPE
+#endif

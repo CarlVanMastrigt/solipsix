@@ -194,7 +194,7 @@ void * cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(cvm_vk_ma
 
 
 
-#define SOL_STACK_TYPE uint32_t
+#define SOL_STACK_ENTRY_TYPE uint32_t
 #define SOL_STACK_FUNCTION_PREFIX u32_stack
 #define SOL_STACK_STRUCT_NAME u32_stack
 #include "data_structures/stack.h"

@@ -87,7 +87,7 @@ typedef struct cvm_overlay_element_render_data
 }
 cvm_overlay_element_render_data;
 
-#define SOL_STACK_TYPE cvm_overlay_element_render_data
+#define SOL_STACK_ENTRY_TYPE cvm_overlay_element_render_data
 #define SOL_STACK_FUNCTION_PREFIX cvm_overlay_element_render_data_stack
 #define SOL_STACK_STRUCT_NAME cvm_overlay_element_render_data_stack
 #include "data_structures/stack.h"

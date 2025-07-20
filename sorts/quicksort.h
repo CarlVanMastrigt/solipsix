@@ -32,7 +32,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_SORT_COMPARE_LT
 #error must define SOL_SORT_COMPARE_LT(const SOL_SORT_TYPE* a, const SOL_SORT_TYPE* b)
+#ifdef SOL_SORT_CONTEXT_TYPE
+#define SOL_SORT_COMPARE_LT(A, B, CTX) ((A) < (B))
+#else
 #define SOL_SORT_COMPARE_LT(A, B) ((A) < (B))
+#endif
 #endif
 
 /** is a very good idea to set this based on type and expense of comparison */
@@ -41,7 +45,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifdef SOL_SORT_CONTEXT_TYPE
-static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count, SOL_SORT_CONTEXT_TYPE ctx)
+#define SOL_SORT_COMPARE_LT_CONTEXTUAL(A, B) SOL_SORT_COMPARE_LT(A, B, context)
+#else
+#define SOL_SORT_COMPARE_LT_CONTEXTUAL(A, B) SOL_SORT_COMPARE_LT(A, B)
+#endif
+
+#ifdef SOL_SORT_CONTEXT_TYPE
+static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count, SOL_SORT_CONTEXT_TYPE context)
 #else
 static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
 #endif
@@ -70,14 +80,11 @@ static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
     start = data;
     end = data + count - 1;
 
-    if(count >SOL_SORT_BUBBLE_THRESHOLD) while(1)
+    if(count > SOL_SORT_BUBBLE_THRESHOLD) while(1)
     {
         /* pre-sort start and end of range */
-        #ifdef SOL_SORT_CONTEXT_TYPE
-        if(SOL_SORT_COMPARE_LT(end, start, ctx))
-        #else
-        if(SOL_SORT_COMPARE_LT(end, start))
-        #endif
+
+        if(SOL_SORT_COMPARE_LT_CONTEXTUAL(end, start))
         {
             tmp = *start;
             *start = *end;
@@ -87,21 +94,13 @@ static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
         middle = start + ((end - start) >> 1);
 
         /* sort middle relative to start and end, this also also sets the middle(valued) of the 3 as pivot */
-        #ifdef SOL_SORT_CONTEXT_TYPE
-        if(SOL_SORT_COMPARE_LT(end, middle, ctx))
-        #else
-        if(SOL_SORT_COMPARE_LT(end, middle))
-        #endif
+        if(SOL_SORT_COMPARE_LT_CONTEXTUAL(end, middle))
         {
             pivot = *end;
             *end = *middle;
             *middle = pivot;
         }
-        #ifdef SOL_SORT_CONTEXT_TYPE
-        else if(SOL_SORT_COMPARE_LT(middle, start, ctx))
-        #else
-        else if(SOL_SORT_COMPARE_LT(middle, start))
-        #endif
+        else if(SOL_SORT_COMPARE_LT_CONTEXTUAL(middle, start))
         {
             pivot = *start;
             *start = *middle;
@@ -119,13 +118,8 @@ static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
         {
             /* we want the iters after these while loops to be the first positions that violate pivot sorting */
             /* note: we don't specially handle the pivot, so it may end up on either side of range */
-            #ifdef SOL_SORT_CONTEXT_TYPE
-            while(SOL_SORT_COMPARE_LT((++iter_forwards), (&pivot) , ctx));
-            while(SOL_SORT_COMPARE_LT((&pivot), (--iter_backwards), ctx));
-            #else
-            while(SOL_SORT_COMPARE_LT((++iter_forwards), (&pivot) ));
-            while(SOL_SORT_COMPARE_LT((&pivot), (--iter_backwards)));
-            #endif
+            while(SOL_SORT_COMPARE_LT_CONTEXTUAL((++iter_forwards), (&pivot) ));
+            while(SOL_SORT_COMPARE_LT_CONTEXTUAL((&pivot), (--iter_backwards)));
 
             if(iter_backwards<iter_forwards)
             {
@@ -187,11 +181,7 @@ static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
     end = data + ((SOL_SORT_BUBBLE_THRESHOLD > count) ? count : SOL_SORT_BUBBLE_THRESHOLD);
     for(iter_forwards = data + 1; iter_forwards < end ; iter_forwards++)
     {
-        #ifdef SOL_SORT_CONTEXT_TYPE
-        if(SOL_SORT_COMPARE_LT(iter_forwards, smallest, ctx))
-        #else
-        if(SOL_SORT_COMPARE_LT(iter_forwards, smallest))
-        #endif
+        if(SOL_SORT_COMPARE_LT_CONTEXTUAL(iter_forwards, smallest))
         {
             smallest = iter_forwards;
         }
@@ -210,22 +200,14 @@ static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
     for(iter_forwards = data+2; iter_forwards <= end; iter_forwards++)
     {
         iter_backwards = iter_forwards - 1;
-        #ifdef SOL_SORT_CONTEXT_TYPE
-        if(SOL_SORT_COMPARE_LT(iter_forwards, iter_backwards, ctx))
-        #else
-        if(SOL_SORT_COMPARE_LT(iter_forwards, iter_backwards))
-        #endif
+        if(SOL_SORT_COMPARE_LT_CONTEXTUAL(iter_forwards, iter_backwards))
         {
             tmp = *iter_forwards;
             do
             {
                 iter_backwards[1] = iter_backwards[0];
             }
-            #ifdef SOL_SORT_CONTEXT_TYPE
-            while(SOL_SORT_COMPARE_LT((&tmp), (--iter_backwards), ctx));
-            #else
-            while(SOL_SORT_COMPARE_LT((&tmp), (--iter_backwards)));
-            #endif
+            while(SOL_SORT_COMPARE_LT_CONTEXTUAL((&tmp), (--iter_backwards)));
 
             iter_backwards[1] = tmp;
         }
@@ -236,6 +218,8 @@ static void SOL_SORT_FUNCTION_NAME(SOL_SORT_TYPE* data, size_t count)
 #undef SOL_SORT_FUNCTION_NAME
 #undef SOL_SORT_BUBBLE_THRESHOLD
 #undef SOL_SORT_COMPARE_LT
+
+#undef SOL_SORT_COMPARE_LT_CONTEXTUAL
 
 #ifdef SOL_SORT_CONTEXT_TYPE
 #undef SOL_SORT_CONTEXT_TYPE

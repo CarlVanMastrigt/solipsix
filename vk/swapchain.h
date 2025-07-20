@@ -25,7 +25,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_SWAPCHAIN_H
 #define CVM_VK_SWAPCHAIN_H
 
-#include "data_structures/queue.h"
 
 enum cvm_vk_presentable_image_state
 {
@@ -109,8 +108,10 @@ struct cvm_vk_swapchain_instance
 //    defaults;
 };
 
-SOL_QUEUE(cvm_vk_swapchain_instance, cvm_vk_swapchain_instance_queue, cvm_vk_swapchain_instance_queue)
-
+#define SOL_QUEUE_ENTRY_TYPE cvm_vk_swapchain_instance
+#define SOL_QUEUE_FUNCTION_PREFIX cvm_vk_swapchain_instance_queue
+#define SOL_QUEUE_STRUCT_NAME cvm_vk_swapchain_instance_queue
+#include "data_structures/queue.h"
 
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain

@@ -65,6 +65,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 
+#ifdef SOL_HASH_MAP_CONTEXT_TYPE
+#define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(K,E) SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E, map->context)
+#define SOL_HASH_MAP_KEY_HASH_CONTEXT(K) SOL_HASH_MAP_KEY_HASH(K, map->context)
+#define SOL_HASH_MAP_ENTRY_HASH_CONTEXT(E) SOL_HASH_MAP_ENTRY_HASH(E, map->context)
+#else
+#define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(K,E) SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E)
+#define SOL_HASH_MAP_KEY_HASH_CONTEXT(K) SOL_HASH_MAP_KEY_HASH(K)
+#define SOL_HASH_MAP_ENTRY_HASH_CONTEXT(E) SOL_HASH_MAP_ENTRY_HASH(E)
+#endif
 
 #define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_SHIFT (16 - SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS)
 #define SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS (SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_SHIFT-1)
@@ -178,11 +187,8 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(stru
         if(identifier)
         {
             entry_ptr = old_entries + old_index;
-            #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-            entry_hash = SOL_HASH_MAP_ENTRY_HASH(entry_ptr, map->context);
-            #else
-            entry_hash = SOL_HASH_MAP_ENTRY_HASH(entry_ptr);
-            #endif
+            entry_hash = SOL_HASH_MAP_ENTRY_HASH_CONTEXT(entry_ptr);
+
             entry_index = (entry_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
             index = entry_index;
 
@@ -227,11 +233,7 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(stru
 
     while(identifier == identifiers[index])
     {
-        #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(key_ptr, entries + index, map->context))
-        #else
-        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(key_ptr, entries + index))
-        #endif
+        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(key_ptr, entries + index))
         {
             *index_result = index;
             return true;/** precise key/entry found */
@@ -324,11 +326,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 {
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
-    #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH(key, map->context);
-    #else
-    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH(key);
-    #endif
+    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
     uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
 
@@ -344,11 +342,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 
 SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
-    #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH(key, map->context);
-    #else
-    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH(key);
-    #endif
+    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
 
     uint64_t entry_space, index_mask, key_index, move_index, next_move_index, prev_move_index;
@@ -448,11 +442,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 {
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
-    #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH(key, map->context);
-    #else
-    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH(key);
-    #endif
+    const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
 
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
     uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
@@ -487,6 +477,10 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 #undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL
 #undef SOL_HASH_MAP_KEY_HASH
 #undef SOL_HASH_MAP_ENTRY_HASH
+
+#undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT
+#undef SOL_HASH_MAP_KEY_HASH_CONTEXT
+#undef SOL_HASH_MAP_ENTRY_HASH_CONTEXT
 
 #ifdef SOL_HASH_MAP_CONTEXT_TYPE
 #undef SOL_HASH_MAP_CONTEXT_TYPE

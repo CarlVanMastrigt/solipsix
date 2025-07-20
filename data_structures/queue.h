@@ -17,12 +17,30 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
 
 #include <stdlib.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+
+#include "sol_utils.h"
+
+
+#ifndef SOL_QUEUE_ENTRY_TYPE
+#error must define SOL_QUEUE_ENTRY_TYPE
+#define SOL_QUEUE_ENTRY_TYPE int
+#endif
+
+#ifndef SOL_QUEUE_FUNCTION_PREFIX
+#error must define SOL_QUEUE_FUNCTION_PREFIX
+#define SOL_QUEUE_FUNCTION_PREFIX placeholder_stack
+#endif
+
+#ifndef SOL_QUEUE_STRUCT_NAME
+#error must define SOL_QUEUE_STRUCT_NAME
+#define SOL_QUEUE_STRUCT_NAME placeholder_stack
+#endif
 
 /**
 brief on queue resizing:
@@ -36,140 +54,149 @@ vs
 
 
 iterating a queue:
-for(i=0;i<q->count;i++) function_prefix##_access_entry(q, q->front + i)
+for(i=0;i<q->count;i++) SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_entry)(q, q->front + i)
 */
 
-#define SOL_QUEUE(type, struct_name, function_prefix)                                                            \
-                                                                                                                 \
-struct struct_name                                                                                               \
-{                                                                                                                \
-    type* data;                                                                                                  \
-    uint32_t space;                                                                                              \
-    uint32_t count;                                                                                              \
-    uint32_t front;                                                                                              \
-};                                                                                                               \
-                                                                                                                 \
-                                                                                                                 \
-static inline void function_prefix##_initialise(struct struct_name* q, uint32_t initial_size)                    \
-{                                                                                                                \
-    assert((initial_size & (initial_size - 1)) == 0);                                                            \
-    q->data = malloc(sizeof(type) * initial_size);                                                               \
-    q->space = initial_size;                                                                                     \
-    q->count = 0;                                                                                                \
-    q->front = 0;                                                                                                \
-}                                                                                                                \
-                                                                                                                 \
-static inline void function_prefix##_terminate(struct struct_name* q)                                            \
-{                                                                                                                \
-    free(q->data);                                                                                               \
-}                                                                                                                \
-                                                                                                                 \
-static inline type* function_prefix##_access_entry(struct struct_name* q, uint32_t index)                        \
-{                                                                                                                \
-    assert(index < q->front+q->count && index >= q->front);                                                      \
-    return q->data + (index & (q->space - 1));                                                                   \
-}                                                                                                                \
-                                                                                                                 \
-static inline void function_prefix##_enqueue_index(struct struct_name* q, uint32_t* index_ptr)                   \
-{                                                                                                                \
-    uint32_t front_offset, move_count;                                                                           \
-    type * src;                                                                                                  \
-    assert(index_ptr);                                                                                           \
-    if(q->count == q->space)                                                                                     \
-    {                                                                                                            \
-        q->data = realloc(q->data, sizeof(type) * q->count * 2);                                                 \
-        front_offset = q->front & (q->space - 1);                                                                \
-        if(q->front & q->space)                                                                                  \
-        {                                                                                                        \
-            src = q->data + front_offset;                                                                        \
-            move_count = q->space - front_offset;                                                                \
-        }                                                                                                        \
-        else                                                                                                     \
-        {                                                                                                        \
-            src = q->data;                                                                                       \
-            move_count = front_offset;                                                                           \
-        }                                                                                                        \
-        memcpy(src + q->space, src, sizeof(type) * move_count);                                                  \
-        q->space *= 2;                                                                                           \
-    }                                                                                                            \
-    *index_ptr = q->front + q->count;                                                                            \
-    q->count++;                                                                                                  \
-}                                                                                                                \
-                                                                                                                 \
-static inline void function_prefix##_enqueue_ptr(struct struct_name* q, type** entry_ptr, uint32_t* index_ptr)   \
-{                                                                                                                \
-    uint32_t index;                                                                                              \
-    assert(entry_ptr);                                                                                           \
-    function_prefix##_enqueue_index(q, &index);                                                                  \
-    if(index_ptr) *index_ptr = index;                                                                            \
-    *entry_ptr = q->data + (index & (q->space - 1));                                                             \
-}                                                                                                                \
-                                                                                                                 \
-static inline void function_prefix##_enqueue(struct struct_name* q, type value, uint32_t* index_ptr)             \
-{                                                                                                                \
-    uint32_t index;                                                                                              \
-    function_prefix##_enqueue_index(q, &index);                                                                  \
-    if(index_ptr) *index_ptr = index;                                                                            \
-    q->data[index & (q->space - 1)] = value;                                                                     \
-}                                                                                                                \
-                                                                                                                 \
-static inline bool function_prefix##_dequeue_ptr(struct struct_name* q, type** entry_ptr)                        \
-{                                                                                                                \
-    assert(entry_ptr);                                                                                           \
-    if(q->count == 0)                                                                                            \
-    {                                                                                                            \
-        *entry_ptr = NULL;                                                                                       \
-        return false;                                                                                            \
-    }                                                                                                            \
-    *entry_ptr = q->data + (q->front & (q->space - 1));                                                          \
-    q->front++;                                                                                                  \
-    q->count--;                                                                                                  \
-    return true;                                                                                                 \
-}                                                                                                                \
-                                                                                                                 \
-static inline bool function_prefix##_dequeue(struct struct_name* q, type* value)                                 \
-{                                                                                                                \
-    assert(value);                                                                                               \
-    if(q->count == 0) return false;                                                                              \
-    *value = q->data[q->front & (q->space - 1)];                                                                 \
-    q->front++;                                                                                                  \
-    q->count--;                                                                                                  \
-    return true;                                                                                                 \
-}                                                                                                                \
-                                                                                                                 \
-/** remove the front of the queue without accessing its contents */                                              \
-/** should only be used after access_front has been used to check the entry that will be pruned */               \
-static inline void function_prefix##_prune_front(struct struct_name* q)                                          \
-{                                                                                                                \
-    assert(q->count > 0);                                                                                        \
-    q->front++;                                                                                                  \
-    q->count--;                                                                                                  \
-}                                                                                                                \
-                                                                                                                 \
-static inline bool function_prefix##_access_front(struct struct_name* q, type** entry_ptr)                       \
-{                                                                                                                \
-    assert(entry_ptr);                                                                                           \
-    if(q->count == 0)                                                                                            \
-    {                                                                                                            \
-        *entry_ptr = NULL;                                                                                       \
-        return false;                                                                                            \
-    }                                                                                                            \
-    *entry_ptr = q->data + (q->front & (q->space - 1));                                                          \
-    return true;                                                                                                 \
-}                                                                                                                \
-                                                                                                                 \
-static inline bool function_prefix##_access_back(struct struct_name* q, type** entry_ptr)                        \
-{                                                                                                                \
-    assert(entry_ptr);                                                                                           \
-    if(q->count == 0)                                                                                            \
-    {                                                                                                            \
-        *entry_ptr = NULL;                                                                                       \
-        return false;                                                                                            \
-    }                                                                                                            \
-    *entry_ptr = q->data + ((q->front + q->count - 1) & (q->space - 1));                                         \
-    return true;                                                                                                 \
+struct SOL_QUEUE_STRUCT_NAME
+{
+    SOL_QUEUE_ENTRY_TYPE* data;
+    uint32_t space;
+    uint32_t count;
+    uint32_t front;
+};
+
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_initialise)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t initial_size)
+{
+    assert((initial_size & (initial_size - 1)) == 0);
+    q->data = malloc(sizeof(SOL_QUEUE_ENTRY_TYPE) * initial_size);
+    q->space = initial_size;
+    q->count = 0;
+    q->front = 0;
+}
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_terminate)(struct SOL_QUEUE_STRUCT_NAME* q)
+{
+    free(q->data);
+}
+
+static inline SOL_QUEUE_ENTRY_TYPE* SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_entry)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t index)
+{
+    assert(index < q->front+q->count && index >= q->front);
+    return q->data + (index & (q->space - 1));
+}
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t* index_ptr)
+{
+    uint32_t front_offset, move_count;
+    SOL_QUEUE_ENTRY_TYPE * src;
+    assert(index_ptr);
+    if(q->count == q->space)
+    {
+        q->data = realloc(q->data, sizeof(SOL_QUEUE_ENTRY_TYPE) * q->count * 2);
+        front_offset = q->front & (q->space - 1);
+        if(q->front & q->space)
+        {
+            src = q->data + front_offset;
+            move_count = q->space - front_offset;
+        }
+        else
+        {
+            src = q->data;
+            move_count = front_offset;
+        }
+        memcpy(src + q->space, src, sizeof(SOL_QUEUE_ENTRY_TYPE) * move_count);
+        q->space *= 2;
+    }
+    *index_ptr = q->front + q->count;
+    q->count++;
+}
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr, uint32_t* index_ptr)
+{
+    uint32_t index;
+    assert(entry_ptr);
+    SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(q, &index);
+    if(index_ptr)
+    {
+        *index_ptr = index;
+    }
+    *entry_ptr = q->data + (index & (q->space - 1));
+}
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE value, uint32_t* index_ptr)
+{
+    uint32_t index;
+    SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(q, &index);
+    if(index_ptr)
+    {
+        *index_ptr = index;
+    }
+    q->data[index & (q->space - 1)] = value;
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue_ptr)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr)
+{
+    assert(entry_ptr);
+    if(q->count == 0)
+    {
+        *entry_ptr = NULL;
+        return false;
+    }
+    *entry_ptr = q->data + (q->front & (q->space - 1));
+    q->front++;
+    q->count--;
+    return true;
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE* value)
+{
+    assert(value);
+    if(q->count == 0)
+    {
+        return false;
+    }
+    *value = q->data[q->front & (q->space - 1)];
+    q->front++;
+    q->count--;
+    return true;
+}
+
+/** remove the front of the queue without accessing its contents */
+/** should only be used after access_front has been used to check the entry that will be pruned */
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_prune_front)(struct SOL_QUEUE_STRUCT_NAME* q)
+{
+    assert(q->count > 0);
+    q->front++;
+    q->count--;
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_front)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr)
+{
+    assert(entry_ptr);
+    if(q->count == 0)
+    {
+        *entry_ptr = NULL;
+        return false;
+    }
+    *entry_ptr = q->data + (q->front & (q->space - 1));
+    return true;
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_back)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr)
+{
+    assert(entry_ptr);
+    if(q->count == 0)
+    {
+        *entry_ptr = NULL;
+        return false;
+    }
+    *entry_ptr = q->data + ((q->front + q->count - 1) & (q->space - 1));
+    return true;
 }
 
 
-
+#undef SOL_QUEUE_ENTRY_TYPE
+#undef SOL_QUEUE_FUNCTION_PREFIX
+#undef SOL_QUEUE_STRUCT_NAME
 

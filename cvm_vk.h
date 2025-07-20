@@ -47,22 +47,22 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#define SOL_STACK_TYPE VkBufferMemoryBarrier2
+#define SOL_STACK_ENTRY_TYPE VkBufferMemoryBarrier2
 #define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_barrier_stack
 #define SOL_STACK_STRUCT_NAME cvm_vk_buffer_barrier_stack
 #include "data_structures/stack.h"
 
-#define SOL_STACK_TYPE VkBufferCopy
+#define SOL_STACK_ENTRY_TYPE VkBufferCopy
 #define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_copy_stack
 #define SOL_STACK_STRUCT_NAME cvm_vk_buffer_copy_stack
 #include "data_structures/stack.h"
 
-#define SOL_STACK_TYPE VkBufferImageCopy
+#define SOL_STACK_ENTRY_TYPE VkBufferImageCopy
 #define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_image_copy_stack
 #define SOL_STACK_STRUCT_NAME cvm_vk_buffer_image_copy_stack
 #include "data_structures/stack.h"
 
-#define SOL_STACK_TYPE VkSemaphore
+#define SOL_STACK_ENTRY_TYPE VkSemaphore
 #define SOL_STACK_FUNCTION_PREFIX sol_vk_semaphore_stack
 #define SOL_STACK_STRUCT_NAME sol_vk_semaphore_stack
 #include "data_structures/stack.h"

@@ -174,7 +174,7 @@ struct sol_image_atlas_map_entry
 	/* wasted space... */
 };
 
-#define SOL_ARRAY_TYPE struct sol_image_atlas_entry
+#define SOL_ARRAY_ENTRY_TYPE struct sol_image_atlas_entry
 #define SOL_ARRAY_FUNCTION_PREFIX sol_image_atlas_entry_array
 #define SOL_ARRAY_STRUCT_NAME sol_image_atlas_entry_array
 #include "solipsix/data_structures/array.h"

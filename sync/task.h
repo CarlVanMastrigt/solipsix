@@ -23,7 +23,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <threads.h>
 
-#include "data_structures/queue.h"
 #include "lockfree/pool.h"
 #include "lockfree/hopper.h"
 
@@ -31,7 +30,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_sync_task;
 
-SOL_QUEUE(struct sol_sync_task*, sol_task_queue, sol_task_queue)
+#define SOL_QUEUE_ENTRY_TYPE struct sol_sync_task*
+#define SOL_QUEUE_FUNCTION_PREFIX sol_task_queue
+#define SOL_QUEUE_STRUCT_NAME sol_task_queue
+#include "data_structures/queue.h"
 
 struct sol_sync_task_system
 {

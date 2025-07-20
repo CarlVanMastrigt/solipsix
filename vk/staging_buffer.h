@@ -24,7 +24,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <threads.h>
 #include <vulkan/vulkan.h>
 
-#include "data_structures/queue.h"
 #include "vk/timeline_semaphore.h"
 #include "cvm_vk.h"
 
@@ -51,7 +50,10 @@ struct sol_vk_staging_buffer_segment
     VkDeviceSize size;
 };
 
-SOL_QUEUE(struct sol_vk_staging_buffer_segment, sol_vk_staging_buffer_segment_queue, sol_vk_staging_buffer_segment_queue)
+#define SOL_QUEUE_ENTRY_TYPE struct sol_vk_staging_buffer_segment
+#define SOL_QUEUE_FUNCTION_PREFIX sol_vk_staging_buffer_segment_queue
+#define SOL_QUEUE_STRUCT_NAME sol_vk_staging_buffer_segment_queue
+#include "data_structures/queue.h"
 
 /** TODO: should have a way to wait on CPU-side if the allocation was written GPU-side */
 

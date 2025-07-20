@@ -22,7 +22,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "overlay/enums.h"
 
 #include "data_structures/fixed_size_cache.h"
-#include "data_structures/queue.h"
 
 
 
@@ -63,7 +62,10 @@ struct cvm_overlay_target_resources
     struct sol_vk_timeline_semaphore_moment last_use_moment;
 };
 
-SOL_QUEUE(struct cvm_overlay_target_resources, cvm_overlay_target_resources_queue, cvm_overlay_target_resources_queue)
+#define SOL_QUEUE_ENTRY_TYPE struct cvm_overlay_target_resources
+#define SOL_QUEUE_FUNCTION_PREFIX cvm_overlay_target_resources_queue
+#define SOL_QUEUE_STRUCT_NAME cvm_overlay_target_resources_queue
+#include "data_structures/queue.h"
 /// queue as is done above might not be best if it's desirable to maintain multiple targets as renderable
 
 /// resources used in a per cycle/frame fashion
@@ -76,7 +78,10 @@ struct cvm_overlay_transient_resources
     struct sol_vk_timeline_semaphore_moment last_use_moment;
 };
 
-SOL_QUEUE(struct cvm_overlay_transient_resources*, cvm_overlay_transient_resources_queue, cvm_overlay_transient_resources_queue)
+#define SOL_QUEUE_ENTRY_TYPE struct cvm_overlay_transient_resources*
+#define SOL_QUEUE_FUNCTION_PREFIX cvm_overlay_transient_resources_queue
+#define SOL_QUEUE_STRUCT_NAME cvm_overlay_transient_resources_queue
+#include "data_structures/queue.h"
 
 /// fixed sized queue of these?
 /// queue init at runtime? (custom size)

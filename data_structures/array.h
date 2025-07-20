@@ -29,9 +29,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#ifndef SOL_ARRAY_TYPE
-#error must define SOL_ARRAY_TYPE
-#define SOL_ARRAY_TYPE int
+#ifndef SOL_ARRAY_ENTRY_TYPE
+#error must define SOL_ARRAY_ENTRY_TYPE
+#define SOL_ARRAY_ENTRY_TYPE int
 #endif
 
 #ifndef SOL_ARRAY_FUNCTION_PREFIX
@@ -49,7 +49,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct SOL_ARRAY_STRUCT_NAME
 {
     struct sol_available_indices_stack available_indices;
-    SOL_ARRAY_TYPE* array;
+    SOL_ARRAY_ENTRY_TYPE* array;
     uint32_t space;
     uint32_t count;
 };
@@ -58,7 +58,7 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_initialise)(struct
 {
     assert((initial_size & (initial_size - 1)) == 0);
     sol_available_indices_stack_initialise(&a->available_indices, initial_size);
-    a->array = malloc(sizeof(SOL_ARRAY_TYPE) * initial_size);
+    a->array = malloc(sizeof(SOL_ARRAY_ENTRY_TYPE) * initial_size);
     a->space = initial_size;
     a->count = 0;
 }
@@ -69,7 +69,7 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_terminate)(struct 
     free(a->array);
 }
 
-static inline SOL_ARRAY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t* index_ptr)
+static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t* index_ptr)
 {
     uint32_t i;
     if(!sol_available_indices_stack_remove(&a->available_indices, &i))
@@ -77,7 +77,7 @@ static inline SOL_ARRAY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_
         if(a->count == a->space)
         {
             a->space *= 2;
-            a->array = realloc(a->array, sizeof(SOL_ARRAY_TYPE) * a->space);
+            a->array = realloc(a->array, sizeof(SOL_ARRAY_ENTRY_TYPE) * a->space);
         }
         i = a->count++;
     }
@@ -88,7 +88,7 @@ static inline SOL_ARRAY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_
     return a->array + i;
 }
 
-static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct SOL_ARRAY_STRUCT_NAME* a, SOL_ARRAY_TYPE value)
+static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct SOL_ARRAY_STRUCT_NAME* a, SOL_ARRAY_ENTRY_TYPE value)
 {
 	uint32_t i;
     *(SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(a, &i)) = value;
@@ -96,13 +96,13 @@ static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct
 }
 
 /** returned pointer cannot be used after any other operation has occurred*/
-static inline const SOL_ARRAY_TYPE * SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline const SOL_ARRAY_ENTRY_TYPE * SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     sol_available_indices_stack_append(&a->available_indices, index);
     return a->array + index;
 }
 
-static inline SOL_ARRAY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     sol_available_indices_stack_append(&a->available_indices, index);
     return a->array[index];
@@ -114,18 +114,18 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_reset)(struct SOL_
     a->count=0;
 }
 
-static inline SOL_ARRAY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_get_entry)(const struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_get_entry)(const struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     return a->array[index];
 }
 
-static inline SOL_ARRAY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_access_entry)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_access_entry)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     return a->array + index;
 }
 
 
-#undef SOL_ARRAY_TYPE
+#undef SOL_ARRAY_ENTRY_TYPE
 #undef SOL_ARRAY_FUNCTION_PREFIX
 #undef SOL_ARRAY_STRUCT_NAME
 

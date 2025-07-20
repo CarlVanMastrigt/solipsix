@@ -19,6 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "data_structures/hash_map.h"
 
+
 #ifndef SOL_HASH_MAP_STRUCT_NAME
 #error must define SOL_HASH_MAP_STRUCT_NAME
 #define SOL_HASH_MAP_STRUCT_NAME placeholder_hash_map
@@ -31,12 +32,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_HASH_MAP_KEY_TYPE
 #error must define SOL_HASH_MAP_KEY_TYPE
-#define SOL_HASH_MAP_KEY_TYPE int
+#define SOL_HASH_MAP_KEY_TYPE uint64_t
 #endif
 
 #ifndef SOL_HASH_MAP_ENTRY_TYPE
 #error must define SOL_HASH_MAP_ENTRY_TYPE
-#define SOL_HASH_MAP_ENTRY_TYPE int
+#define SOL_HASH_MAP_ENTRY_TYPE uint64_t
 #endif
 
 #ifndef SOL_HASH_MAP_FUNCTION_KEYWORDS
