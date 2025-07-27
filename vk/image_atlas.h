@@ -29,7 +29,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "math/u16_vec2.h"
 
 #include "vk/timeline_semaphore.h"
-#include "data_structures/hash_map.h"
+#include "data_structures/hash_map_defines.h"
 
 /** external syncrronization of contents must be performed
 */

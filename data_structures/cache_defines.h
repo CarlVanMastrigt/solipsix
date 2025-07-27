@@ -19,35 +19,32 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
+/** all includes put here instead of implement file to take advantage of pragma once */
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <limits.h>
 
 #include "sol_utils.h"
-/** all includes put here instead of implement file to take advantage of pragma once */
 
-enum sol_map_result
+enum sol_cache_result
 {
-    SOL_MAP_FAIL_FULL        = 0,/** could not add element because map is full (at least in the hash space region for the key being inserted) */
-    SOL_MAP_FAIL_ABSENT      = 0,/** key not found in map */
-    SOL_MAP_SUCCESS_FOUND    = 1,
-    SOL_MAP_SUCCESS_REPLACED = 1,
-    SOL_MAP_SUCCESS_INSERTED = 2,
-    SOL_MAP_SUCCESS_REMOVED  = 3,
-    SOL_MAP_RESULT_END       = 4,
+    SOL_CACHE_SUCCESS_FOUND    = 0, /** existing entry with key found and returned */
+    SOL_CACHE_SUCCESS_INSERTED = 1, /** no entry with existing key is in cache, but there is still space, so an uninitialised entry was returned */
+    SOL_CACHE_SUCCESS_REPLACED = 2, /** no entry with existing key is in cache, and the entry pointed to must be replaced */
+    SOL_CACHE_FAIL_ABSENT      = 3, /** key not found in map */
+    SOL_CACHE_RESULT_END       = 4,
 };
 
-struct sol_hash_map_descriptor
+struct sol_cache_link_u16
 {
-    uint8_t entry_space_exponent_limit;/** 2 ^ exponent_imit = max hash map size */
-    uint8_t resize_fill_factor;/** out of 256 */
-    uint8_t limit_fill_factor;/** out of 256 */
+    uint16_t older;
+    uint16_t newer;
 };
 
 
-#define SOL_HASH_MAP_IDENTIFIER_EXIST_BIT 0x0001
-#define SOL_HASH_MAP_DELTA_TEST_BIT 0x8000
+
 
 
 

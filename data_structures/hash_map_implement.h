@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "data_structures/hash_map.h"
+#include "data_structures/hash_map_defines.h"
 
 
 #ifndef SOL_HASH_MAP_STRUCT_NAME
@@ -364,7 +364,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
         }
     }
 
-    SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain_for_map_size__goto):
+    obtain_for_map_size:
     {
         entry_space = (uint64_t)1 << map->entry_space_exponent;
         index_mask = entry_space - 1;
@@ -392,7 +392,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
                 else
                 {
                     SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(map);
-                    goto SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain_for_map_size__goto);
+                    goto obtain_for_map_size;
                 }
             }
             move_index = next_move_index;

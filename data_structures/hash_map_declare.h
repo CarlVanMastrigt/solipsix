@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "data_structures/hash_map.h"
+#include "data_structures/hash_map_defines.h"
 
 
 #ifndef SOL_HASH_MAP_STRUCT_NAME

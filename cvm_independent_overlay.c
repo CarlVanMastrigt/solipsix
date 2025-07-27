@@ -21,8 +21,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "overlay/enums.h"
 
-#include "data_structures/fixed_size_cache.h"
-
 
 
 struct cvm_overlay_frame_resources
@@ -36,9 +34,12 @@ struct cvm_overlay_frame_resources
     VkFramebuffer framebuffer;
 };
 
-#define SOL_CACHE_CMP( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
-SOL_FIXED_SIZE_CACHE(struct cvm_overlay_frame_resources, struct cvm_overlay_target*, cvm_overlay_frame_resources_cache, cvm_overlay_frame_resources_cache)
-#undef SOL_CACHE_CMP
+#define SOL_LIMITED_CACHE_ENTRY_TYPE struct cvm_overlay_frame_resources
+#define SOL_LIMITED_CACHE_KEY_TYPE struct cvm_overlay_target*
+#define SOL_LIMITED_CACHE_FUNCTION_PREFIX cvm_overlay_frame_resources_cache
+#define SOL_LIMITED_CACHE_STRUCT_NAME cvm_overlay_frame_resources_cache
+#define SOL_LIMITED_CACHE_CMP_EQ( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
+#include "data_structures/limited_cache.h"
 
 /// needs a better name
 struct cvm_overlay_target_resources
@@ -240,17 +241,18 @@ static inline void cvm_overlay_frame_resources_terminate(struct cvm_overlay_fram
 static inline struct cvm_overlay_frame_resources* cvm_overlay_frame_resources_acquire(struct cvm_overlay_target_resources* target_resources, const cvm_vk_device * device, const struct cvm_overlay_target * target)
 {
     struct cvm_overlay_frame_resources* frame_resources;
-    bool evicted;
+    enum sol_cache_result obtain_result;
 
-    frame_resources = cvm_overlay_frame_resources_cache_find(&target_resources->frame_resources, target);
-    if(frame_resources==NULL)
+    /// acquire framebuffer backing, framebuffer backing and mutable resources are intrinsically linked
+    obtain_result = cvm_overlay_frame_resources_cache_obtain(&target_resources->frame_resources, target, &frame_resources);
+    switch(obtain_result)
     {
-        frame_resources = cvm_overlay_frame_resources_cache_new(&target_resources->frame_resources, &evicted);
-        if(evicted)
-        {
-            cvm_overlay_frame_resources_terminate(frame_resources, device);
-        }
+        /** NOTE: intentional fallthrough */
+    case SOL_CACHE_SUCCESS_REPLACED:
+        cvm_overlay_frame_resources_terminate(frame_resources, device);
+    case SOL_CACHE_SUCCESS_INSERTED:
         cvm_overlay_frame_resources_initialise(frame_resources, device, target_resources, target);
+    default:;
     }
 
     return frame_resources;
@@ -289,7 +291,7 @@ static inline void cvm_overlay_target_resources_terminate(struct cvm_overlay_tar
     assert(target_resources->last_use_moment.semaphore != VK_NULL_HANDLE);
     sol_vk_timeline_semaphore_moment_wait(&target_resources->last_use_moment, device);
 
-    while((frame_resources = cvm_overlay_frame_resources_cache_evict(&target_resources->frame_resources)))
+    while((frame_resources = cvm_overlay_frame_resources_cache_evict_oldest(&target_resources->frame_resources)))
     {
         cvm_overlay_frame_resources_terminate(frame_resources, device);
     }
