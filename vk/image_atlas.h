@@ -74,7 +74,7 @@ void sol_image_atlas_release_access(struct sol_image_atlas* atlas, const struct 
 /** acquire a unique identifier for accessing/indexing entries in the atlas
 	`transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used
 	will always retun `SOL_IMAGE_ATLAS_SUCCESS_INSERTED` when `obtained` and `SOL_IMAGE_ATLAS_FAIL_ABSENT` when requested with `find` */
-uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient);
+uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas);
 
 /** same as above but shortcuts returning its present location, useful when other stored detals aren't required */
 enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
@@ -82,8 +82,10 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 /** if the entry didnt exist, create a slot for it, prefer this if entry will be created regardless (over calling find first)
 	this must be used with write if its contents will be modified in any way
 	if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised */
-enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location, u16_vec2 size, bool write_access);
+enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location, u16_vec2 size, bool write_access, bool transient);
 
+
+#warning make `write_access` and `transient` in obtain flags?
 
 
 

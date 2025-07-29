@@ -41,12 +41,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_BINARY_HEAP_STRUCT_NAME
 #error must define SOL_BINARY_HEAP_STRUCT_NAME
-#define SOL_BINARY_HEAP_STRUCT_NAME placeholder_hash_map
+#define SOL_BINARY_HEAP_STRUCT_NAME placeholder_binary_heap
 #endif
 
 #ifndef SOL_BINARY_HEAP_FUNCTION_PREFIX
 #error must define SOL_BINARY_HEAP_FUNCTION_PREFIX
-#define SOL_BINARY_HEAP_FUNCTION_PREFIX placeholder_hash_map
+#define SOL_BINARY_HEAP_FUNCTION_PREFIX placeholder_binary_heap
 #endif
 
 #ifndef SOL_BINARY_HEAP_ENTRY_CMP_LT

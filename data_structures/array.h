@@ -41,7 +41,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_ARRAY_STRUCT_NAME
 #error must define SOL_ARRAY_STRUCT_NAME
-#define SOL_ARRAY_STRUCT_NAME placeholder_stack
+#define SOL_ARRAY_STRUCT_NAME placeholder_array
 #endif
 
 

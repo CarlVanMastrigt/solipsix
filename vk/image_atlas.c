@@ -90,36 +90,28 @@ at the moment a novel resource must not be used by another accessor as there is 
 #warning prefer to use only 20 bits for accessor index...
 
 
-enum sol_image_atlas_queue_index_type
-{
-	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_BASE                = 0,/** index is irrelevant in this case */
-	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_ENTRY               = 1,
-	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_ACCESS_MARKER_READ  = 2,
-	SOL_IMAGE_ATLAS_QUEUE_INDEX_TYPE_ACCESS_MARKER_WRITE = 3,
-};
-
-struct sol_image_atlas_queue_index
-{
-	/** note: this will reference accessors in a queue by index, it IS valid to use fewer bits to store the index than the full 32
-		so long as fewer than that many are actually used at once (half that many in this case because checking order with modular arithmetic)
-		supporting 10^9 max elements should be enough... */
-	uint32_t index:30;// only 20 bits used for access_marker
-	uint32_t type:2;/** enum sol_image_atlas_queue_index_type */
-};
 
 
-#define SOL_IMAGE_ATLAS_QUEUE_INDEX_NULL (struct sol_image_atlas_queue_index) {.index = 0x3FFFFFFFu, .type = 0}
-bool sol_image_atlas_queue_index_is_null(struct sol_image_atlas_queue_index queue_index)
-{
-	return (queue_index.type == 0) && (queue_index.index == 0x3FFFFFFFu);
-}
+
+
 
 /** how best to pack? */
 struct sol_image_atlas_entry
 {
-	/** prev/next indices in linked list of entries my order of use */
-	struct sol_image_atlas_queue_index prev;
-	struct sol_image_atlas_queue_index next;
+	/** prev/next indices in linked list of entries my order of use, 16M is more than enough entries
+		NOTE: 0 is reserved for the dummy start index*/
+	uint32_t prev_index;
+	uint32_t next_index;
+
+	/** size class is power of 2 times entry pixel dimension (4)
+		4 * 2 ^ (0:15) is more than enough (4 << 15 = 128k, is larger than max texture size)*/
+	uint64_t x_size_class : 4;
+	uint64_t y_size_class : 4;
+
+	/** array slice this entry is present in */
+	uint64_t entry_array_index:8;
+
+//== 64 ==
 
 	/** can be derived from packed location, but provided her for quick access (may be worth removing id doing so would better size this struct) */
 	u16_vec2 entry_location;
@@ -130,35 +122,32 @@ struct sol_image_atlas_entry
 		this is used to sort/order entries (lower value means better placed) */
 	uint32_t packed_location;
 
-	/** size class is power of 2 times entry pixel dimension (4)
-		4 * 2 ^ (0:15) is more than enough (4 << 15 = 128k, is larger than max texture size)*/
-	uint32_t x_size_class : 4;
-	uint32_t y_size_class : 4;
+//== 64 ==
 
-	/** index in heap of size class (x,y)
-		only applicable when free, so VERY inlikely 16m are available */
-	uint32_t heap_index : 24;
-
-#warning for the below we will potentially reference items in the accessor queue that have expired: as such queue should properly assert index is withing (wrapped) range
-	/** index in queue of accessors (does need to be a u32 for compatibility)
-		used to ensure an entry is only moved forward in the least recently used queue when necessary and to a point that correctly reflects its usage
-		(should be put just after the accessor marker)  */
-	uint32_t access_index : 20;
-	/** ^ just making sure this matches index held in sol_image_atlas_queue_index (shouldn't matter given queue implementation though) */
+	/** index in heap of size class (x,y) only 16M entries supported so this is enough (22 bits would be enough) */
+	uint64_t heap_index : 24;
 
 	/** must be set appropriately on "creation" this indicates that the contents should NOT be copied when this tile is deframented
 		(possibly just immediately free this location instead of deframenting it)
 		(and) the location should be discarded/relinquished immediately after accessor release ?
 		if request differs from this property then the old location should be treated as different (possibly same goes with size?) */
-	uint32_t transient_contents : 1;
+	uint64_t transient_contents : 1;
+
+#warning for the below we will potentially reference items in the accessor queue that have expired: as such queue should properly assert index is withing (wrapped) range
+	/** index in queue of accessors (does need to be a u32 for compatibility)
+		used to ensure an entry is only moved forward in the least recently used queue when necessary and to a point that correctly reflects its usage
+		(should be put just after the accessor marker)  */
+	uint64_t access_index : 20;
+	/** ^ just making sure this matches index held in sol_image_atlas_queue_index (shouldn't matter given queue implementation though) */
 };
 
 /** marker in queue of accessors vended, basically needs to be used in a queue */
-struct sol_image_atlas_access_marker
+struct sol_image_atlas_access
 {
-	struct sol_image_atlas_queue_index prev;
-	struct sol_image_atlas_queue_index next;
-
+	/** NOTE: start and end are exclusive, and must be as they must be able to reference empty accessors */
+	#warning wait fuck: this doesnt work right? fails miserably on empty accessors when modifying linked list... unless each list is independent? which is easy enough to do...
+	uint32_t first_index;
+	uint32_t last_index;
 	// uint8_t access_complete_moment_count;
 	// struct sol_vk_timeline_semaphore_moment access_complete_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
 	struct sol_vk_timeline_semaphore_moment access_complete_moment;
@@ -170,22 +159,46 @@ struct sol_image_atlas_access_marker
 struct sol_image_atlas_map_entry
 {
 	uint64_t identifier;/** hash map key */
-	uint32_t entry_index;/** must be an index because its index is used to navigate the linked list */
+	uint32_t entry_index;/** must be an index because its index is used to navigate the linked list, need only have same  */
 	/* wasted space... */
 };
 
 #define SOL_ARRAY_ENTRY_TYPE struct sol_image_atlas_entry
 #define SOL_ARRAY_FUNCTION_PREFIX sol_image_atlas_entry_array
 #define SOL_ARRAY_STRUCT_NAME sol_image_atlas_entry_array
-#include "solipsix/data_structures/array.h"
+#include "data_structures/array.h"
+
+
+
+#define SOL_QUEUE_ENTRY_TYPE struct sol_image_atlas_access
+#define SOL_QUEUE_FUNCTION_PREFIX sol_image_atlas_access_queue
+#define SOL_QUEUE_STRUCT_NAME sol_image_atlas_access_queue
+#include "data_structures/queue.h"
+
+
+#define SOL_HASH_MAP_STRUCT_NAME sol_image_atlas_map
+#define SOL_HASH_MAP_FUNCTION_PREFIX sol_image_atlas_map
+#define SOL_HASH_MAP_KEY_TYPE uint64_t
+#define SOL_HASH_MAP_ENTRY_TYPE struct sol_image_atlas_map_entry
+#define SOL_HASH_MAP_FUNCTION_KEYWORDS static inline
+#define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E) K == E->identifier
+#define SOL_HASH_MAP_KEY_HASH(K) K
+#define SOL_HASH_MAP_ENTRY_HASH(E) E->identifier
+#define SOL_HASH_MAP_KEY_FROM_ENTRY(E) E->identifier
+#include "data_structures/hash_map_implement.h"
 
 struct sol_image_atlas
 {
-	struct sol_image_atlas_queue_index first;
-	struct sol_image_atlas_queue_index last;
-
 	struct sol_image_atlas_entry_array entries;
+	struct sol_image_atlas_access_queue accesses;
 };
+
+
+/** an access marker for writes may be necessary/important in order to track when an entry has finished being written?
+ 	can PROBABLY avoid injecting "accessor" entries into linked list altogether; instead just keeping accessor index in every entry
+ 		^ by moving whole sections of a linked list to another upon their "complete" moment passing the inactive list of entries can be easily maintained (their accessor list will remain invalid)
+ 	also of note:
+ */
 
 
 

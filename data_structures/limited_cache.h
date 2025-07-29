@@ -33,12 +33,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_LIMITED_CACHE_FUNCTION_PREFIX
 #error must define SOL_LIMITED_CACHE_FUNCTION_PREFIX
-#define SOL_LIMITED_CACHE_FUNCTION_PREFIX placeholder_stack
+#define SOL_LIMITED_CACHE_FUNCTION_PREFIX placeholder_limited_cacahe
 #endif
 
 #ifndef SOL_LIMITED_CACHE_STRUCT_NAME
 #error must define SOL_LIMITED_CACHE_STRUCT_NAME
-#define SOL_LIMITED_CACHE_STRUCT_NAME placeholder_stack
+#define SOL_LIMITED_CACHE_STRUCT_NAME placeholder_limited_cacahe
 #endif
 
 #ifndef SOL_LIMITED_CACHE_CMP_EQ

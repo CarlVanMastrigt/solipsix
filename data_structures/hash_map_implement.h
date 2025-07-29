@@ -45,17 +45,22 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifndef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL
-#error must define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(const KEY_TYPE*, const ENTRY_TYPE*) returning a bool
-#define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K,E) ((*K)==(*E))
+#error must define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(KEY_TYPE, const ENTRY_TYPE*) returning a bool
+#define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K,E) ((K)==(*E))
+#endif
+
+#ifndef SOL_HASH_MAP_KEY_FROM_ENTRY
+#error must define SOL_HASH_MAP_KEY_FROM_ENTRY(const ENTRY_TYPE*) returning a KEY_TYPE
+#define SOL_HASH_MAP_KEY_FROM_ENTRY(E) (*E)
 #endif
 
 #ifndef SOL_HASH_MAP_KEY_HASH
-#error must define SOL_HASH_MAP_KEY_HASH(const KEY_TYPE*)` returning a uint64_t
-#define SOL_HASH_MAP_KEY_HASH(K) (*K)
+#error must define SOL_HASH_MAP_KEY_HASH(KEY_TYPE)` returning a uint64_t
+#define SOL_HASH_MAP_KEY_HASH(K) (K)
 #endif
 
 #ifndef SOL_HASH_MAP_ENTRY_HASH
-#error must define SOL_HASH_MAP_ENTRY_HASH(const KEY_TYPE*)` returning a uint64_t
+#error must define SOL_HASH_MAP_ENTRY_HASH(const ENTRY_TYPE*)` returning a uint64_t
 #define SOL_HASH_MAP_ENTRY_HASH(E) (*E)
 #endif
 
@@ -67,10 +72,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifdef SOL_HASH_MAP_CONTEXT_TYPE
 #define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(K,E) SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E, map->context)
+#define SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT(E) SOL_HASH_MAP_KEY_FROM_ENTRY(E, map->context)
 #define SOL_HASH_MAP_KEY_HASH_CONTEXT(K) SOL_HASH_MAP_KEY_HASH(K, map->context)
 #define SOL_HASH_MAP_ENTRY_HASH_CONTEXT(E) SOL_HASH_MAP_ENTRY_HASH(E, map->context)
 #else
 #define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(K,E) SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E)
+#define SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT(E) SOL_HASH_MAP_KEY_FROM_ENTRY(E)
 #define SOL_HASH_MAP_KEY_HASH_CONTEXT(K) SOL_HASH_MAP_KEY_HASH(K)
 #define SOL_HASH_MAP_ENTRY_HASH_CONTEXT(E) SOL_HASH_MAP_ENTRY_HASH(E)
 #endif
@@ -219,7 +226,7 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(stru
     free(old_entries);
 }
 
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key_ptr, uint16_t identifier, uint64_t index, uint64_t* index_result)
+static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, uint16_t identifier, uint64_t index, uint64_t* index_result)
 {
     uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     uint64_t index_mask = entry_space - 1;
@@ -233,7 +240,7 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(stru
 
     while(identifier == identifiers[index])
     {
-        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(key_ptr, entries + index))
+        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(key, (entries + index)))
         {
             *index_result = index;
             return true;/** precise key/entry found */
@@ -322,7 +329,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
     memset(map->identifiers, 0x00, sizeof(uint16_t) << map->entry_space_exponent);
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
@@ -340,7 +347,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     return SOL_MAP_FAIL_ABSENT;
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
     const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
@@ -426,7 +433,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     SOL_HASH_MAP_ENTRY_TYPE* entry_ptr;
     enum sol_map_result result;
 
-    result = SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(map, entry, &entry_ptr);
+    result = SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(map, SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT(entry), &entry_ptr);
 
     switch (result)
     {
@@ -438,7 +445,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     return result;
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE* entry)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE* entry)
 {
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
@@ -477,8 +484,10 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 #undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL
 #undef SOL_HASH_MAP_KEY_HASH
 #undef SOL_HASH_MAP_ENTRY_HASH
+#undef SOL_HASH_MAP_KEY_FROM_ENTRY
 
 #undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT
+#undef SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT
 #undef SOL_HASH_MAP_KEY_HASH_CONTEXT
 #undef SOL_HASH_MAP_ENTRY_HASH_CONTEXT
 

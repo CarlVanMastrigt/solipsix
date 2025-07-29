@@ -34,12 +34,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_QUEUE_FUNCTION_PREFIX
 #error must define SOL_QUEUE_FUNCTION_PREFIX
-#define SOL_QUEUE_FUNCTION_PREFIX placeholder_stack
+#define SOL_QUEUE_FUNCTION_PREFIX placeholder_queue
 #endif
 
 #ifndef SOL_QUEUE_STRUCT_NAME
 #error must define SOL_QUEUE_STRUCT_NAME
-#define SOL_QUEUE_STRUCT_NAME placeholder_stack
+#define SOL_QUEUE_STRUCT_NAME placeholder_queue
 #endif
 
 /**

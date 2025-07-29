@@ -33,12 +33,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_LIMITED_QUEUE_FUNCTION_PREFIX
 #error must define SOL_LIMITED_QUEUE_FUNCTION_PREFIX
-#define SOL_LIMITED_QUEUE_FUNCTION_PREFIX placeholder_stack
+#define SOL_LIMITED_QUEUE_FUNCTION_PREFIX placeholder_limited_queue
 #endif
 
 #ifndef SOL_LIMITED_QUEUE_STRUCT_NAME
 #error must define SOL_LIMITED_QUEUE_STRUCT_NAME
-#define SOL_LIMITED_QUEUE_STRUCT_NAME placeholder_stack
+#define SOL_LIMITED_QUEUE_STRUCT_NAME placeholder_limited_queue
 #endif
 
 /** rigid queue has a fixed size set at initialization (it is possible to change this, but doing so would invalidate held indices so is not supported at this time)
