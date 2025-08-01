@@ -25,14 +25,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "sol_utils.h"
 
 
-/**
- * SOL_BINARY_HEAP_ENTRY_CMP_LT(A,B) must be declared, with true resulting in the value A moving UP the heap
- *     ^ A and B are SOL_BINARY_HEAP_ENTRY_TYPE*
- *
- * TODO: may be worth looking into adding support for random location deletion and heap
- * location tracking to support that, though probably not as adaptable as might be desirable
- */
-
 
 #ifndef SOL_BINARY_HEAP_ENTRY_TYPE
 #error must define SOL_BINARY_HEAP_ENTRY_TYPE
@@ -50,7 +42,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifndef SOL_BINARY_HEAP_ENTRY_CMP_LT
-#error must define SOL_BINARY_HEAP_ENTRY_CMP_LT(const SOL_BINARY_HEAP_ENTRY_TYPE* A, const SOL_BINARY_HEAP_ENTRY_TYPE* B) returning a bool (A < B) with context as param if provided
+#error must define bool SOL_BINARY_HEAP_ENTRY_CMP_LT(const SOL_BINARY_HEAP_ENTRY_TYPE* A, const SOL_BINARY_HEAP_ENTRY_TYPE* B) returning (A < B) with context as param if provided
 #define SOL_BINARY_HEAP_ENTRY_CMP_LT(A,B) ((*A)<(*B))
 #endif
 
@@ -95,32 +87,39 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(
 static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
 #endif
 {
-    uint32_t u,d;
+    uint32_t next_index, index;
 
     if(heap->count == heap->space)
     {
-        heap->space *= 2;
+        if(heap->space)
+        {
+            heap->space *= 2;
+        }
+        else
+        {
+            heap->space = 64;
+        }
         heap->heap = realloc(heap->heap, sizeof(SOL_BINARY_HEAP_ENTRY_TYPE) * heap->space);
     }
 
-    d = heap->count++;
+    index = heap->count++;
 
-    while(d)
+    while(index)
     {
-        u = (d - 1) >> 1;
+        next_index = (index - 1) >> 1;
 
-        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + u), (entry)))
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index), (entry)))
         {
             break;
         }
 
-        heap->heap[d] = heap->heap[u];
-        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + d), d);
-        d = u;
+        heap->heap[index] = heap->heap[next_index];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
+        index = next_index;
     }
 
-    heap->heap[d] = *entry;
-    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + d), d);
+    heap->heap[index] = *entry;
+    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
 }
 
 #ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
@@ -140,48 +139,114 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_clear)(struc
     heap->count = 0;
 }
 
+static inline uint32_t SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_count)(struct SOL_BINARY_HEAP_STRUCT_NAME* heap)
+{
+    return heap->count;
+}
+
 #ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
 static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
 #else
 static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
 #endif
 {
-    uint32_t u,d,count;
-    const SOL_BINARY_HEAP_ENTRY_TYPE* r;
+    uint32_t index, next_index, count;
+    const SOL_BINARY_HEAP_ENTRY_TYPE* replacement;
 
     if(heap->count == 0)
     {
         return false;
     }
 
-    *entry = heap->heap[0];
-    count = --heap->count;
-    r = heap->heap + count;
-    u = 0;
-    d = 2;
-
-    while(d < count)
+    if(entry)
     {
-        d -= SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + d - 1), (heap->heap + d));
-        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((r), (heap->heap + d)))
+        *entry = heap->heap[0];
+    }
+    count = --heap->count;
+    replacement = heap->heap + count;
+    index = 0;
+    next_index = 2;
+
+    while(next_index < count)
+    {
+        next_index -= SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index - 1), (heap->heap + next_index));
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((replacement), (heap->heap + next_index)))
         {
             break;
         }
-        heap->heap[u] = heap->heap[d];
-        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + u), u);
-        u = d;
-        d = (d + 1) << 1;
+        heap->heap[index] = heap->heap[next_index];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
+        index = next_index;
+        next_index = (next_index + 1) << 1;
     }
-    if(d == count && (SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + d - 1), r)))
+    if(next_index == count && (SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index - 1), replacement)))
     {
-        heap->heap[u] = heap->heap[d - 1];
-        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + u), u);
-        u = d - 1;
+        heap->heap[index] = heap->heap[next_index - 1];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
+        index = next_index - 1;
     }
 
-    heap->heap[u] = *r;
-    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + u), u);
+    heap->heap[index] = *replacement;
+    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
     return true;
+}
+
+#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove_index)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, uint32_t index, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
+#else
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove_index)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, uint32_t index, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
+#endif
+{
+    uint32_t next_index, count;
+    const SOL_BINARY_HEAP_ENTRY_TYPE* replacement;
+
+    assert(index < heap->count);
+
+    if(entry)
+    {
+        *entry = heap->heap[index];
+    }
+    count = --heap->count;
+    replacement = heap->heap + count;
+
+    /** attempt to move replacement up the heap */
+    while(index)
+    {
+        next_index = (index - 1) >> 1;
+
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index), (entry)))
+        {
+            break;
+        }
+
+        heap->heap[index] = heap->heap[next_index];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
+        index = next_index;
+    }
+
+    /** attempt to move replacement down the hep */
+    next_index = (index + 1) << 1;
+    while(next_index < count)
+    {
+        next_index -= SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index - 1), (heap->heap + next_index));
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((replacement), (heap->heap + next_index)))
+        {
+            break;
+        }
+        heap->heap[index] = heap->heap[next_index];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
+        index = next_index;
+        next_index = (next_index + 1) << 1;
+    }
+    if(next_index == count && (SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index - 1), replacement)))
+    {
+        heap->heap[index] = heap->heap[next_index - 1];
+        SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
+        index = next_index - 1;
+    }
+
+    heap->heap[index] = *replacement;
+    SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
 }
 
 

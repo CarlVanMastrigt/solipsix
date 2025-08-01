@@ -44,30 +44,45 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_HASH_MAP_FUNCTION_KEYWORDS
 #endif
 
-struct SOL_HASH_MAP_STRUCT_NAME
-{
-    struct sol_hash_map_descriptor descriptor;
+#ifdef SOL_HASH_MAP_STRUCT_DEFINE
+    struct SOL_HASH_MAP_STRUCT_NAME
+    {
+        struct sol_hash_map_descriptor descriptor;
 
-    uint8_t entry_space_exponent;
+        uint8_t entry_space_exponent;
 
-    SOL_HASH_MAP_ENTRY_TYPE* entries;
-    uint16_t* identifiers;
+        SOL_HASH_MAP_ENTRY_TYPE* entries;
+        uint16_t* identifiers;
 
+        #ifdef SOL_HASH_MAP_CONTEXT_TYPE
+        SOL_HASH_MAP_CONTEXT_TYPE context;
+        #endif
+
+        uint64_t entry_count;
+        uint64_t entry_limit;
+    };
+
+    /** only if providing a complete definition of the struct should initialise and terminate functions be provided */
     #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-    SOL_HASH_MAP_CONTEXT_TYPE context;
+    SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context);
+    #else
+    SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, struct sol_hash_map_descriptor descriptor);
     #endif
 
-    uint64_t entry_count;
-    uint64_t entry_limit;
-};
+    SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_terminate)(struct SOL_HASH_MAP_STRUCT_NAME* map);
 
-#ifdef SOL_HASH_MAP_CONTEXT_TYPE
-SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context);
+    #undef SOL_HASH_MAP_STRUCT_DEFINE
 #else
-SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor);
+    struct SOL_HASH_MAP_STRUCT_NAME;
 #endif
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_terminate)(struct SOL_HASH_MAP_STRUCT_NAME* map);
+#ifdef SOL_HASH_MAP_CONTEXT_TYPE
+SOL_HASH_MAP_FUNCTION_KEYWORDS struct SOL_HASH_MAP_STRUCT_NAME* SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_create)(struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context);
+#else
+SOL_HASH_MAP_FUNCTION_KEYWORDS struct SOL_HASH_MAP_STRUCT_NAME* SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_create)(struct sol_hash_map_descriptor descriptor);
+#endif
+
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_destroy)(struct SOL_HASH_MAP_STRUCT_NAME* map);
 
 /** completely empties the hash map, effectively removing all entries */
 SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_clear)(struct SOL_HASH_MAP_STRUCT_NAME* map);

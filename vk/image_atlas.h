@@ -51,6 +51,9 @@ struct sol_image_atlas_description
 	struct cvm_vk_device* device;
 
 	// image details
+	uint8_t image_x_dimension_exponent;
+	uint8_t image_y_dimension_exponent;
+	uint8_t image_array_dimension;
 };
 
 struct sol_image_atlas_location
@@ -59,11 +62,8 @@ struct sol_image_atlas_location
 	uint8_t array_layer;
 };
 
-void sol_image_atlas_initialise(struct sol_image_atlas* atlas, const struct sol_image_atlas_description* description);
-void sol_image_atlas_terminate(struct sol_image_atlas* atlas);
-
-
-
+struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description);
+void sol_image_atlas_destroy(struct sol_image_atlas* atlas);
 
 void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas);
 
@@ -82,12 +82,14 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 /** if the entry didnt exist, create a slot for it, prefer this if entry will be created regardless (over calling find first)
 	this must be used with write if its contents will be modified in any way
 	if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised */
-enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location, u16_vec2 size, bool write_access, bool transient);
+enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, bool write_access, bool transient, struct sol_image_atlas_location* entry_location);
 
+#warning should readonly access be a viable option? (allowing only find operations) could also make this immediate in that incomplete writes are NOT vended
 
 #warning make `write_access` and `transient` in obtain flags?
 
-
+#warning if write access requested and there is a better slot to place the size of content desired (or a different size is requested) \
+use that new spot and wait on the appropriate entry to be made free to clear it
 
 
 

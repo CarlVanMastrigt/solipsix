@@ -40,6 +40,7 @@ enum sol_map_result
 
 struct sol_hash_map_descriptor
 {
+    uint8_t entry_space_exponent_initial;/** 2 ^ exponent_imit = max hash map size */
     uint8_t entry_space_exponent_limit;/** 2 ^ exponent_imit = max hash map size */
     uint8_t resize_fill_factor;/** out of 256 */
     uint8_t limit_fill_factor;/** out of 256 */

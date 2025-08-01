@@ -96,7 +96,7 @@ static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct
 }
 
 /** returned pointer cannot be used after any other operation has occurred*/
-static inline const SOL_ARRAY_ENTRY_TYPE * SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline SOL_ARRAY_ENTRY_TYPE * SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     sol_available_indices_stack_append(&a->available_indices, index);
     return a->array + index;
@@ -108,10 +108,15 @@ static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_re
     return a->array[index];
 }
 
-static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_reset)(struct SOL_ARRAY_STRUCT_NAME* a)
+static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_clear)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
     sol_available_indices_stack_reset(&a->available_indices);
-    a->count=0;
+    a->count = 0;
+}
+
+static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_count)(struct SOL_ARRAY_STRUCT_NAME* a)
+{
+    return a->count;
 }
 
 static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_get_entry)(const struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)

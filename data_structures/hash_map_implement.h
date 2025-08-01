@@ -134,7 +134,7 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_inva
 
 
 
-#ifndef SOL_HASH_MAP_PRIOR_DECLARATION
+#ifndef SOL_HASH_MAP_STRUCT_NO_DEFINE
 struct SOL_HASH_MAP_STRUCT_NAME
 {
     struct sol_hash_map_descriptor descriptor;
@@ -152,7 +152,7 @@ struct SOL_HASH_MAP_STRUCT_NAME
     uint64_t entry_limit;
 };
 #else
-#undef SOL_HASH_MAP_PRIOR_DECLARATION
+#undef SOL_HASH_MAP_STRUCT_NO_DEFINE
 #endif
 
 
@@ -281,40 +281,44 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_evict_index__i)
 
 
 
+
 #ifdef SOL_HASH_MAP_CONTEXT_TYPE
-SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context)
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context)
 #else
-SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, uint8_t initial_entry_space_exponent, struct sol_hash_map_descriptor descriptor)
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, struct sol_hash_map_descriptor descriptor)
 #endif
 {
     assert(descriptor.entry_space_exponent_limit <= 32-SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS);
     /** beyond this is probably unreasonable, used to catch this accidentally being treated as raw COUNT rather than power of 2 */
-    assert(initial_entry_space_exponent <= descriptor.entry_space_exponent_limit);
-    assert(initial_entry_space_exponent >= SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS);
-    assert(initial_entry_space_exponent >= 8);/* must have exponent greater than uint8_t for all bits in fill limit to be significant */
+
+    assert(descriptor.entry_space_exponent_initial >= 8);
+    /** must have exponent greater than uint8_t for all bits in fill limit to be significant */
+
+    assert(descriptor.entry_space_exponent_initial <= descriptor.entry_space_exponent_limit);
+    assert(descriptor.entry_space_exponent_initial >= SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS);
 
     map->descriptor = descriptor;
 
-    map->entries = malloc(sizeof(SOL_HASH_MAP_ENTRY_TYPE) << initial_entry_space_exponent);
-    map->identifiers = malloc(sizeof(uint16_t) << initial_entry_space_exponent);
+    map->entries = malloc(sizeof(SOL_HASH_MAP_ENTRY_TYPE) << descriptor.entry_space_exponent_initial);
+    map->identifiers = malloc(sizeof(uint16_t) << descriptor.entry_space_exponent_initial);
 
     #ifdef SOL_HASH_MAP_CONTEXT_TYPE
     map->context = context;
     #endif
 
-    map->entry_space_exponent = initial_entry_space_exponent;
+    map->entry_space_exponent = descriptor.entry_space_exponent_initial;
     map->entry_count = 0;
 
-    if(initial_entry_space_exponent == descriptor.entry_space_exponent_limit)
+    if(descriptor.entry_space_exponent_initial == descriptor.entry_space_exponent_limit)
     {
-        map->entry_limit = ((uint64_t)descriptor.limit_fill_factor << (initial_entry_space_exponent - 8));
+        map->entry_limit = ((uint64_t)descriptor.limit_fill_factor << (descriptor.entry_space_exponent_initial - 8));
     }
     else
     {
-        map->entry_limit = ((uint64_t)descriptor.resize_fill_factor << (initial_entry_space_exponent - 8));
+        map->entry_limit = ((uint64_t)descriptor.resize_fill_factor << (descriptor.entry_space_exponent_initial - 8));
     }
 
-    memset(map->identifiers, 0x00, sizeof(uint16_t) << initial_entry_space_exponent);
+    memset(map->identifiers, 0x00, sizeof(uint16_t) << descriptor.entry_space_exponent_initial);
 }
 
 SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_terminate)(struct SOL_HASH_MAP_STRUCT_NAME* map)
@@ -323,11 +327,35 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
     free(map->identifiers);
 }
 
+#ifdef SOL_HASH_MAP_CONTEXT_TYPE
+SOL_HASH_MAP_FUNCTION_KEYWORDS struct SOL_HASH_MAP_STRUCT_NAME* SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_create)(struct sol_hash_map_descriptor descriptor, SOL_HASH_MAP_CONTEXT_TYPE context)
+{
+    struct SOL_HASH_MAP_STRUCT_NAME* map = malloc(sizeof(struct SOL_HASH_MAP_STRUCT_NAME));
+    SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(map, descriptor, context);
+    return map;
+}
+#else
+SOL_HASH_MAP_FUNCTION_KEYWORDS struct SOL_HASH_MAP_STRUCT_NAME* SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_create)(struct sol_hash_map_descriptor descriptor)
+{
+    struct SOL_HASH_MAP_STRUCT_NAME* map = malloc(sizeof(struct SOL_HASH_MAP_STRUCT_NAME));
+    SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(map, descriptor);
+    return map;
+}
+#endif
+
+SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_destroy)(struct SOL_HASH_MAP_STRUCT_NAME* map)
+{
+    SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_terminate)(map);
+    free(map);
+}
+
 SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_clear)(struct SOL_HASH_MAP_STRUCT_NAME* map)
 {
     map->entry_count = 0;
     memset(map->identifiers, 0x00, sizeof(uint16_t) << map->entry_space_exponent);
 }
+
+
 
 SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
@@ -428,7 +456,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     return SOL_MAP_SUCCESS_INSERTED;
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_ENTRY_TYPE* entry)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, const SOL_HASH_MAP_ENTRY_TYPE* entry)
 {
     SOL_HASH_MAP_ENTRY_TYPE* entry_ptr;
     enum sol_map_result result;
