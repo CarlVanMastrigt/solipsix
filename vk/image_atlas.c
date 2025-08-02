@@ -100,6 +100,7 @@ at the moment a novel resource must not be used by another accessor as there is 
 
 #define SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT 2
 #define SOL_IMAGE_ATLAS_MIN_TILE_SIZE 4
+/** note: SOL_IMAGE_ATLAS_MIN_TILE_SIZE must be power of 2 */
 #define SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT 13
 /** [4,16384] inclusive ^^ */
 
@@ -111,22 +112,28 @@ struct sol_image_atlas_entry
 //== 64 ==
 
 	/** prev/next indices in linked list of entries my order of use, 16M is more than enough entries
-	 * NOTE: 0 is reserved for the dummy start index*/
+	 * NOTE: 0 is reserved for the dummy start index
+	 * SOL_U32_INVALID indicates an entry is not in the linked list, though this can also be inferred by other properties */
 	uint32_t prev_entry_index;
 	uint32_t next_entry_index;
 
 //== 64 ==
 
-	uint32_t top_left_adjacent_vertical;
-	uint32_t top_left_adjacent_horizontal;
+	/** links in 2d structure
+	 *  index zero is invalid, which should be the index of root node in the linked list
+	 *  names reftlect direction from a corner;
+	 * start corner is towards zero (top left)
+	 * end corner is away from zero (bottom right) */
+	uint32_t adj_start_left;
+	uint32_t adj_start_up;
 //== 64 ==
-	uint32_t bottom_right_adjacent_vertical;
-	uint32_t hottom_adjacent_horizontal;
+	uint32_t adj_end_right;
+	uint32_t adj_end_down;
 
 //== 64 ==
 
 	/** can be derived from packed location, but provided her for quick access (may be worth removing id doing so would better size this struct) */
-	u16_vec2 entry_location;
+	u16_vec2 pixel_location;
 
 	/** z-tile location is in terms of minimum entry pixel dimension (4)
 	 * packed in such a way to order entries by layer first then top left -> bottom right
@@ -153,7 +160,7 @@ struct sol_image_atlas_entry
 	/** index in queue of accessors (does need to be a u32 for compatibility)
 	 * used to ensure an entry is only moved forward in the least recently used queue when necessary and to a point that correctly reflects its usage
 	 * (should be put just after the accessor marker)  */
-	uint64_t access_index : 20;
+	uint64_t access_index : 16;
 	/** ^ just making sure this matches index held in sol_image_atlas_queue_index (shouldn't matter given queue implementation though) */
 
 	/** must be set appropriately on "creation" this indicates that the contents should NOT be copied when this tile is deframented
@@ -171,6 +178,8 @@ struct sol_image_atlas_entry
 
 	/** is this a free/available tile, if so identifier should be ignored */
 	uint64_t is_available : 1;
+
+	/** 4 reserved bytes */
 };
 
 struct sol_image_atlas_accessor
@@ -312,14 +321,341 @@ static inline void sol_image_atlas_entry_set_heap_index(const uint32_t* entry_in
 
 static inline void sol_image_atlas_entry_remove_from_queue(struct sol_image_atlas* atlas, struct sol_image_atlas_entry* entry)
 {
+	struct sol_image_atlas_entry* prev_entry;
+	struct sol_image_atlas_entry* next_entry;
 	/** the root entry should not be removed in this way */
 	assert(entry->is_accessor || entry->is_tile_entry);
-	struct sol_image_atlas_entry* prev_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry->prev_entry_index);
-	struct sol_image_atlas_entry* next_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry->next_entry_index);
+	assert(entry->next_entry_index != SOL_U32_INVALID);
+	assert(entry->prev_entry_index != SOL_U32_INVALID);
+
+	prev_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry->prev_entry_index);
+	next_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry->next_entry_index);
 
 	prev_entry->next_entry_index = entry->next_entry_index;
 	next_entry->prev_entry_index = entry->prev_entry_index;
+
+	entry->next_entry_index = SOL_U32_INVALID;
+	entry->prev_entry_index = SOL_U32_INVALID;
 }
+
+static inline void sol_image_atlas_remove_available_entry(struct sol_image_atlas* atlas, struct sol_image_atlas_entry* entry)
+{
+	struct sol_image_atlas_entry_availability_heap* availability_heap;
+	uint32_t validation_index;
+
+	/** validate entry really does look available */
+	assert(entry->is_available);
+	assert(entry->is_tile_entry);
+	assert(entry->identifier == 0);
+	assert(entry->prev_entry_index == SOL_U32_INVALID);
+	assert(entry->next_entry_index == SOL_U32_INVALID);
+
+	availability_heap = &atlas->availablity_heaps[entry->x_size_class][entry->y_size_class];
+	sol_image_atlas_entry_availability_heap_remove_index(availability_heap, entry->heap_index, &validation_index, atlas);
+
+	/** make sure entry referenced the location in the heap that referenced the entry we were trying to remove */
+	assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, validation_index) == entry);
+
+	/** if this was the last entry of the specified size; unset the bit in the availibility masks to indicate as such  */
+	if(sol_image_atlas_entry_availability_heap_count(availability_heap) == 0)
+	{
+		atlas->availibility_masks[entry->x_size_class] &= ~(1 << entry->y_size_class);
+	}
+}
+
+
+/** which entry takes precedence in coalescion may result in a change to the entry being removed */
+static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_image_atlas* atlas, uint32_t* entry_index_ptr)
+{
+	struct sol_image_atlas_entry* buddy_entry;
+	struct sol_image_atlas_entry* coalesce_entry;
+	struct sol_image_atlas_entry* adjacent_entry;
+	uint32_t buddy_index, coalesce_index, adjacent_index;
+	uint16_t combined_max_x;
+	bool odd_offset;
+
+	coalesce_index = *entry_index_ptr;
+	coalesce_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
+
+	/** check for coalescable buddy */
+	odd_offset = coalesce_entry->pixel_location.x & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class);
+	buddy_index = odd_offset ? coalesce_entry->adj_start_left : coalesce_entry->adj_end_right;
+	if(buddy_index == 0)
+	{
+		/** root entry index (zero) indicated this entry has no valid neighbours in this direction
+		 * must fill entire image to not have a valid buddy though */
+		assert(coalesce_entry->x_size_class + SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT == atlas->description.image_x_dimension_exponent);
+		return false;
+	}
+	buddy_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, buddy_index);
+
+	if( ! buddy_entry->is_available || buddy_entry->x_size_class != coalesce_entry->x_size_class && buddy_entry->y_size_class != coalesce_entry->y_size_class)
+	{
+		return false;
+	}
+
+	/** remove buddy from availibility heap */
+	sol_image_atlas_remove_available_entry(atlas, buddy_entry);
+
+	/** coalesce into the entry closer to zero, so swap entry and it's buddy if necessary to make this happen
+	 * this makes the code that follows simpler/invariant and preserves the packed location value */
+	if(odd_offset)
+	{
+		*entry_index_ptr = buddy_index;
+		SOL_SWAP(coalesce_entry, buddy_entry);
+		SOL_SWAP(coalesce_index, buddy_index);
+	}
+
+	/** make sure buddy is in the expected location */
+	assert(coalesce_entry->pixel_location.y == buddy_entry->pixel_location.y);
+	assert(coalesce_entry->pixel_location.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class) == buddy_entry->pixel_location.x);
+
+	/** combine buddy with entry*/
+	coalesce_entry->x_size_class++;
+
+	coalesce_entry->adj_end_right = buddy_entry->adj_end_right;
+	coalesce_entry->adj_end_down   = buddy_entry->adj_end_down;
+
+	/** this combines the buddy (right tile of the 2) into the left tile
+	 * so need to set any link that referenced the buddy to now reference the coalesced tile
+	 * iterate all edges and replace references to buddy(index) with reference to entry(index) */
+
+	/** traverse right side */
+	adjacent_index = coalesce_entry->adj_end_right;
+	while(adjacent_index)
+	{
+		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+		if(adjacent_entry->adj_start_left != buddy_index)
+		{
+			assert(adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y);
+			break;
+		}
+		adjacent_entry->adj_start_left = coalesce_index;
+
+		adjacent_index = adjacent_entry->adj_start_up;
+	}
+
+	/** traverse bottom side */
+	adjacent_index = coalesce_entry->adj_end_down;
+	while(adjacent_index)
+	{
+		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+		if(adjacent_entry->adj_start_up != buddy_index)
+		{
+			assert(adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x);
+			break;
+		}
+		adjacent_entry->adj_start_up = coalesce_index;
+
+		adjacent_index = adjacent_entry->adj_start_left;
+	}
+
+	/** traverse top side, first half may already reference coalesced index and so muct be skipped */
+	combined_max_x = coalesce_entry->pixel_location.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class);
+	adjacent_index = coalesce_entry->adj_start_up;
+	while (adjacent_index)
+	{
+		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+		/** when starting from top left may already be referencing correct entry (index), so should skip this if encountered */
+		if(adjacent_entry->adj_end_down != coalesce_index)
+		{
+			if(adjacent_entry->adj_end_down != buddy_index)
+			{
+				assert(adjacent_entry->pixel_location.x >= combined_max_x || adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x);
+				break;
+			}
+			adjacent_entry->adj_end_down = coalesce_index;
+		}
+
+		adjacent_index = adjacent_entry->adj_end_right;
+	}
+
+	/** remove the buddy tile entirely, after clearing the entries data (which should not strictly be necessary) */
+	*buddy_entry = (struct sol_image_atlas_entry){};
+	sol_image_atlas_entry_array_remove(&atlas->entry_array, buddy_index);
+
+	return true;
+}
+
+static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_atlas* atlas, uint32_t* entry_index_ptr)
+{
+	struct sol_image_atlas_entry* buddy_entry;
+	struct sol_image_atlas_entry* coalesce_entry;
+	struct sol_image_atlas_entry* adjacent_entry;
+	uint32_t buddy_index, coalesce_index, adjacent_index;
+	uint16_t combined_max_y;
+	bool odd_offset;
+
+	coalesce_index = *entry_index_ptr;
+	coalesce_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
+
+	/** check for coalescable buddy */
+	odd_offset = coalesce_entry->pixel_location.y & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class);
+	buddy_index = odd_offset ? coalesce_entry->adj_start_up : coalesce_entry->adj_end_down;
+	if(buddy_index == 0)
+	{
+		/** root entry index (zero) indicated this entry has no valid neighbours in this direction
+		 * must fill entire image to not have a valid buddy though */
+		assert(coalesce_entry->y_size_class + SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT == atlas->description.image_y_dimension_exponent);
+		return false;
+	}
+	buddy_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, buddy_index);
+
+	if( ! buddy_entry->is_available || buddy_entry->x_size_class != coalesce_entry->x_size_class && buddy_entry->y_size_class != coalesce_entry->y_size_class)
+	{
+		return false;
+	}
+
+	/** remove buddy from availibility heap */
+	sol_image_atlas_remove_available_entry(atlas, buddy_entry);
+
+	/** coalesce into the entry closer to zero, so swap entry and it's buddy if necessary to make this happen
+	 * this makes the code that follows simpler/invariant and preserves the packed location value */
+	if(odd_offset)
+	{
+		*entry_index_ptr = buddy_index;
+		SOL_SWAP(coalesce_entry, buddy_entry);
+		SOL_SWAP(coalesce_index, buddy_index);
+	}
+
+	/** make sure buddy is in the expected location */
+	assert(coalesce_entry->pixel_location.x == buddy_entry->pixel_location.x);
+	assert(coalesce_entry->pixel_location.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class) == buddy_entry->pixel_location.y);
+
+	/** combine buddy with entry*/
+	coalesce_entry->y_size_class++;
+
+	coalesce_entry->adj_end_right = buddy_entry->adj_end_right;
+	coalesce_entry->adj_end_down   = buddy_entry->adj_end_down;
+
+	/** this combines the buddy (right tile of the 2) into the left tile
+	 * so need to set any link that referenced the buddy to now reference the coalesced tile
+	 * iterate all edges and replace references to buddy(index) with reference to entry(index) */
+
+	/** traverse bottom side */
+	adjacent_index = coalesce_entry->adj_end_down;
+	while(adjacent_index)
+	{
+		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+		if(adjacent_entry->adj_start_up != buddy_index)
+		{
+			assert(adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x);
+			break;
+		}
+		adjacent_entry->adj_start_up = coalesce_index;
+
+		adjacent_index = adjacent_entry->adj_start_left;
+	}
+
+	/** traverse right side */
+	adjacent_index = coalesce_entry->adj_end_right;
+	while(adjacent_index)
+	{
+		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+		if(adjacent_entry->adj_start_left != buddy_index)
+		{
+			assert(adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y);
+			break;
+		}
+		adjacent_entry->adj_start_left = coalesce_index;
+
+		adjacent_index = adjacent_entry->adj_start_up;
+	}
+
+	/** traverse left side, first half may already reference coalesced index and so muct be skipped */
+	combined_max_y = coalesce_entry->pixel_location.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class);
+	adjacent_index = coalesce_entry->adj_start_left;
+	while (adjacent_index)
+	{
+		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+		/** when starting from top left may already be referencing correct entry (index), so should skip this if encountered */
+		if(adjacent_entry->adj_end_right != coalesce_index)
+		{
+			if(adjacent_entry->adj_end_right != buddy_index)
+			{
+				assert(adjacent_entry->pixel_location.y >= combined_max_y || adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y);
+				break;
+			}
+			adjacent_entry->adj_end_right = coalesce_index;
+		}
+
+		adjacent_index = adjacent_entry->adj_end_down;
+	}
+
+	/** remove the buddy tile entirely, after clearing the entries data (which should not strictly be necessary) */
+	*buddy_entry = (struct sol_image_atlas_entry){};
+	sol_image_atlas_entry_array_remove(&atlas->entry_array, buddy_index);
+
+	return true;
+}
+
+/** NOTE: entry referenced by this index may be completely destroyed, should ONLY call after all other uses of this entry have been completed */
+static inline void sol_image_atlas_entry_make_available(struct sol_image_atlas* atlas, uint32_t entry_index)
+{
+	struct sol_image_atlas_entry_availability_heap* availability_heap;
+	struct sol_image_atlas_entry* entry;
+	bool coalesced;
+
+	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+
+	/** entry must have been removed from the map before calling this function */
+	assert(entry->identifier == 0);
+	assert(entry->is_tile_entry);
+
+	sol_image_atlas_entry_remove_from_queue(atlas, entry);
+	entry->is_available = true;
+
+	/** check to see if this entry can be coalesced with its neighbours */
+	do
+	{
+		/** note: more agressively combine vertically, because also more agressively split vertically */
+		if(entry->x_size_class < entry->y_size_class)
+		{
+			coalesced = sol_image_atlas_entry_try_coalesce_horizontal(atlas, &entry_index);
+			if(!coalesced)
+			{
+				coalesced = sol_image_atlas_entry_try_coalesce_vertical(atlas, &entry_index);
+			}
+		}
+		else
+		{
+			coalesced = sol_image_atlas_entry_try_coalesce_vertical(atlas, &entry_index);
+			if(!coalesced)
+			{
+				coalesced = sol_image_atlas_entry_try_coalesce_horizontal(atlas, &entry_index);
+			}
+		}
+
+		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+	}
+	while(coalesced);
+
+	availability_heap = &atlas->availablity_heaps[entry->x_size_class][entry->y_size_class];
+	sol_image_atlas_entry_availability_heap_append(availability_heap, entry_index, atlas);
+
+	/** mark the bit in availibility mask to indicate there is a tile/entry of the final coalesced size available */
+	atlas->availibility_masks[entry->x_size_class] |= (1 << entry->y_size_class);
+}
+
+/** NOTE: entry referenced by this index may be completely destroyed, should ONLY call after all other uses of this entry have been completed */
+static inline void sol_image_atlas_entry_evict(struct sol_image_atlas* atlas, uint32_t entry_index)
+{
+	struct sol_image_atlas_entry* entry;
+	uint32_t map_entry_index;
+	enum sol_map_result map_remove_result;
+
+	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+	assert(entry->identifier != 0);
+
+	map_remove_result = sol_image_atlas_map_remove(&atlas->itentifier_entry_map, entry->identifier, &map_entry_index);
+	assert(map_remove_result == SOL_MAP_SUCCESS_REMOVED);
+	assert(map_entry_index == entry_index);
+	entry->identifier = 0;
+
+	sol_image_atlas_entry_make_available(atlas, entry_index);
+}
+
+
 
 
 
@@ -327,13 +663,13 @@ static inline void sol_image_atlas_entry_remove_from_queue(struct sol_image_atla
 
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description)
 {
-	uint32_t x_dim, y_dim, i, entry_index;
+	uint32_t x_size_class, y_size_class, array_slice, entry_index;
 	struct sol_image_atlas* atlas = malloc(sizeof(struct sol_image_atlas));
 	struct sol_image_atlas_entry* root_entry;
 	struct sol_image_atlas_entry* entry;
 
-	assert(description->image_x_dimension_exponent >= 8 && description->image_x_dimension_exponent<=16);
-	assert(description->image_y_dimension_exponent >= 8 && description->image_y_dimension_exponent<=16);
+	assert(description->image_x_dimension_exponent >= 8 && description->image_x_dimension_exponent <= 16);
+	assert(description->image_y_dimension_exponent >= 8 && description->image_y_dimension_exponent <= 16);
 
 	atlas->description = *description;
 
@@ -369,22 +705,47 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	};
 
 
-	for(x_dim = 0; x_dim < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x_dim++)
+	for(x_size_class = 0; x_size_class < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x_size_class++)
 	{
-		atlas->availibility_masks[x_dim] = 0;
-		for(y_dim = 0; y_dim < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; y_dim++)
+		atlas->availibility_masks[x_size_class] = 0;
+		for(y_size_class = 0; y_size_class < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; y_size_class++)
 		{
-			sol_image_atlas_entry_availability_heap_initialise(&atlas->availablity_heaps[x_dim][y_dim], 0);
+			sol_image_atlas_entry_availability_heap_initialise(&atlas->availablity_heaps[x_size_class][y_size_class], 0);
 		}
 	}
 
 	/** populate availability for atlas image sized entries */
-	x_dim = atlas->description.image_x_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
-	y_dim = atlas->description.image_y_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
+	x_size_class = atlas->description.image_x_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
+	y_size_class = atlas->description.image_y_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
 
-	for(i = 0; i < atlas->description.image_array_dimension; i++)
+	for(array_slice = 0; array_slice < atlas->description.image_array_dimension; array_slice++)
 	{
+		/** for every array slice make an entry filling the slive available */
 		entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &entry_index);
+		*entry = (struct sol_image_atlas_entry)
+		{
+			.identifier = 0, /** "invalid" identifier */
+			.next_entry_index = SOL_U32_INVALID,
+			.prev_entry_index = SOL_U32_INVALID,
+			.adj_start_left     = 0,
+			.adj_start_up       = 0,
+			.adj_end_right = 0,
+			.adj_end_down   = 0,
+			.pixel_location = u16_vec2_set(0, 0),
+			.packed_location = array_slice << 24,
+			.x_size_class = x_size_class,
+			.y_size_class = y_size_class,
+			.array_slice = array_slice,
+			// .heap_index
+			// .access_index
+			// .is_transient
+			.is_tile_entry = true,
+			.is_accessor = false,
+			.is_available = true,
+		};
+		/** put the entry in the heap and set availability mask */
+		sol_image_atlas_entry_availability_heap_append(&atlas->availablity_heaps[x_size_class][y_size_class], entry_index, atlas);
+		atlas->availibility_masks[x_size_class] |= 1 << y_size_class;
 	}
 
 	return atlas;
@@ -392,7 +753,7 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 {
-	uint32_t x_dim, y_dim;
+	uint32_t x_size_class, y_size_class;
 	struct sol_image_atlas_accessor* accessor;
 	struct sol_image_atlas_entry* root_entry;
 	uint32_t entry_index;
@@ -410,14 +771,11 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 		sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
 	}
 
-	/** free all entries in the enytry linked list queue */
+	/** free all entries in the entry linked list queue */
 	root_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->root_entry_index);
 	while(root_entry->next_entry_index != atlas->root_entry_index)
 	{
-		entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, root_entry->next_entry_index);
-		assert(entry->is_tile_entry);
-
-		#warning make entry available: i.e. evict it, remove from map, queue, &c. put in available state
+		sol_image_atlas_entry_evict(atlas, root_entry->next_entry_index);
 	}
 	assert(root_entry->next_entry_index == atlas->root_entry_index);
 	assert(root_entry->prev_entry_index == atlas->root_entry_index);
@@ -425,34 +783,36 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 
 
 
-	x_dim = atlas->description.image_x_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
-	y_dim = atlas->description.image_y_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
-	assert(sol_image_atlas_entry_availability_heap_count(&atlas->availablity_heaps[x_dim][y_dim]) == atlas->description.image_array_dimension);
+	x_size_class = atlas->description.image_x_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
+	y_size_class = atlas->description.image_y_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
+	assert(sol_image_atlas_entry_availability_heap_count(&atlas->availablity_heaps[x_size_class][y_size_class]) == atlas->description.image_array_dimension);
 
-	while(sol_image_atlas_entry_availability_heap_remove(&atlas->availablity_heaps[x_dim][y_dim], &entry_index, atlas))
+	while(sol_image_atlas_entry_availability_heap_remove(&atlas->availablity_heaps[x_size_class][y_size_class], &entry_index, atlas))
 	{
 		entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, entry_index);
 		/** assert contents are as expected */
-		assert(entry->x_size_class == x_dim);
-		assert(entry->y_size_class == y_dim);
-		assert(entry->entry_location.x == 0);
-		assert(entry->entry_location.y == 0);
-		assert(entry->next_entry_index == SOL_U32_INVALID);
-		assert(entry->prev_entry_index == SOL_U32_INVALID);
+		assert(entry->x_size_class == x_size_class);
+		assert(entry->y_size_class == y_size_class);
+		assert(entry->pixel_location.x == 0);
+		assert(entry->pixel_location.y == 0);
+		assert(entry->next_entry_index == 0);
+		assert(entry->prev_entry_index == 0);
 		assert(entry->identifier == 0);
 		assert(entry->is_tile_entry);
 		assert(entry->is_available);
 	}
 
+
 	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_entry_index);
 	assert(sol_image_atlas_entry_array_count(&atlas->entry_array) == 0);
 
-	for(x_dim = 0; x_dim < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x_dim++)
+
+	for(x_size_class = 0; x_size_class < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x_size_class++)
 	{
-		for(y_dim = 0; y_dim < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; y_dim++)
+		for(y_size_class = 0; y_size_class < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; y_size_class++)
 		{
-			assert(sol_image_atlas_entry_availability_heap_count(&atlas->availablity_heaps[x_dim][y_dim]) == 0);
-			sol_image_atlas_entry_availability_heap_terminate(&atlas->availablity_heaps[x_dim][y_dim]);
+			assert(sol_image_atlas_entry_availability_heap_count(&atlas->availablity_heaps[x_size_class][y_size_class]) == 0);
+			sol_image_atlas_entry_availability_heap_terminate(&atlas->availablity_heaps[x_size_class][y_size_class]);
 		}
 	}
 
@@ -461,6 +821,8 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 	sol_image_atlas_entry_array_terminate(&atlas->entry_array);
 
 	sol_vk_timeline_semaphore_terminate(&atlas->timeline_semaphore, atlas->description.device);
+
+	#warning destroy image
 
 	free(atlas);
 }

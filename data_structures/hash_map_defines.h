@@ -27,6 +27,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sol_utils.h"
 
+#warning rename this to sol_map_result_type
 enum sol_map_result
 {
     SOL_MAP_FAIL_FULL        = 0,/** could not add element because map is full (at least in the hash space region for the key being inserted) */
