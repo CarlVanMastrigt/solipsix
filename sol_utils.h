@@ -61,19 +61,19 @@ static inline uint32_t sol_u32_align(uint32_t size, uint32_t alignment)
 }
 
 
-//exp is nearest power of 2 relative to some value
+/** exp is power (exponent) of 2 */
 static inline uint64_t sol_u64_ctz      (uint64_t v){ return (v < 1) ? 64 :    __builtin_ctzl(v  ); }
 static inline uint64_t sol_u64_clz      (uint64_t v){ return (v < 1) ? 64 :    __builtin_clzl(v  ); }
-static inline uint64_t sol_u64_exp_gte  (uint64_t v){ return (v < 2) ? 0  : 64-__builtin_clzl(v-1); }
-static inline uint64_t sol_u64_exp_lte  (uint64_t v){ return (v < 1) ? 0  : 63-__builtin_clzl(v  ); }
+static inline uint64_t sol_u64_exp_ge   (uint64_t v){ return (v < 2) ? 0  : 64-__builtin_clzl(v-1); }
+static inline uint64_t sol_u64_exp_le   (uint64_t v){ return (v < 1) ? 0  : 63-__builtin_clzl(v  ); }
 static inline uint64_t sol_u64_exp_gt   (uint64_t v){ return (v < 1) ? 0  : 64-__builtin_clzl(v  ); }
 static inline uint64_t sol_u64_exp_lt   (uint64_t v){ return (v < 2) ? 0  : 63-__builtin_clzl(v-1); }
 static inline uint64_t sol_u64_bit_count(uint64_t v){ return              __builtin_popcountl(v  ); }
 
 static inline uint32_t sol_u32_ctz      (uint32_t v){ return (v < 1) ? 32 :    __builtin_ctz(v  ); }
 static inline uint32_t sol_u32_clz      (uint32_t v){ return (v < 1) ? 32 :    __builtin_clz(v  ); }
-static inline uint32_t sol_u32_exp_gte  (uint32_t v){ return (v < 2) ? 0  : 32-__builtin_clz(v-1); }
-static inline uint32_t sol_u32_exp_lte  (uint32_t v){ return (v < 1) ? 0  : 31-__builtin_clz(v  ); }
+static inline uint32_t sol_u32_exp_ge   (uint32_t v){ return (v < 2) ? 0  : 32-__builtin_clz(v-1); }
+static inline uint32_t sol_u32_exp_le   (uint32_t v){ return (v < 1) ? 0  : 31-__builtin_clz(v  ); }
 static inline uint32_t sol_u32_exp_gt   (uint32_t v){ return (v < 1) ? 0  : 32-__builtin_clz(v  ); }
 static inline uint32_t sol_u32_exp_lt   (uint32_t v){ return (v < 2) ? 0  : 31-__builtin_clz(v-1); }
 static inline uint32_t sol_u32_bit_count(uint32_t v){ return              __builtin_popcount(v  ); }
