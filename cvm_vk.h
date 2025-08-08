@@ -336,8 +336,8 @@ struct sol_vk_image
     VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by
 };
 
-VkResult sol_vk_image_create(struct sol_vk_image* image, const cvm_vk_device* device, const VkImageCreateInfo* image_create_info, bool create_default_view);
-void sol_vk_image_destroy(struct sol_vk_image* image, const cvm_vk_device* device);
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, bool create_default_view);
+void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
 
 
 

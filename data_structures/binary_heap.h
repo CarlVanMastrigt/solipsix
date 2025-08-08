@@ -144,6 +144,11 @@ static inline uint32_t SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_count)(s
     return heap->count;
 }
 
+static inline const SOL_BINARY_HEAP_ENTRY_TYPE* SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_access_top)(struct SOL_BINARY_HEAP_STRUCT_NAME* heap)
+{
+    return heap->heap;
+}
+
 #ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
 static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
 #else

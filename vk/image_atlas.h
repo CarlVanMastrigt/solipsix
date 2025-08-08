@@ -42,15 +42,15 @@ enum sol_image_atlas_result
 {
     SOL_IMAGE_ATLAS_FAIL_FULL        = SOL_MAP_FAIL_FULL, /** either hash map is full or there are no remaining tiles, either way need to wait for space to be made */
     SOL_IMAGE_ATLAS_FAIL_ABSENT      = SOL_MAP_FAIL_ABSENT, /** if not forcing a dependency this may appear if a resource is written */
-    SOL_IMAGE_ATLAS_SUCCESS_FOUND    = SOL_MAP_SUCCESS_FOUND,
-    SOL_IMAGE_ATLAS_SUCCESS_INSERTED = SOL_MAP_SUCCESS_INSERTED,
+    SOL_IMAGE_ATLAS_SUCCESS_FOUND    = SOL_MAP_SUCCESS_FOUND, /** existing entry found; no need to initalise */
+    SOL_IMAGE_ATLAS_SUCCESS_INSERTED = SOL_MAP_SUCCESS_INSERTED, /** existing entry not found; space was made but contents must be initialised */
 };
 
 struct sol_image_atlas_description
 {
-	struct cvm_vk_device* device;
-
 	// image details
+	VkFormat format;
+	VkImageUsageFlags usage;
 	uint8_t image_x_dimension_exponent;
 	uint8_t image_y_dimension_exponent;
 	uint8_t image_array_dimension;
@@ -62,13 +62,14 @@ struct sol_image_atlas_location
 	uint8_t array_layer;
 };
 
-struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description);
-void sol_image_atlas_destroy(struct sol_image_atlas* atlas);
+struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
+void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas);
+/** must wait on returned moment before doing anything with the atlas */
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-/** after reading resources the slot should be released with the moment where it was last used (for now only one moment is supported) */
-void sol_image_atlas_release_access(struct sol_image_atlas* atlas, const struct sol_vk_timeline_semaphore_moment* access_complete_moment);
+/** after reading and/or writing resources the returned moment must be signalled */
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
 
 /** acquire a unique identifier for accessing/indexing entries in the atlas
@@ -86,7 +87,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 
 #warning should readonly access be a viable option? (allowing only find operations) could also make this immediate in that incomplete writes are NOT vended
 
-#warning make `write_access` and `transient` in obtain flags?
+#warning make `write_access` and `transient` (in obtain) flags instead?
 
 #warning if write access requested and there is a better slot to place the size of content desired (or a different size is requested) \
 use that new spot and wait on the appropriate entry to be made free to clear it

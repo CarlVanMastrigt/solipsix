@@ -195,6 +195,14 @@ static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_back)(struc
     return true;
 }
 
+/** note: index may become valid again if queue cycles the full u32 before being assessed */
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_index_valid)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t index)
+{
+    /** get index as relative */
+    index -= q->front;
+    return index < q->count;
+}
+
 
 #undef SOL_QUEUE_ENTRY_TYPE
 #undef SOL_QUEUE_FUNCTION_PREFIX

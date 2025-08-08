@@ -18,83 +18,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 
+#include <stdio.h>
 
 #include "vk/image_atlas.h"
-
-
-
-
-
-/** should the image atlas vend monotonic identifiers which are then mapped externally?
- 	that way fonts can track their contents with a map as they would likely need to anyway (to store glyph specific data)
-
- 	how to defragment? acquire access and release with semaphore of completion on both
- 	acquire -> semaphore to wait on before using
- 	release <- semaphore of last use for these contents (or array of semaphores if used across queues)
- 		^ acquire/release would need an index/slot associated (so that prior releases can be ignored)
- 			^ NO - copies/defragments can wait on prior defragments, allowing correct global order
- 	doing so would mark all resources before and after usage and allow defragmentation to be managed internally?
-
- 	fill / copies would need to be handled externally; this is good if atlas is being used for compositing
- 		^ compositing would want transient allocations that don't retain their contents (and thus don't require a copy op to defrag)
-
- 	accessors hold a RC of each entry? add to LRU after being released? automatic release if created as "transient"? (no fixed size &c.)
- 	RC should be decremented after all moments are released
-
- 	release last triggers defragmentation?
-*/
-
-
-
-/** each accessor needs a reference to all entries used in it's execution, can easuly have multiple completely independent accesses to entries that don't complete in order
-	however, this is too much overhead
-
-	single usage queue (linked list) with an associated point in time for each accessor
-		^ start of accessor: mark point in time in queue
-		^ release of accessor: apply moment restrictions to progressing past that point in time
-
-		-------|------|-----|------
-		       ^ anything after here must have waited on all prior entries in order to be releasable (including defragment based copies)
-
-	could/should literally have something in the linked list/queue to identify these thresholds (variant index bit to identify threshold?)
-	
-	the above approach does mean long lived dispatches block release of all *subsequent* entries, but this is probably fine as dispatches should be *relatively* short lived
-*/
-
-
-/** for now: atlas is singularly ordered for all individual resources (all resources must be externally synchronized between init and use)
-		^ this handles [write -> use -> use] by putting onus on caller
-	really need a plan for defragmentation though, would like it to run completely asynchronously (only update locations when CPU is notified of copy op completing)
-	current access complete useful for this, don't defragment until first use is complete (technically unnecessary wait as write *likely* happens before read use)
-	perhaps its better to not to "deframent" at all and instead force resource recreation by invalidating entries when thier placement becomes particularly egregious
-	possibly block access to these resources so they leave the active section of the queue? or put onus on caller to copy as part of request (where it would otherwise have to load if it were invalidated)
-	this avoids recreation while allowing access to the old location for other uses
-
-	similar approach could also be used for ensuring value is initialised; write access (either implicitly on obtain because missing or explicitly on request)
-	forces subsequent uses to wait on that accesses request (should they wish to use it, make optional part of request that forces a dependency)
-	similar could then be used to handle defragmentation without shifting onus on caller to copy
-		^ though: start with no defrag; just invalidate
-
-	important to allow external writing of resources, this MAY be paired with immediate invalidation (only transient resources written externally) or locked in accessor "owner" for resources
-	important to allow immediate/controlled instantiation of resources even if that means access cannot be multi-threaded/multi-accessor <- this may actually be a (massive) benefit ??
-		^ allows internal abstracted defragmentation controlled CPU side in simple fashion(?)
-
-		need a map of which re
-	*/
-
-#warning the single wait on latest moment when acquiring is sufficient for ensuring defragmentation works (need to ensure latest location is vended), \
-but not great for having dedicated loaders or really any good mechanism for sharing resources between accessors, \
-at the moment a novel resource must not be used by another accessor as there is no way to guarantee synchronization of filling its contents (leading to UB)
-// ^ MAYBE find for texture resources, but definitely bad for buffer resources
-
-
-	/** is it worth breaking the timeline semaphore into read and write??
-	 * read must wait on prior writes
-	 * write must wait on prior writes
-	 * write must wait on prior reads
-	 * read needn't wait on prior reads though...
-	 * so separating them would allow disorder read only frames, I'm unsure if this is desirable though*/
-
+#include "vk/image.h"
 
 
 
@@ -109,7 +36,6 @@ struct sol_image_atlas_entry
 	/** hash map key; used for hash map lookup upon defragmentation eviction */
 	uint64_t identifier;
 
-//== 64 ==
 
 	/** prev/next indices in linked list of entries my order of use, 16M is more than enough entries
 	 * NOTE: 0 is reserved for the dummy start index
@@ -117,23 +43,20 @@ struct sol_image_atlas_entry
 	uint32_t prev_entry_index;
 	uint32_t next_entry_index;
 
-//== 64 ==
 
-	/** links in 2d structure
-	 *  index zero is invalid, which should be the index of root node in the linked list
-	 *  names reftlect direction from a corner;
-	 * start corner is towards zero (top left)
-	 * end corner is away from zero (bottom right) */
+	/** links within the 2d structure of an array layer of the atlas
+	 *  index zero is invalid, which should be the index of root node of the active entry linked list
+	 *  names indicate a cardinal direction from a corner;
+	 * start corner is towards zero (top left of image)
+	 * end corner is away from zero (bottom right of image) */
 	uint32_t adj_start_left;
 	uint32_t adj_start_up;
-//== 64 ==
 	uint32_t adj_end_right;
 	uint32_t adj_end_down;
 
-//== 64 ==
 
-	/** can be derived from packed location, but provided her for quick access (may be worth removing id doing so would better size this struct) */
-	u16_vec2 pixel_location;
+	/** can be derived from packed location, but provided her for quick/efficient access */
+	u16_vec2 pixel_location_xy;
 
 	/** z-tile location is in terms of minimum entry pixel dimension (4)
 	 * packed in such a way to order entries by layer first then top left -> bottom right
@@ -141,27 +64,26 @@ struct sol_image_atlas_entry
 	 * this is used to sort/order entries (lower value means better placed) */
 	uint32_t packed_location;
 
-//== 64 ==
+
+	/** index in queue of accessors (does need to be a u32 for compatibility)
+	 * used to ensure an entry is only moved forward in the least recently used queue when necessary and to a point that correctly reflects its usage
+	 * (should be put just after the accessor marker)
+	 * valid if not available */
+	uint32_t accessor_index;
+
+	/** index in availability heap of size class (x,y)
+	 * NOTE: could possibly be unioned with prev/next as this is (presently) not used at the same time as being in a linked list */
+	uint32_t heap_index;
+
+
 
 	/** size class is power of 2 times minimum entry pixel dimension (4)
 	 * so: 4 * 2 ^ (0:15) is more than enough (4 << 15 = 128k, is larger than max texture size)*/
 	uint64_t x_size_class : 4;
 	uint64_t y_size_class : 4;
 
-	/** array slice of image this entry is present in */
-	uint64_t array_slice : 8;
-
-	/** index in heap of size class (x,y) only 16M entries supported so this is enough (22 bits would be enough) */
-	uint64_t heap_index : 24;
-	#warning is heap warranted? items on the heap should be free, which means identifier and prev/next in linked list will be unused...
-		/** ^ should be very few free items at any time though */
-
-
-	/** index in queue of accessors (does need to be a u32 for compatibility)
-	 * used to ensure an entry is only moved forward in the least recently used queue when necessary and to a point that correctly reflects its usage
-	 * (should be put just after the accessor marker)  */
-	uint64_t access_index : 16;
-	/** ^ just making sure this matches index held in sol_image_atlas_queue_index (shouldn't matter given queue implementation though) */
+	/** array layer of image this entry is present in */
+	uint64_t array_layer : 8;
 
 	/** must be set appropriately on "creation" this indicates that the contents should NOT be copied when this tile is deframented
 	 * (possibly just immediately free this location instead of deframenting it)
@@ -178,19 +100,16 @@ struct sol_image_atlas_entry
 
 	/** is this a free/available tile, if so identifier should be ignored */
 	uint64_t is_available : 1;
-
-	/** 4 reserved bytes */
 };
 
 struct sol_image_atlas_accessor
 {
-	/** the index of the entry within the linked list marking the start/threshold of this accessor */
-	uint32_t threshold_entry_index;
+	/** the indices of the entry within the linked list marking the start/threshold of this accessor
+	 * for active put in front; for expired put before and clean up expired regularly/aggressively */
+	uint32_t active_threshold_entry_index;
+	uint32_t expired_threshold_entry_index;
 
 	struct sol_vk_timeline_semaphore_moment complete_moment;
-
-	#warning entries can back-refernce this by index, possibly good to do this to allow dependencies between accesses?
-	/** a more reliable way to accomplish this is to have dedicated loading for */
 };
 
 #define SOL_ARRAY_ENTRY_TYPE struct sol_image_atlas_entry
@@ -238,8 +157,8 @@ static inline void sol_image_atlas_entry_set_heap_index(const uint32_t* entry_in
 #define SOL_BINARY_HEAP_SET_ENTRY_INDEX(E, IDX, CTX) sol_image_atlas_entry_set_heap_index(E, IDX, CTX)
 #include "data_structures/binary_heap.h"
 
-#warning could binary heap benefit from custom allocator (169 allocations here, that could all come from a single alloc)
-#warning binary heap could have custom size to use when 0 initial size is provided
+/** TODO: could binary heap benefit from custom allocator (169 allocations here, that could all come from a single alloc)
+ * TODO: binary heap could have custom size to use when 0 initial size is provided */
 
 
 struct sol_image_atlas
@@ -247,12 +166,13 @@ struct sol_image_atlas
 	/** provided description */
 	struct sol_image_atlas_description description;
 
-
+	struct sol_vk_supervised_image image;
 
 	/** this is the management semaphore for accesses in the image atlas, it will signal availability and write completion
 	 * users of the image atlas must signal moments vended to them to indicate reads and writes have completed
 	 * users must also wait on the moment vended upon acquisition in order to ensure all prior modifications are visible */
 	struct sol_vk_timeline_semaphore timeline_semaphore;
+	struct sol_vk_timeline_semaphore_moment current_moment;
 
 
 	/** all entry indices reference indices in this array, contains the actual information regarding vended tiles */
@@ -276,10 +196,12 @@ struct sol_image_atlas
 	uint64_t current_identifier;
 
 	/** the (reserved/unused) entry delineating the start and end of the linked list of entries */
-	uint32_t root_entry_index;
+	uint32_t root_active_entry_index;
+
+	uint32_t root_expired_entry_index;
 
 	/** index in queue of present accessor, only one may be active at a time in the current scheme */
-	uint32_t current_accessor_index;
+	uint32_t active_accessor_index;
 
 	#warning using an accessor mask (instead of single accessor), while maintaining single threaded requirement, might be good for coordinating different sources of writes
 	bool accessor_active;
@@ -338,6 +260,55 @@ static inline void sol_image_atlas_entry_remove_from_queue(struct sol_image_atla
 	entry->prev_entry_index = SOL_U32_INVALID;
 }
 
+
+static inline void sol_image_atlas_entry_add_to_queue_after(struct sol_image_atlas* atlas, uint32_t entry_index, uint32_t prev_entry_index)
+{
+	struct sol_image_atlas_entry* prev_entry;
+	struct sol_image_atlas_entry* next_entry;
+	struct sol_image_atlas_entry* entry;
+	uint32_t next_entry_index;
+	/** the root entry should not be removed in this way */
+	assert(entry->is_accessor || entry->is_tile_entry);
+	assert(entry->next_entry_index == SOL_U32_INVALID);
+	assert(entry->prev_entry_index == SOL_U32_INVALID);
+
+	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+
+	prev_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, prev_entry_index);
+	next_entry_index = prev_entry->next_entry_index;
+	next_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, next_entry_index);
+
+	prev_entry->next_entry_index = entry_index;
+	next_entry->prev_entry_index = entry_index;
+
+	entry->next_entry_index = next_entry_index;
+	entry->prev_entry_index = prev_entry_index;
+}
+
+static inline void sol_image_atlas_entry_add_to_queue_before(struct sol_image_atlas* atlas, uint32_t entry_index, uint32_t next_entry_index)
+{
+	struct sol_image_atlas_entry* prev_entry;
+	struct sol_image_atlas_entry* next_entry;
+	struct sol_image_atlas_entry* entry;
+	uint32_t prev_entry_index;
+	/** the root entry should not be removed in this way */
+	assert(entry->is_accessor || entry->is_tile_entry);
+	assert(entry->next_entry_index == SOL_U32_INVALID);
+	assert(entry->prev_entry_index == SOL_U32_INVALID);
+
+	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+
+	next_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, next_entry_index);
+	prev_entry_index = next_entry->prev_entry_index;
+	prev_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, prev_entry_index);
+
+	prev_entry->next_entry_index = entry_index;
+	next_entry->prev_entry_index = entry_index;
+
+	entry->next_entry_index = next_entry_index;
+	entry->prev_entry_index = prev_entry_index;
+}
+
 static inline void sol_image_atlas_remove_available_entry(struct sol_image_atlas* atlas, struct sol_image_atlas_entry* entry)
 {
 	struct sol_image_atlas_entry_availability_heap* availability_heap;
@@ -378,9 +349,9 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 	coalesce_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
 
 	/** check for coalescable buddy */
-	odd_offset = coalesce_entry->pixel_location.x & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class);
+	odd_offset = coalesce_entry->pixel_location_xy.x & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class);
 	buddy_index = odd_offset ? coalesce_entry->adj_start_left : coalesce_entry->adj_end_right;
-	if (buddy_index == 0)
+	if(buddy_index == 0)
 	{
 		/** root entry index (zero) indicated this entry has no valid neighbours in this direction
 		 * must fill entire image to not have a valid buddy though */
@@ -389,7 +360,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 	}
 	buddy_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, buddy_index);
 
-	if ( ! buddy_entry->is_available || buddy_entry->x_size_class != coalesce_entry->x_size_class && buddy_entry->y_size_class != coalesce_entry->y_size_class)
+	if( ! buddy_entry->is_available || buddy_entry->x_size_class != coalesce_entry->x_size_class && buddy_entry->y_size_class != coalesce_entry->y_size_class)
 	{
 		return false;
 	}
@@ -399,7 +370,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 
 	/** coalesce into the entry closer to zero, so swap entry and it's buddy if necessary to make this happen
 	 * this makes the code that follows simpler/invariant and preserves the packed location value */
-	if (odd_offset)
+	if(odd_offset)
 	{
 		*entry_index_ptr = buddy_index;
 		SOL_SWAP(coalesce_entry, buddy_entry);
@@ -407,8 +378,8 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 	}
 
 	/** make sure buddy is in the expected location */
-	assert(coalesce_entry->pixel_location.y == buddy_entry->pixel_location.y);
-	assert(coalesce_entry->pixel_location.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class) == buddy_entry->pixel_location.x);
+	assert(coalesce_entry->pixel_location_xy.y == buddy_entry->pixel_location_xy.y);
+	assert(coalesce_entry->pixel_location_xy.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class) == buddy_entry->pixel_location_xy.x);
 
 	/** combine buddy with entry*/
 	coalesce_entry->x_size_class++;
@@ -422,12 +393,12 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 
 	/** traverse right side */
 	adjacent_index = coalesce_entry->adj_end_right;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->adj_start_left != buddy_index)
+		if(adjacent_entry->adj_start_left != buddy_index)
 		{
-			assert(adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y);
+			assert(adjacent_entry->pixel_location_xy.y < buddy_entry->pixel_location_xy.y);
 			break;
 		}
 		adjacent_entry->adj_start_left = coalesce_index;
@@ -437,12 +408,12 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 
 	/** traverse bottom side */
 	adjacent_index = coalesce_entry->adj_end_down;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->adj_start_up != buddy_index)
+		if(adjacent_entry->adj_start_up != buddy_index)
 		{
-			assert(adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x);
+			assert(adjacent_entry->pixel_location_xy.x < buddy_entry->pixel_location_xy.x);
 			break;
 		}
 		adjacent_entry->adj_start_up = coalesce_index;
@@ -451,17 +422,17 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 	}
 
 	/** traverse top side, first half may already reference coalesced index and so muct be skipped */
-	coalesced_end_x = coalesce_entry->pixel_location.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class);
+	coalesced_end_x = coalesce_entry->pixel_location_xy.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->x_size_class);
 	adjacent_index = coalesce_entry->adj_start_up;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
 		/** when starting from top left may already be referencing correct entry (index), so should skip this if encountered */
-		if (adjacent_entry->adj_end_down != coalesce_index)
+		if(adjacent_entry->adj_end_down != coalesce_index)
 		{
-			if (adjacent_entry->adj_end_down != buddy_index)
+			if(adjacent_entry->adj_end_down != buddy_index)
 			{
-				assert(adjacent_entry->pixel_location.x >= coalesced_end_x || adjacent_entry->x_size_class > coalesce_entry->x_size_class);
+				assert(adjacent_entry->pixel_location_xy.x >= coalesced_end_x || adjacent_entry->x_size_class > coalesce_entry->x_size_class);
 				break;
 			}
 			adjacent_entry->adj_end_down = coalesce_index;
@@ -491,9 +462,9 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 	coalesce_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
 
 	/** check for coalescable buddy */
-	odd_offset = coalesce_entry->pixel_location.y & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class);
+	odd_offset = coalesce_entry->pixel_location_xy.y & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class);
 	buddy_index = odd_offset ? coalesce_entry->adj_start_up : coalesce_entry->adj_end_down;
-	if (buddy_index == 0)
+	if(buddy_index == 0)
 	{
 		/** root entry index (zero) indicated this entry has no valid neighbours in this direction
 		 * must fill entire image to not have a valid buddy though */
@@ -502,7 +473,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 	}
 	buddy_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, buddy_index);
 
-	if ( ! buddy_entry->is_available || buddy_entry->x_size_class != coalesce_entry->x_size_class && buddy_entry->y_size_class != coalesce_entry->y_size_class)
+	if( ! buddy_entry->is_available || buddy_entry->x_size_class != coalesce_entry->x_size_class && buddy_entry->y_size_class != coalesce_entry->y_size_class)
 	{
 		return false;
 	}
@@ -512,7 +483,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 
 	/** coalesce into the entry closer to zero, so swap entry and it's buddy if necessary to make this happen
 	 * this makes the code that follows simpler/invariant and preserves the packed location value */
-	if (odd_offset)
+	if(odd_offset)
 	{
 		*entry_index_ptr = buddy_index;
 		SOL_SWAP(coalesce_entry, buddy_entry);
@@ -520,8 +491,8 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 	}
 
 	/** make sure buddy is in the expected location */
-	assert(coalesce_entry->pixel_location.x == buddy_entry->pixel_location.x);
-	assert(coalesce_entry->pixel_location.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class) == buddy_entry->pixel_location.y);
+	assert(coalesce_entry->pixel_location_xy.x == buddy_entry->pixel_location_xy.x);
+	assert(coalesce_entry->pixel_location_xy.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class) == buddy_entry->pixel_location_xy.y);
 
 	/** combine buddy with entry*/
 	coalesce_entry->y_size_class++;
@@ -535,12 +506,12 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 
 	/** traverse bottom side */
 	adjacent_index = coalesce_entry->adj_end_down;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->adj_start_up != buddy_index)
+		if(adjacent_entry->adj_start_up != buddy_index)
 		{
-			assert(adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x);
+			assert(adjacent_entry->pixel_location_xy.x < buddy_entry->pixel_location_xy.x);
 			break;
 		}
 		adjacent_entry->adj_start_up = coalesce_index;
@@ -550,12 +521,12 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 
 	/** traverse right side */
 	adjacent_index = coalesce_entry->adj_end_right;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->adj_start_left != buddy_index)
+		if(adjacent_entry->adj_start_left != buddy_index)
 		{
-			assert(adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y);
+			assert(adjacent_entry->pixel_location_xy.y < buddy_entry->pixel_location_xy.y);
 			break;
 		}
 		adjacent_entry->adj_start_left = coalesce_index;
@@ -564,17 +535,17 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 	}
 
 	/** traverse left side, first half may already reference coalesced index and so muct be skipped */
-	coalesced_end_y = coalesce_entry->pixel_location.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class);
+	coalesced_end_y = coalesce_entry->pixel_location_xy.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << coalesce_entry->y_size_class);
 	adjacent_index = coalesce_entry->adj_start_left;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
 		/** when starting from top left may already be referencing correct entry (index), so should skip this if encountered */
-		if (adjacent_entry->adj_end_right != coalesce_index)
+		if(adjacent_entry->adj_end_right != coalesce_index)
 		{
-			if (adjacent_entry->adj_end_right != buddy_index)
+			if(adjacent_entry->adj_end_right != buddy_index)
 			{
-				assert(adjacent_entry->pixel_location.y >= coalesced_end_y || adjacent_entry->y_size_class > coalesce_entry->y_size_class);
+				assert(adjacent_entry->pixel_location_xy.y >= coalesced_end_y || adjacent_entry->y_size_class > coalesce_entry->y_size_class);
 				break;
 			}
 			adjacent_entry->adj_end_right = coalesce_index;
@@ -599,21 +570,22 @@ static inline void sol_image_atlas_entry_make_available(struct sol_image_atlas* 
 
 	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 
-	/** entry must have been removed from the map before calling this function */
+	/** entry must have been removed from the map and queue before calling this function */
+	assert(entry->prev_entry_index == SOL_U32_INVALID);
+	assert(entry->next_entry_index == SOL_U32_INVALID);
 	assert(entry->identifier == 0);
 	assert(entry->is_tile_entry);
 
-	sol_image_atlas_entry_remove_from_queue(atlas, entry);
 	entry->is_available = true;
 
 	/** check to see if this entry can be coalesced with its neighbours */
 	do
 	{
 		/** note: more agressively combine vertically, because also more agressively split vertically */
-		if (entry->x_size_class < entry->y_size_class)
+		if(entry->x_size_class < entry->y_size_class)
 		{
 			coalesced = sol_image_atlas_entry_try_coalesce_horizontal(atlas, &entry_index);
-			if (!coalesced)
+			if(!coalesced)
 			{
 				coalesced = sol_image_atlas_entry_try_coalesce_vertical(atlas, &entry_index);
 			}
@@ -621,7 +593,7 @@ static inline void sol_image_atlas_entry_make_available(struct sol_image_atlas* 
 		else
 		{
 			coalesced = sol_image_atlas_entry_try_coalesce_vertical(atlas, &entry_index);
-			if (!coalesced)
+			if(!coalesced)
 			{
 				coalesced = sol_image_atlas_entry_try_coalesce_horizontal(atlas, &entry_index);
 			}
@@ -629,7 +601,7 @@ static inline void sol_image_atlas_entry_make_available(struct sol_image_atlas* 
 
 		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 	}
-	while (coalesced);
+	while(coalesced);
 
 	/** put the newly available entry in the correct avilibility heap */
 	availability_heap = &atlas->availablity_heaps[entry->x_size_class][entry->y_size_class];
@@ -653,6 +625,8 @@ static inline void sol_image_atlas_entry_evict(struct sol_image_atlas* atlas, ui
 	assert(map_remove_result == SOL_MAP_SUCCESS_REMOVED);
 	assert(map_entry_index == entry_index);
 	entry->identifier = 0;
+
+	sol_image_atlas_entry_remove_from_queue(atlas, entry);
 
 	sol_image_atlas_entry_make_available(atlas, entry_index);
 }
@@ -680,7 +654,7 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 
 	/* check the split entries offset is valid for it's size class */
 	assert((split_entry->packed_location & (1u << (split_entry->x_size_class * 2 + 0))) == 0);
-	assert((split_entry->pixel_location.x & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->x_size_class)) == 0);
+	assert((split_entry->pixel_location_xy.x & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->x_size_class)) == 0);
 
 	buddy_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &buddy_index);
 
@@ -693,11 +667,11 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 		.adj_start_up = 0,/** must be set */
 		.adj_end_right = split_entry->adj_end_right,
 		.adj_end_down  = split_entry->adj_end_down,
-		.pixel_location = u16_vec2_add(split_entry->pixel_location, u16_vec2_set(SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->x_size_class, 0)),
+		.pixel_location_xy = u16_vec2_add(split_entry->pixel_location_xy, u16_vec2_set(SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->x_size_class, 0)),
 		.packed_location = split_entry->packed_location | (1u << (split_entry->x_size_class * 2 + 0)),
 		.x_size_class = split_entry->x_size_class,
 		.y_size_class = split_entry->y_size_class,
-		.array_slice = split_entry->array_slice,
+		.array_layer = split_entry->array_layer,
 		// .heap_index
 		.is_accessor = false,
 		.is_tile_entry = true,
@@ -710,12 +684,12 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 
 	/** traverse right side */
 	adjacent_index = buddy_entry->adj_end_right;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->adj_start_left != split_index)
+		if(adjacent_entry->adj_start_left != split_index)
 		{
-			assert(adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y);
+			assert(adjacent_entry->pixel_location_xy.y < buddy_entry->pixel_location_xy.y);
 			break;
 		}
 		adjacent_entry->adj_start_left = buddy_index;
@@ -725,10 +699,10 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 
 	/** traverse bottom side */
 	adjacent_index = buddy_entry->adj_end_down;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x)
+		if(adjacent_entry->pixel_location_xy.x < buddy_entry->pixel_location_xy.x)
 		{
 			assert(split_entry->adj_end_down == 0);
 			split_entry->adj_end_down = adjacent_index;
@@ -740,24 +714,24 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 	}
 
 	/** traverse top side */
-	buddy_end_x = buddy_entry->pixel_location.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << buddy_entry->x_size_class);
+	buddy_end_x = buddy_entry->pixel_location_xy.x + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << buddy_entry->x_size_class);
 	adjacent_index = split_entry->adj_start_up;
-	while (adjacent_entry)
+	while(adjacent_entry)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->x_size_class > buddy_entry->x_size_class || adjacent_entry->pixel_location.x == buddy_entry->pixel_location.x)
+		if(adjacent_entry->x_size_class > buddy_entry->x_size_class || adjacent_entry->pixel_location_xy.x == buddy_entry->pixel_location_xy.x)
 		{
 			assert(buddy_entry->adj_start_up == 0);
 			buddy_entry->adj_start_up = adjacent_index;
 		}
 
-		if (adjacent_entry->adj_end_down != split_index)
+		if(adjacent_entry->adj_end_down != split_index)
 		{
-			assert(adjacent_entry->pixel_location.x >= buddy_end_x || adjacent_entry->x_size_class > (split_entry->x_size_class + 1));
+			assert(adjacent_entry->pixel_location_xy.x >= buddy_end_x || adjacent_entry->x_size_class > (split_entry->x_size_class + 1));
 			break;
 		}
 
-		if (adjacent_entry->pixel_location.x >= buddy_entry->pixel_location.x)
+		if(adjacent_entry->pixel_location_xy.x >= buddy_entry->pixel_location_xy.x)
 		{
 			adjacent_entry->adj_end_down = buddy_index;
 		}
@@ -799,7 +773,7 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 
 	/* check the split entries offset is valid for it's size class */
 	assert((split_entry->packed_location & (1u << (split_entry->y_size_class * 2 + 1))) == 0);
-	assert((split_entry->pixel_location.y & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->y_size_class)) == 0);
+	assert((split_entry->pixel_location_xy.y & (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->y_size_class)) == 0);
 
 	buddy_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &buddy_index);
 
@@ -812,11 +786,11 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 		.adj_start_up = split_index,
 		.adj_end_right = split_entry->adj_end_right,
 		.adj_end_down  = split_entry->adj_end_down,
-		.pixel_location = u16_vec2_add(split_entry->pixel_location, u16_vec2_set(0, SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->x_size_class)),
+		.pixel_location_xy = u16_vec2_add(split_entry->pixel_location_xy, u16_vec2_set(0, SOL_IMAGE_ATLAS_MIN_TILE_SIZE << split_entry->x_size_class)),
 		.packed_location = split_entry->packed_location | (1u << (split_entry->x_size_class * 2 + 1)),
 		.x_size_class = split_entry->x_size_class,
 		.y_size_class = split_entry->y_size_class,
-		.array_slice = split_entry->array_slice,
+		.array_layer = split_entry->array_layer,
 		// .heap_index
 		.is_accessor = false,
 		.is_tile_entry = true,
@@ -829,12 +803,12 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 
 	/** traverse bottom side */
 	adjacent_index = buddy_entry->adj_end_down;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->adj_start_up != split_index)
+		if(adjacent_entry->adj_start_up != split_index)
 		{
-			assert(adjacent_entry->pixel_location.x < buddy_entry->pixel_location.x);
+			assert(adjacent_entry->pixel_location_xy.x < buddy_entry->pixel_location_xy.x);
 			break;
 		}
 		adjacent_entry->adj_start_up = buddy_index;
@@ -844,10 +818,10 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 
 	/** traverse right side */
 	adjacent_index = buddy_entry->adj_end_right;
-	while (adjacent_index)
+	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->pixel_location.y < buddy_entry->pixel_location.y)
+		if(adjacent_entry->pixel_location_xy.y < buddy_entry->pixel_location_xy.y)
 		{
 			assert(split_entry->adj_end_right == 0);
 			split_entry->adj_end_right = adjacent_index;
@@ -859,24 +833,24 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	}
 
 	/** traverse left side */
-	buddy_end_y = buddy_entry->pixel_location.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << buddy_entry->y_size_class);
+	buddy_end_y = buddy_entry->pixel_location_xy.y + (SOL_IMAGE_ATLAS_MIN_TILE_SIZE << buddy_entry->y_size_class);
 	adjacent_index = split_entry->adj_start_left;
-	while (adjacent_entry)
+	while(adjacent_entry)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if (adjacent_entry->y_size_class > buddy_entry->y_size_class || adjacent_entry->pixel_location.y == buddy_entry->pixel_location.y)
+		if(adjacent_entry->y_size_class > buddy_entry->y_size_class || adjacent_entry->pixel_location_xy.y == buddy_entry->pixel_location_xy.y)
 		{
 			assert(buddy_entry->adj_start_left == 0);
 			buddy_entry->adj_start_left = adjacent_index;
 		}
 
-		if (adjacent_entry->adj_end_right != split_index)
+		if(adjacent_entry->adj_end_right != split_index)
 		{
-			assert(adjacent_entry->pixel_location.y >= buddy_end_y || adjacent_entry->y_size_class > (split_entry->y_size_class + 1));
+			assert(adjacent_entry->pixel_location_xy.y >= buddy_end_y || adjacent_entry->y_size_class > (split_entry->y_size_class + 1));
 			break;
 		}
 
-		if (adjacent_entry->pixel_location.y >= buddy_entry->pixel_location.y)
+		if(adjacent_entry->pixel_location_xy.y >= buddy_entry->pixel_location_xy.y)
 		{
 			adjacent_entry->adj_end_right = buddy_index;
 		}
@@ -908,14 +882,14 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 
 	split_min = UINT32_MAX;
 
-	for (x = x_req; x < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x++)
+	for(x = x_req; x < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x++)
 	{
 		availiability_mask = atlas->availability_masks[x] >> y_req;
-		if (availiability_mask)
+		if(availiability_mask)
 		{
 			y = sol_u32_ctz(availiability_mask);
 			split = y + x;
-			if (split <= split_min)
+			if(split <= split_min)
 			{
 				split_min = split;
 				x_min = x;
@@ -924,7 +898,7 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 		}
 	}
 
-	if (split_min == UINT32_MAX)
+	if(split_min == UINT32_MAX)
 	{
 		return false;
 	}
@@ -961,11 +935,12 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 		/** preferentially split vertically if possible */
 		if(entry->y_size_class >= entry->x_size_class && entry->y_size_class != y_req)
 		{
+			assert(entry->y_size_class > y_req);
 			sol_image_atlas_entry_split_vertically(atlas, entry, entry_index);
 		}
 		else
 		{
-			assert(entry->x_size_class != x_req);
+			assert(entry->x_size_class > x_req);
 			sol_image_atlas_entry_split_horizontally(atlas, entry, entry_index);
 		}
 	}
@@ -976,13 +951,54 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 
 
 
-
-
-struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description)
+static inline uint32_t sol_image_atlas_create_header_entry(struct sol_image_atlas* atlas)
 {
-	uint32_t x_size_class, y_size_class, array_slice, entry_index;
+	uint32_t entry_index;
+	struct sol_image_atlas_entry* entry;
+
+	entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &entry_index);
+
+	*entry = (struct sol_image_atlas_entry)
+	{
+		.identifier = 0, /** "invalid" identifier */
+		.next_entry_index = entry_index,
+		.prev_entry_index = entry_index,
+		/** following 2 values being false indicate this entry is a header */
+		.is_tile_entry = false,
+		.is_accessor = false,
+	};
+
+	return entry_index;
+}
+
+static inline uint32_t sol_image_atlas_create_accessor_entry(struct sol_image_atlas* atlas, uint32_t header_entry_index, uint32_t accessor_index)
+{
+	uint32_t entry_index;
+	struct sol_image_atlas_entry* entry;
+
+	entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &entry_index);
+
+	*entry = (struct sol_image_atlas_entry)
+	{
+		.identifier = 0, /** "invalid" identifier */
+		.accessor_index = accessor_index,
+		.next_entry_index = SOL_U32_INVALID,
+		.prev_entry_index = SOL_U32_INVALID,
+		.is_tile_entry = false,
+		.is_accessor = true,
+	};
+
+	sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, header_entry_index);
+
+	return entry_index;
+}
+
+
+
+struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device)
+{
+	uint32_t x_size_class, y_size_class, array_layer, entry_index;
 	struct sol_image_atlas* atlas = malloc(sizeof(struct sol_image_atlas));
-	struct sol_image_atlas_entry* root_entry;
 	struct sol_image_atlas_entry* entry;
 
 	assert(description->image_x_dimension_exponent >= 8 && description->image_x_dimension_exponent <= 16);
@@ -990,9 +1006,31 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 
 	atlas->description = *description;
 
-	sol_vk_timeline_semaphore_initialise(&atlas->timeline_semaphore, atlas->description.device);
+	sol_vk_timeline_semaphore_initialise(&atlas->timeline_semaphore, device);
 
-	#warning initialise (tracked?) image
+	const VkImageCreateInfo image_create_info =
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = description->format,
+		.extent = (VkExtent3D)
+		{
+			.width  = 1u << description->image_x_dimension_exponent,
+			.height = 1u << description->image_y_dimension_exponent,
+			.depth  = 1u,
+		},
+		.mipLevels = 1,
+		.arrayLayers = description->image_array_dimension,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = description->usage,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+
+	sol_vk_supervised_image_initialise(&atlas->image, device, &image_create_info);
 
 	sol_image_atlas_entry_array_initialise(&atlas->entry_array, 1024);
 	sol_image_atlas_accessor_queue_initialise(&atlas->accessor_queue, 64);
@@ -1008,18 +1046,11 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	atlas->current_identifier = 0;
 	atlas->accessor_active = false;
 
-	root_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &atlas->root_entry_index);
-	assert(atlas->root_entry_index == 0);
+	atlas->root_active_entry_index = sol_image_atlas_create_header_entry(atlas);
+	atlas->root_expired_entry_index = sol_image_atlas_create_header_entry(atlas);
 
-	*root_entry = (struct sol_image_atlas_entry)
-	{
-		.identifier = 0, /** "invalid" identifier */
-		.next_entry_index = atlas->root_entry_index,
-		.prev_entry_index = atlas->root_entry_index,
-		/** following 2 values being false indicate this entry is the root */
-		.is_tile_entry = false,
-		.is_accessor = false,
-	};
+	/** for tile entries, index zero is reserved, make sure the unchanging root occupies this index */
+	assert(atlas->root_active_entry_index == 0);
 
 
 	for(x_size_class = 0; x_size_class < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x_size_class++)
@@ -1035,9 +1066,9 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	x_size_class = atlas->description.image_x_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
 	y_size_class = atlas->description.image_y_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
 
-	for(array_slice = 0; array_slice < atlas->description.image_array_dimension; array_slice++)
+	for(array_layer = 0; array_layer < atlas->description.image_array_dimension; array_layer++)
 	{
-		/** for every array slice make an entry filling the slive available */
+		/** for every array layer make an entry filling the slive available */
 		entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &entry_index);
 		*entry = (struct sol_image_atlas_entry)
 		{
@@ -1048,11 +1079,11 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 			.adj_start_up       = 0,
 			.adj_end_right = 0,
 			.adj_end_down   = 0,
-			.pixel_location = u16_vec2_set(0, 0),
-			.packed_location = array_slice << 24,
+			.pixel_location_xy = u16_vec2_set(0, 0),
+			.packed_location = array_layer << 24,
 			.x_size_class = x_size_class,
 			.y_size_class = y_size_class,
-			.array_slice = array_slice,
+			.array_layer = array_layer,
 			// .heap_index
 			// .access_index
 			// .is_transient
@@ -1068,7 +1099,7 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	return atlas;
 }
 
-void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
+void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
 {
 	uint32_t x_size_class, y_size_class;
 	struct sol_image_atlas_accessor* accessor;
@@ -1080,24 +1111,36 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 	/** wait on and then release all accessors */
 	while(sol_image_atlas_accessor_queue_dequeue_ptr(&atlas->accessor_queue, &accessor))
 	{
-		sol_vk_timeline_semaphore_moment_wait(&accessor->complete_moment, atlas->description.device);
+		sol_vk_timeline_semaphore_moment_wait(&accessor->complete_moment, device);
 
-		threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, accessor->threshold_entry_index);
+		threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, accessor->active_threshold_entry_index);
 		assert(threshold_entry->is_accessor);
+		sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
 
+		threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, accessor->expired_threshold_entry_index);
+		assert(threshold_entry->is_accessor);
 		sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
 	}
 
-	/** free all entries in the entry linked list queue */
-	root_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->root_entry_index);
-	while(root_entry->next_entry_index != atlas->root_entry_index)
+	/** free all entries in the expired linked list queue */
+	root_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->root_expired_entry_index);
+	while(root_entry->next_entry_index != atlas->root_expired_entry_index)
 	{
 		sol_image_atlas_entry_evict(atlas, root_entry->next_entry_index);
 	}
-	assert(root_entry->next_entry_index == atlas->root_entry_index);
-	assert(root_entry->prev_entry_index == atlas->root_entry_index);
-	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_entry_index);
+	assert(root_entry->next_entry_index == atlas->root_expired_entry_index);
+	assert(root_entry->prev_entry_index == atlas->root_expired_entry_index);
+	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_expired_entry_index);
 
+	/** free all entries in the active linked list queue */
+	root_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->root_active_entry_index);
+	while(root_entry->next_entry_index != atlas->root_active_entry_index)
+	{
+		sol_image_atlas_entry_evict(atlas, root_entry->next_entry_index);
+	}
+	assert(root_entry->next_entry_index == atlas->root_active_entry_index);
+	assert(root_entry->prev_entry_index == atlas->root_active_entry_index);
+	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_active_entry_index);
 
 
 	x_size_class = atlas->description.image_x_dimension_exponent - SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT;
@@ -1110,8 +1153,8 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 		/** assert contents are as expected */
 		assert(entry->x_size_class == x_size_class);
 		assert(entry->y_size_class == y_size_class);
-		assert(entry->pixel_location.x == 0);
-		assert(entry->pixel_location.y == 0);
+		assert(entry->pixel_location_xy.x == 0);
+		assert(entry->pixel_location_xy.y == 0);
 		assert(entry->next_entry_index == 0);
 		assert(entry->prev_entry_index == 0);
 		assert(entry->identifier == 0);
@@ -1120,7 +1163,8 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 	}
 
 
-	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_entry_index);
+	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_expired_entry_index);
+	sol_image_atlas_entry_array_remove(&atlas->entry_array, atlas->root_active_entry_index);
 	assert(sol_image_atlas_entry_array_count(&atlas->entry_array) == 0);
 
 
@@ -1137,12 +1181,99 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas)
 	sol_image_atlas_accessor_queue_terminate(&atlas->accessor_queue);
 	sol_image_atlas_entry_array_terminate(&atlas->entry_array);
 
-	sol_vk_timeline_semaphore_terminate(&atlas->timeline_semaphore, atlas->description.device);
+	sol_vk_timeline_semaphore_terminate(&atlas->timeline_semaphore, device);
 
-	#warning destroy image
+	sol_vk_supervised_image_terminate(&atlas->image, device);
 
 	free(atlas);
 }
+
+static inline void sol_image_atlas_prune_accessors(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
+{
+	struct sol_image_atlas_accessor* accessor;
+	struct sol_image_atlas_entry* threshold_entry;
+	struct sol_image_atlas_entry* header_entry;
+	struct sol_image_atlas_entry* expired_entry;
+	uint32_t expired_entry_index;
+
+	while(sol_image_atlas_accessor_queue_access_front(&atlas->accessor_queue, &accessor))
+	{
+		if( ! sol_vk_timeline_semaphore_moment_query(&accessor->complete_moment, device))
+		{
+			break;
+		}
+
+		/** remove the markers */
+		threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, accessor->active_threshold_entry_index);
+		assert(threshold_entry->is_accessor);
+		sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
+
+		threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, accessor->expired_threshold_entry_index);
+		assert(threshold_entry->is_accessor);
+		sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
+
+		sol_image_atlas_accessor_queue_prune_front(&atlas->accessor_queue);
+	}
+
+
+	/** make all expired entries available */
+	header_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->root_expired_entry_index);
+
+	while(1)
+	{
+		expired_entry_index = header_entry->next_entry_index;
+		expired_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, expired_entry_index);
+
+		if( ! expired_entry->is_tile_entry)
+		{
+			break;
+		}
+
+		assert(expired_entry->identifier == 0);
+		sol_image_atlas_entry_remove_from_queue(atlas, expired_entry);
+		sol_image_atlas_entry_make_available(atlas, expired_entry_index);
+	}
+}
+
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
+{
+	struct sol_vk_timeline_semaphore_moment prior_moment;
+	struct sol_image_atlas_accessor* accessor;
+	uint32_t accessor_index;
+
+	sol_image_atlas_prune_accessors(atlas, device);
+
+	assert(!atlas->accessor_active);
+
+	/** generating the moment at the start of an access like this may need to change in future if multiple accessors can be active at once */
+	prior_moment = atlas->current_moment;
+	atlas->current_moment = sol_vk_timeline_semaphore_generate_moment(&atlas->timeline_semaphore);
+
+	sol_image_atlas_accessor_queue_enqueue_ptr(&atlas->accessor_queue, &accessor, &accessor_index);
+	accessor->complete_moment = atlas->current_moment;
+	accessor->active_threshold_entry_index = sol_image_atlas_create_accessor_entry(atlas, atlas->root_active_entry_index, accessor_index);
+	accessor->expired_threshold_entry_index = sol_image_atlas_create_accessor_entry(atlas, atlas->root_expired_entry_index, accessor_index);
+
+	atlas->active_accessor_index = accessor_index;
+	atlas->accessor_active = true;
+
+	return prior_moment;
+}
+
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
+{
+	struct sol_image_atlas_accessor* accessor;
+
+	sol_image_atlas_prune_accessors(atlas, device);
+
+	assert(atlas->accessor_active);
+	atlas->accessor_active = false;
+
+	/** NOTE: device is an input despite not being used because it may be necessary if, in future multiple accessors can be active at once */
+
+	return atlas->current_moment;
+}
+
 
 
 uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas)
@@ -1152,13 +1283,225 @@ uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas)
 	return atlas->current_identifier;
 }
 
+enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location)
+{
+	struct sol_image_atlas_entry* entry;
+	struct sol_image_atlas_accessor* accessor;
+	enum sol_map_result map_find_result;
+	uint32_t* entry_index_ptr;
+	uint32_t entry_index;
+	uint32_t accessor_index;
 
-/** an access marker for writes may be necessary/important in order to track when an entry has finished being written?
- 	can PROBABLY avoid injecting "accessor" entries into linked list altogether; instead just keeping accessor index in every entry
- 		^ by moving whole sections of a linked list to another upon their "complete" moment passing the inactive list of entries can be easily maintained (their accessor list will remain invalid)
- 	also of note:
- */
+	/** must have an accessor active to be able to use entries */
+	assert(atlas->accessor_active);
+	accessor_index = atlas->active_accessor_index;
 
+	map_find_result = sol_image_atlas_map_find(&atlas->itentifier_entry_map, entry_identifier, &entry_index_ptr);
+
+	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+	{
+		#warning handle write vs read case (does it make sense to be able to write after find, rather than obtain? )
+
+		entry_index = *entry_index_ptr;
+		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+
+		assert(entry->identifier == entry_identifier);
+
+		if(entry->accessor_index != accessor_index)
+		{
+			sol_image_atlas_entry_remove_from_queue(atlas, entry);
+
+			accessor = sol_image_atlas_accessor_queue_access_entry(&atlas->accessor_queue, accessor_index);
+
+			entry->accessor_index = accessor_index;
+			sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, accessor->active_threshold_entry_index);
+		}
+
+		entry_location->array_layer = entry->array_layer;
+		entry_location->xy = entry->pixel_location_xy;
+
+		return SOL_IMAGE_ATLAS_SUCCESS_FOUND;
+	}
+	else
+	{
+		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
+		return SOL_IMAGE_ATLAS_FAIL_ABSENT;
+	}
+}
+
+enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, bool write_access, bool transient, struct sol_image_atlas_location* entry_location)
+{
+	/** NOTE acquiring space (when required) will change the hash map
+	 * as such the pointer returned for obtain will no longer be valid and is not worth keeping around
+	 * so its better to attempt find and then obtain instead once space has been made */
+
+	/** write access will never return found, only absent or inserted */
+
+	struct sol_image_atlas_entry_availability_heap* availability_heap;
+	struct sol_image_atlas_entry* entry;
+	const struct sol_image_atlas_entry* top_available_entry;
+	const struct sol_image_atlas_entry* evictable_entry;
+	const struct sol_image_atlas_entry* header_entry;
+	struct sol_image_atlas_accessor* accessor;
+	enum sol_map_result map_find_result, map_remove_result;
+	uint32_t* entry_index_in_map;
+	uint32_t entry_index, active_accessor_index, x_size_class, y_size_class, top_available_entry_index;
+	bool size_mismatch, better_location;
+
+	/** must have an accessor active to be able to use entries */
+	assert(atlas->accessor_active);
+	active_accessor_index = atlas->active_accessor_index;
+
+	x_size_class = sol_u32_exp_ge(size.x >> SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT);
+	y_size_class = sol_u32_exp_ge(size.y >> SOL_IMAGE_ATLAS_MIN_TILE_SIZE_EXPONENT);
+
+	map_find_result = sol_image_atlas_map_find(&atlas->itentifier_entry_map, entry_identifier, &entry_index_in_map);
+	size_mismatch = false;
+
+	entry = NULL;// not needed
+	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+	{
+		entry_index = *entry_index_in_map;
+		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+
+		assert(entry->identifier == entry_identifier);
+
+		/** its supported to request a different sized entry if also accessing with write_access
+		 * so need to handle reallocation/repositioning of entries in this case */
+		size_mismatch = x_size_class != entry->x_size_class || y_size_class != entry->y_size_class;
+		/** if there is a size mismatch must have requested write access */
+		assert(!size_mismatch || write_access);
+
+		/** should not try to write an entry twice within a single accessor
+		 * if write access was requested it must be the first time encountering the entry within this accessor
+		 * this also ensures a size mismatch cannot occurr within the span of a single accessor */
+		assert(!write_access || entry->accessor_index != active_accessor_index);
+
+
+		if(entry->accessor_index != active_accessor_index)
+		{
+			sol_image_atlas_entry_remove_from_queue(atlas, entry);
+
+			if(write_access)
+			{
+				#warning move this to a function...?
+				/** use this opportunity to move to a "better" location if one exists
+				 * a better analysis might check if splitting new location would result in a better location
+				 * balanced against current locations potential to coalesce,
+				 * (maybe the general search region for new location is determined or weighted by present locations coalescion potential)
+				 * couls also spurriously fail (requiring re-creation of resource, though this is unnecessarily expensive) */
+				if(atlas->availability_masks[x_size_class] & (1u << y_size_class))
+				{
+					availability_heap = &atlas->availablity_heaps[x_size_class][y_size_class];
+					top_available_entry_index = *sol_image_atlas_entry_availability_heap_access_top(availability_heap);
+					top_available_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, top_available_entry_index);
+
+					better_location = top_available_entry->packed_location < entry->packed_location;
+				}
+			}
+
+			if(size_mismatch || better_location)
+			{
+				entry->identifier = 0;
+				/** make entry available now or in the future, effectively removing it, needs to be replaced, mark map as errant in this location */
+				if(sol_image_atlas_accessor_queue_index_valid(&atlas->accessor_queue, entry->accessor_index))
+				{
+					accessor = sol_image_atlas_accessor_queue_access_entry(&atlas->accessor_queue, entry->accessor_index);
+					sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, accessor->expired_threshold_entry_index);
+				}
+				else
+				{
+					sol_image_atlas_entry_make_available(atlas, entry_index);
+				}
+
+				/** NOTE: this invalidates the entry so set it as such and poison the map for this identifier */
+				*entry_index_in_map = 0;/* not strictly needed */
+				entry = NULL;
+			}
+			else
+			{
+				/** put in entry queue sector of accessor,  */
+				entry->accessor_index = active_accessor_index;
+				accessor = sol_image_atlas_accessor_queue_access_entry(&atlas->accessor_queue, active_accessor_index);
+				sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, accessor->active_threshold_entry_index);
+			}
+		}
+
+		/** found and not replaced (hot path) */
+		if(entry)
+		{
+			entry_location->array_layer = entry->array_layer;
+			entry_location->xy = entry->pixel_location_xy;
+			return SOL_IMAGE_ATLAS_SUCCESS_FOUND;
+		}
+	}
+
+	/** no entry, either not found or needs to be replaced */
+
+	if( ! sol_image_atlas_acquire_available_entry_of_size(atlas, size, &entry_index))
+	{
+		/** no entry of requested size available, need to make space by freeing unused entries
+		 * NOTE: this invalidates the map result */
+		entry_index_in_map = NULL;
+		header_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->root_active_entry_index);
+
+		do
+		{
+			evictable_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, header_entry->next_entry_index);
+			if(evictable_entry->is_tile_entry)
+			{
+				sol_image_atlas_entry_evict(atlas, header_entry->next_entry_index);
+			}
+			else
+			{
+				/** failed to allocate an entry of this size because the map is full, ergo fail
+				 * should be an accessor if its not a tile and the map is non-empty */
+				assert(evictable_entry->is_accessor);
+				if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+				{
+					/** should only fail to reallocate an entry if there was a size mismatch */
+					assert(size_mismatch);
+					map_remove_result = sol_image_atlas_map_remove(&atlas->itentifier_entry_map, entry_identifier, NULL);
+					assert(map_remove_result == SOL_MAP_SUCCESS_REMOVED);
+				}
+				return SOL_IMAGE_ATLAS_FAIL_FULL;
+			}
+		}
+		while( ! sol_image_atlas_acquire_available_entry_of_size(atlas, size, &entry_index));
+	}
+
+	/** if the map has been altered then the pointer to the old entry will have become invalid (indicated by being set to null)
+	 * as such the entrty in the map must be obtained again */
+	if(entry_index_in_map == NULL)
+	{
+		switch(sol_image_atlas_map_obtain(&atlas->itentifier_entry_map, entry_identifier, &entry_index_in_map))
+		{
+		case SOL_MAP_FAIL_FULL:
+			/** should not fail to find this entry again if it did exist previously
+			 * as it will not have been removed, but may have been relocated */
+			assert(map_find_result != SOL_MAP_SUCCESS_FOUND);
+			fprintf(stderr, "image atlas identifier map is full or has suffered a hash colission, this should not be possible in reasonable scenarios");
+			/** could not create space in the map so put the entry back on the available heap and return failure
+			 * this should be very unlikely*/
+			sol_image_atlas_entry_make_available(atlas, entry_index);
+			return SOL_IMAGE_ATLAS_FAIL_FULL;
+		default:
+			assert(entry_index_in_map != NULL);
+		}
+	}
+
+	*entry_index_in_map = entry_index;
+	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+	// assert some things about entry here?
+	entry->identifier = entry_identifier;
+	entry->accessor_index = active_accessor_index;
+	accessor = sol_image_atlas_accessor_queue_access_entry(&atlas->accessor_queue, active_accessor_index);
+	sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, accessor->active_threshold_entry_index);
+
+	entry_location->array_layer = entry->array_layer;
+	entry_location->xy = entry->pixel_location_xy;
+	return SOL_IMAGE_ATLAS_SUCCESS_INSERTED;
+}
 
 
 
