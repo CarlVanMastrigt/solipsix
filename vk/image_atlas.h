@@ -58,7 +58,8 @@ struct sol_image_atlas_description
 
 struct sol_image_atlas_location
 {
-	u16_vec2 xy;
+	uint16_t x;
+	uint16_t y;
 	uint8_t array_layer;
 };
 
@@ -66,10 +67,10 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
 /** must wait on returned moment before doing anything with the atlas
- * this especially includes writing returned entries */
+ * (reading or writing accessed entries) */
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-/** after reading and/or writing resources the returned moment must be signalled */
+/** moment must be signalled after all reads and writes to the atlas have completed */
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
 
