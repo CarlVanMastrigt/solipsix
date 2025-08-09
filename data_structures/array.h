@@ -69,7 +69,7 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_terminate)(struct 
     free(a->array);
 }
 
-static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t* index_ptr)
+static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
     uint32_t i;
     if(!sol_available_indices_stack_remove(&a->available_indices, &i))
@@ -81,6 +81,13 @@ static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_a
         }
         i = a->count++;
     }
+    return i;
+}
+
+static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t* index_ptr)
+{
+    uint32_t i;
+    i = SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(a);
     if(index_ptr)
     {
     	*index_ptr = i;
@@ -91,7 +98,8 @@ static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_a
 static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct SOL_ARRAY_STRUCT_NAME* a, SOL_ARRAY_ENTRY_TYPE value)
 {
 	uint32_t i;
-    *(SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_ptr)(a, &i)) = value;
+    i = SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(a);
+    a->array[i] = value;
     return i;
 }
 

@@ -65,7 +65,8 @@ struct sol_image_atlas_location
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-/** must wait on returned moment before doing anything with the atlas */
+/** must wait on returned moment before doing anything with the atlas
+ * this especially includes writing returned entries */
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
 /** after reading and/or writing resources the returned moment must be signalled */
@@ -84,6 +85,10 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 	this must be used with write if its contents will be modified in any way
 	if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised */
 enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, bool write_access, bool transient, struct sol_image_atlas_location* entry_location);
+
+
+struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas);
+
 
 #warning should readonly access be a viable option? (allowing only find operations) could also make this immediate in that incomplete writes are NOT vended
 

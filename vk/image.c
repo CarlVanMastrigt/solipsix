@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_vk.h"
 
-void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info)
+void sol_vk_supervised_image_initialise_default(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info)
 {
     #warning either here or in image atlas probably want `size_t bytes_per_pixel` (derived from format)
 

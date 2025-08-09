@@ -45,11 +45,17 @@ struct sol_vk_supervised_image
     VkAccessFlagBits2 read_access_mask;
 };
 
-void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info);
+void sol_vk_supervised_image_initialise_default(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info);
 void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device);//does nothing
 
 void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer cb, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask);
 /** TODO: want a function that manages similar to above but in the context of render passes */
 
 
+VkImageView sol_vk_supervised_image_view_get(struct sol_vk_supervised_image* supervised_image);
+
+
+/** it should be possible to track the current state across a QFOT and mark a supervised image as such
+ * also new access/stage masks are ignored on release making this very easy
+ * DEFINITELY worth looking into! */
 

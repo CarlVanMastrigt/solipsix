@@ -25,7 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_MEMORY_H
 #define CVM_VK_MEMORY_H
 
-
+#warning NIX THIS
 
 typedef struct cvm_vk_staging_buffer_region
 {
