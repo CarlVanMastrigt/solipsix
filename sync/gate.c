@@ -92,7 +92,6 @@ static void sol_sync_gate_terminate(void* entry, void* data)
     assert(gate->condition == NULL);
 }
 
-
 void sol_sync_gate_pool_initialise(struct sol_sync_gate_pool* pool, size_t capacity_exponent)
 {
     sol_lockfree_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(struct sol_sync_gate));
@@ -115,12 +114,11 @@ struct sol_sync_gate * sol_sync_gate_prepare(struct sol_sync_gate_pool* pool)
 
     gate = sol_lockfree_pool_acquire_entry(&pool->available_gates);
     assert(atomic_load(&gate->status) == 0);
-    /// this is 0 dependencies and in the non-waiting state, this could be made some high count with a fetch sub in `sol_sync_gate_wait` if error checking is desirable
+    /** 0 indicates no dependencies and gate is in the non-waiting state, this could be made some high count with a fetch sub in `sol_sync_gate_wait` if error checking is desirable */
 
     return gate;
 }
 
-// could have a system to execute tasks while waiting, but waiting is really undesirable anyway so avoid it flat out
 void sol_sync_gate_wait(struct sol_sync_gate * gate)
 {
     mtx_t mutex;
@@ -177,7 +175,7 @@ void sol_sync_gate_impose_conditions(struct sol_sync_gate * gate, uint_fast32_t 
     uint_fast32_t old_status = atomic_fetch_add_explicit(&gate->status, count, memory_order_relaxed);
     assert(!(old_status & SOL_GATE_WAITING_FLAG) || (old_status & SOL_GATE_CONDITION_MASK) > 0);
     // illegal to impose a condition on a gate that is being waited on and has no outsatnding conditions
-    /// ADDING dependencies shouldn't incurr memory ordering restrictions
+    /// IMPOSING conditions shouldn't incurr memory ordering restrictions, only satisfying them
 }
 
 void sol_sync_gate_signal_conditions(struct sol_sync_gate* gate, uint_fast32_t count)

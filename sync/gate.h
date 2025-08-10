@@ -23,8 +23,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 #include "lockfree/pool.h"
-
 #include "sync/primitive.h"
+
+/** special thank you to my dad Peter, for suggesting the name for this */
+struct sol_sync_gate;
 
 struct sol_sync_gate_pool
 {
@@ -33,8 +35,6 @@ struct sol_sync_gate_pool
 
 void sol_sync_gate_pool_initialise(struct sol_sync_gate_pool* pool, size_t capacity_exponent);
 void sol_sync_gate_pool_terminate(struct sol_sync_gate_pool* pool);
-
-struct sol_sync_gate;
 
 struct sol_sync_gate* sol_sync_gate_prepare(struct sol_sync_gate_pool* pool);
 

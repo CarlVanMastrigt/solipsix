@@ -122,7 +122,7 @@ struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
     CVM_VK_CHECK(vkEndCommandBuffer(command_buffer->buffer));
 
     assert(command_buffer->signal_count<4);
-    completion_moment = sol_vk_timeline_semaphore_generate_moment(&queue->timeline);
+    completion_moment = sol_vk_timeline_semaphore_generate_new_moment(&queue->timeline);
     command_buffer->signal_info[command_buffer->signal_count++] = sol_vk_timeline_semaphore_moment_submit_info(&completion_moment, completion_signal_stages);
 
     VkSubmitInfo2 submit_info=

@@ -26,17 +26,17 @@ void sol_vk_timeline_semaphore_initialise(struct sol_vk_timeline_semaphore* time
     /** TODO: instead have a cache in device to pull from */
     VkSemaphoreCreateInfo timeline_semaphore_create_info=(VkSemaphoreCreateInfo)
     {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext=(VkSemaphoreTypeCreateInfo[1])
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = (VkSemaphoreTypeCreateInfo[1])
         {
             {
-                .sType=VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-                .pNext=NULL,
-                .semaphoreType=VK_SEMAPHORE_TYPE_TIMELINE,
-                .initialValue=0,
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+                .pNext = NULL,
+                .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+                .initialValue = 0,
             }
         },
-        .flags=0
+        .flags = 0,
     };
 
     VkResult result = vkCreateSemaphore(device->device, &timeline_semaphore_create_info, NULL, &timeline_semaphore->semaphore);
@@ -49,14 +49,23 @@ void sol_vk_timeline_semaphore_terminate(struct sol_vk_timeline_semaphore* timel
     vkDestroySemaphore(device->device, timeline_semaphore->semaphore, NULL);
 }
 
-struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_generate_moment(struct sol_vk_timeline_semaphore* timeline_semaphore)
+struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_generate_new_moment(struct sol_vk_timeline_semaphore* timeline_semaphore)
 {
     timeline_semaphore->value++;
 
     return (struct sol_vk_timeline_semaphore_moment)
     {
         .semaphore = timeline_semaphore->semaphore,
-        .value = timeline_semaphore->value,
+        .value     = timeline_semaphore->value,
+    };
+}
+
+struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_current_moment(struct sol_vk_timeline_semaphore* timeline_semaphore)
+{
+    return (struct sol_vk_timeline_semaphore_moment)
+    {
+        .semaphore = timeline_semaphore->semaphore,
+        .value     = timeline_semaphore->value,
     };
 }
 
@@ -64,17 +73,18 @@ VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct 
 {
     return (VkSemaphoreSubmitInfo)
     {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .pNext=NULL,
-        .semaphore=moment->semaphore,
-        .value=moment->value,
-        .stageMask=stages,
-        .deviceIndex=0
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .pNext = NULL,
+        .semaphore = moment->semaphore,
+        .value = moment->value,
+        .stageMask = stages,
+        .deviceIndex = 0
     };
 }
 
 static inline bool sol_vk_timeline_semaphore_moment_wait_multiple_timed(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, bool repeatedly_wait, uint64_t timeout, const struct cvm_vk_device* device)
 {
+    #warning do moments in batches and make the size opaque ??
     uint32_t i;
     VkResult result;
     VkSemaphore semaphores[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
@@ -123,6 +133,12 @@ bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semapho
     return sol_vk_timeline_semaphore_moment_wait_multiple_timed(moment, 1, true, false, 0, device);
 }
 
+void sol_vk_timeline_semaphore_moment_signal(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
+{
+    sol_vk_timeline_semaphore_moment_signal_multiple(moment, 1, device);
+}
+
+
 void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device)
 {
     sol_vk_timeline_semaphore_moment_wait_multiple_timed(moments, moment_count, wait_on_all, true, SOL_VK_DEFAULT_TIMEOUT, device);
@@ -132,4 +148,25 @@ bool sol_vk_timeline_semaphore_moment_query_multiple(const struct sol_vk_timelin
 {
     return sol_vk_timeline_semaphore_moment_wait_multiple_timed(moments, moment_count, wait_on_all, false, 0, device);
 }
+
+void sol_vk_timeline_semaphore_moment_signal_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, const struct cvm_vk_device* device)
+{
+    uint32_t i;
+    VkResult result;
+    VkSemaphoreSignalInfo signal_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+        .pNext = NULL,
+    };
+
+    for (i = 0; i < moment_count; i++)
+    {
+        signal_info.semaphore = moments[i].semaphore;
+        signal_info.value     = moments[i].value;
+
+        result = vkSignalSemaphore(device->device, &signal_info);
+        assert(result == VK_SUCCESS);
+    }
+}
+
 

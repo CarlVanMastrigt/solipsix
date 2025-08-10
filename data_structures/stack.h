@@ -140,6 +140,11 @@ static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_copy)(struct SOL_S
     memcpy(dst, s->data, sizeof(SOL_STACK_ENTRY_TYPE) * s->count);
 }
 
+static inline uint32_t SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_count)(struct SOL_STACK_STRUCT_NAME* s)
+{
+    return s->count;
+}
+
 
 #undef SOL_STACK_ENTRY_TYPE
 #undef SOL_STACK_FUNCTION_PREFIX

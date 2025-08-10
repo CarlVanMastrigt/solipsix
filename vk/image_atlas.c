@@ -957,10 +957,12 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 
 	assert(description->image_x_dimension_exponent >= 8 && description->image_x_dimension_exponent <= 16);
 	assert(description->image_y_dimension_exponent >= 8 && description->image_y_dimension_exponent <= 16);
+	assert(description->image_array_dimension > 0);
 
 	atlas->description = *description;
 
 	sol_vk_timeline_semaphore_initialise(&atlas->timeline_semaphore, device);
+	atlas->current_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
 
 	const VkImageCreateInfo image_create_info =
 	{
@@ -1077,7 +1079,10 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	assert(!atlas->accessor_active);
 
 	/** wait on and then release most recent access */
-	sol_vk_timeline_semaphore_moment_wait(&atlas->current_moment, device);
+	if(atlas->current_moment.semaphore != VK_NULL_HANDLE)
+	{
+		sol_vk_timeline_semaphore_moment_wait(&atlas->current_moment, device);
+	}
 	threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, atlas->threshold_entry_index);
 	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
 
@@ -1104,14 +1109,18 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 		assert(entry->x_size_class == x_size_class);
 		assert(entry->y_size_class == y_size_class);
 		assert((entry->packed_location & 0x00FFFFFFu) == 0u);
-		assert(entry->next_entry_index == 0);
-		assert(entry->prev_entry_index == 0);
+		assert(entry->next_entry_index == SOL_IA_INVALID_IDX);
+		assert(entry->prev_entry_index == SOL_IA_INVALID_IDX);
+		assert(entry->adj_start_left == 0);
+		assert(entry->adj_start_up == 0);
+		assert(entry->adj_end_right == 0);
+		assert(entry->adj_end_down == 0);
 		assert(entry->identifier == 0);
 		assert(entry->is_tile_entry);
 		assert(entry->is_available);
 	}
 
-	assert(sol_image_atlas_entry_array_count(&atlas->entry_array) == 0);
+	assert(sol_image_atlas_entry_array_is_empty(&atlas->entry_array));
 
 
 	for(x_size_class = 0; x_size_class < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x_size_class++)
@@ -1152,7 +1161,7 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct so
 	assert(atlas->accessor_active);
 	atlas->accessor_active = false;
 
-	atlas->current_moment = sol_vk_timeline_semaphore_generate_moment(&atlas->timeline_semaphore);
+	atlas->current_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
 
 	return atlas->current_moment;
 }

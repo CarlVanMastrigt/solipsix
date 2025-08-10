@@ -122,9 +122,9 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_clear)(struct SOL_
     a->count = 0;
 }
 
-static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_count)(struct SOL_ARRAY_STRUCT_NAME* a)
+static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_is_empty)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
-    return a->count;
+    return a->count == sol_available_indices_stack_count(&a->available_indices);
 }
 
 static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_get_entry)(const struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
