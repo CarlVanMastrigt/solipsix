@@ -42,7 +42,7 @@ void sol_vk_timeline_semaphore_initialise(struct sol_vk_timeline_semaphore* time
 void sol_vk_timeline_semaphore_terminate(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device);
 
 struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_generate_new_moment(struct sol_vk_timeline_semaphore* timeline_semaphore);
-struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_current_moment(struct sol_vk_timeline_semaphore* timeline_semaphore);
+struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_get_current_moment(struct sol_vk_timeline_semaphore* timeline_semaphore);
 
 VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct sol_vk_timeline_semaphore_moment* moment, VkPipelineStageFlags2 stages);
 

@@ -86,7 +86,7 @@ struct sol_gui_theme
 };
 
 //
-static inline struct cvm_overlay_font* sol_gui_theme_get_font(struct sol_gui_theme* theme)
+static inline struct sol_font* sol_gui_theme_get_font(struct sol_gui_theme* theme)
 {
     return theme->font;
 }

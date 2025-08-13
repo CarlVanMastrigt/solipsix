@@ -52,6 +52,8 @@ bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_loc
 
 bool sol_lockfree_hopper_is_closed(struct sol_lockfree_hopper* hopper);
 
+#warning can signal being closed for atomics by replacing pointer to (?) with pointer to hopper itself
+
 
 /** closing the range
  * usage pattern is:  close -> iterate -> relinquish_range

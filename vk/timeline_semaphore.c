@@ -60,7 +60,7 @@ struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_generate_new_m
     };
 }
 
-struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_current_moment(struct sol_vk_timeline_semaphore* timeline_semaphore)
+struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_get_current_moment(struct sol_vk_timeline_semaphore* timeline_semaphore)
 {
     return (struct sol_vk_timeline_semaphore_moment)
     {
