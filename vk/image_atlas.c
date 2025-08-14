@@ -689,14 +689,20 @@ static inline void sol_image_atlas_entry_evict(struct sol_image_atlas* atlas, ui
 
 /** NOTE: will always maintain the index of the split location, creating a new entry (and index with it) for the adjacent tile created by splitting
  * this should also only be called on available entries */
-static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atlas* atlas, struct sol_image_atlas_entry* split_entry, uint32_t split_index)
+static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atlas* atlas, uint32_t split_index)
 {
 	struct sol_image_atlas_entry_availability_heap* availability_heap;
+	struct sol_image_atlas_entry* split_entry;
 	struct sol_image_atlas_entry* buddy_entry;
 	struct sol_image_atlas_entry* adjacent_entry;
 	uint32_t buddy_index, adjacent_index;
 
+	/** split entry must be accessed after buddy as append alters the array (may relocate in memory) */
+	buddy_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &buddy_index);
+	split_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, split_index);
+
 	/** validate entry to split really does look available */
+	assert(split_entry == sol_image_atlas_entry_array_access_entry(&atlas->entry_array, split_index));
 	assert(split_entry->is_available);
 	assert(split_entry->is_tile_entry);
 	assert(split_entry->identifier == 0);
@@ -709,8 +715,6 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 
 	/** check the split entries offset is valid for it's size class */
 	assert((split_entry->packed_location & (1u << (split_entry->x_size_class * 2u + 0u))) == 0u);
-
-	buddy_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &buddy_index);
 
 	*buddy_entry = (struct sol_image_atlas_entry)
 	{
@@ -803,17 +807,23 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 	sol_image_atlas_entry_availability_heap_append(availability_heap, buddy_index, atlas);
 
 	/** mark the bit in availability mask to indicate there is a tile/entry of the split off buddies size available */
-	atlas->availability_masks[buddy_entry->x_size_class] |= (1 << buddy_entry->y_size_class);
+	assert((atlas->availability_masks[buddy_entry->x_size_class] & (1u << buddy_entry->y_size_class)) == 0);
+	atlas->availability_masks[buddy_entry->x_size_class] |= (1u << buddy_entry->y_size_class);
 }
 
 /** NOTE: will always maintain the index of the split location, creating a new entry (and index with it) for the adjacent tile created by splitting
  * this should also only be called on available entries */
-static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas* atlas, struct sol_image_atlas_entry* split_entry, uint32_t split_index)
+static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas* atlas, uint32_t split_index)
 {
 	struct sol_image_atlas_entry_availability_heap* availability_heap;
+	struct sol_image_atlas_entry* split_entry;
 	struct sol_image_atlas_entry* buddy_entry;
 	struct sol_image_atlas_entry* adjacent_entry;
 	uint32_t buddy_index, adjacent_index;
+
+	/** split entry must be accessed after buddy as append alters the array (may relocate in memory) */
+	buddy_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &buddy_index);
+	split_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, split_index);
 
 	/** validate entry to split really does look available */
 	assert(split_entry->is_available);
@@ -828,8 +838,6 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 
 	/** check the split entries offset is valid for it's size class */
 	assert((split_entry->packed_location & (1u << (split_entry->y_size_class * 2u + 1u))) == 0u);
-
-	buddy_entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &buddy_index);
 
 	*buddy_entry = (struct sol_image_atlas_entry)
 	{
@@ -923,7 +931,8 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	sol_image_atlas_entry_availability_heap_append(availability_heap, buddy_index, atlas);
 
 	/** mark the bit in availability mask to indicate there is a tile/entry of the split off buddies size available */
-	atlas->availability_masks[buddy_entry->x_size_class] |= (1 << buddy_entry->y_size_class);
+	assert((atlas->availability_masks[buddy_entry->x_size_class] & (1u << buddy_entry->y_size_class)) == 0);
+	atlas->availability_masks[buddy_entry->x_size_class] |= (1u << buddy_entry->y_size_class);
 }
 
 static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_image_atlas* atlas, u16_vec2 size, uint32_t* entry_index_ptr)
@@ -975,6 +984,7 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 		atlas->availability_masks[x_min] &= ~(1 << y_min);
 	}
 
+
 	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 
 	/** validate entry really does look available */
@@ -993,13 +1003,17 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 		if(entry->x_size_class == x_req || (entry->y_size_class >= entry->x_size_class && entry->y_size_class != y_req))
 		{
 			assert(entry->y_size_class > y_req);
-			sol_image_atlas_entry_split_vertically(atlas, entry, entry_index);
+			sol_image_atlas_entry_split_vertically(atlas, entry_index);
 		}
 		else
 		{
 			assert(entry->x_size_class > x_req);
-			sol_image_atlas_entry_split_horizontally(atlas, entry, entry_index);
+			sol_image_atlas_entry_split_horizontally(atlas, entry_index);
 		}
+
+		#warning this may be faster if instead it tracks size locally (without accessing ptr at all outside asserts)
+		/** old entry ptr may have been invalidated */
+		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 	}
 
 	return true;
@@ -1439,17 +1453,14 @@ void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
 	uint32_t adj_index;
 	uint32_t total_size = 0;
 	uint32_t tile_count = 0;
+	bool could_combine;
 
 	for(entry_index = 0; entry_index < atlas->entry_array.count; entry_index++)
 	{
 		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 
-		#warning assert adjacent entries share an edge as expected, i.e. down right will have same y limit as its neighbour
-
 		if(entry->is_tile_entry)
 		{
-			// printf("entry (%u) : %u, %u : %u, %u   %s =================\n", entry_index, sol_ia_p_loc_get_x(entry->packed_location), sol_ia_p_loc_get_y(entry->packed_location), entry->x_size_class, entry->y_size_class, entry->is_available ? "available" : "used");
-
 			tile_count++;
 			total_size += (SOL_IA_MIN_TILE_SIZE * SOL_IA_MIN_TILE_SIZE) << (entry->x_size_class + entry->y_size_class);
 
@@ -1460,6 +1471,9 @@ void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
 
 				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
 
+				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class&& (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->x_size_class * 2 + 0));
+
+				assert(!could_combine);
 				assert(sol_ia_p_loc_start_in_range_y(entry->packed_location, adj_entry->packed_location, adj_entry->y_size_class));
 				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class) == sol_ia_p_loc_get_x(entry->packed_location));
 				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) <=  sol_ia_p_loc_get_y(entry->packed_location));
@@ -1477,6 +1491,16 @@ void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
 
 				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
 
+				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class && (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->y_size_class * 2 + 1));
+
+				if(could_combine)
+				{
+					printf("entry (%u) : %u, %u : %u, %u   %s \n", entry_index, sol_ia_p_loc_get_x(entry->packed_location), sol_ia_p_loc_get_y(entry->packed_location), SOL_IA_MIN_TILE_SIZE << entry->x_size_class, SOL_IA_MIN_TILE_SIZE << entry->y_size_class, entry->is_available ? "available" : "used");
+
+					printf("adj (%u) %u, %u : %u, %u   %s \n", adj_index, sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class, SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class, adj_entry->is_available ? "available" : "used");
+				}
+
+				assert(!could_combine);
 				assert(sol_ia_p_loc_start_in_range_x(entry->packed_location, adj_entry->packed_location, adj_entry->x_size_class));
 				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class) == sol_ia_p_loc_get_y(entry->packed_location));
 				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) <=  sol_ia_p_loc_get_x(entry->packed_location));
@@ -1492,8 +1516,15 @@ void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
 			{
 				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
 
-				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
+				// {
+				// 	printf("entry (%u) : %u, %u : %u, %u   %s \n", entry_index, sol_ia_p_loc_get_x(entry->packed_location), sol_ia_p_loc_get_y(entry->packed_location), SOL_IA_MIN_TILE_SIZE << entry->x_size_class, SOL_IA_MIN_TILE_SIZE << entry->y_size_class, entry->is_available ? "available" : "used");
 
+				// 	printf("adj (%u) %u, %u : %u, %u\n", adj_index, sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class, SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class);
+				// }
+
+				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class&& (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->x_size_class * 2 + 0));
+
+				assert(!could_combine);
 				assert(sol_ia_p_loc_end_in_range_y(entry->packed_location, entry->y_size_class, adj_entry->packed_location, adj_entry->y_size_class));
 				assert(sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class) == sol_ia_p_loc_get_x(adj_entry->packed_location));
 				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class) >=  sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class));
@@ -1511,6 +1542,9 @@ void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
 
 				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
 
+				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class&& (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->y_size_class * 2 + 1));
+
+				assert(!could_combine);
 				assert(sol_ia_p_loc_end_in_range_x(entry->packed_location, entry->x_size_class, adj_entry->packed_location, adj_entry->x_size_class));
 				assert(sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class) == sol_ia_p_loc_get_y(adj_entry->packed_location));
 				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class) >=  sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class));
