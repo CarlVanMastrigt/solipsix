@@ -100,4 +100,9 @@ use that new spot and wait on the appropriate entry to be made free to clear it
 
 
 
+
+
+
+void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas);
+
 // bool sol_image_atlas_defragment(struct sol_image_atlas* atlas, const struct cvm_vk_device* device, )

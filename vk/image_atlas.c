@@ -97,7 +97,7 @@ static inline uint32_t sol_ia_p_loc_get_x(uint32_t packed_location)
 	/** 0x00555555 */
 	packed_location = ((packed_location & 0x00444444u) << 1) | ((packed_location & 0x00111111u) << 2);
 	/** 0x00CCCCCC */
-	packed_location = ((packed_location & 0x00C0C0C0u) >> 2) | (packed_location & 0x000C0C0Cu);
+	packed_location = ((packed_location & 0x00C0C0C0u) >> 2) | ((packed_location & 0x000C0C0Cu)     );
 	/** 0x003C3C3C */
 	return ((packed_location & 0x003C0000u) >> 8) | ((packed_location & 0x00003C00u) >> 4) | (packed_location & 0x0000003Cu);
 	/** 0x00003FFC */
@@ -106,37 +106,71 @@ static inline uint32_t sol_ia_p_loc_get_x(uint32_t packed_location)
 static inline uint32_t sol_ia_p_loc_get_y(uint32_t packed_location)
 {
 	/** 0x00AAAAAA */
-	packed_location = (packed_location & 0x00888888u) | ((packed_location & 0x00222222u) << 1);
+	packed_location = ((packed_location & 0x00888888u)     ) | ((packed_location & 0x00222222u) << 1);
 	/** 0x00CCCCCC */
-	packed_location = ((packed_location & 0x00C0C0C0u) >> 2) | (packed_location & 0x000C0C0Cu);
+	packed_location = ((packed_location & 0x00C0C0C0u) >> 2) | ((packed_location & 0x000C0C0Cu)     );
 	/** 0x003C3C3C */
 	return ((packed_location & 0x003C0000u) >> 8) | ((packed_location & 0x00003C00u) >> 4) | (packed_location & 0x0000003Cu);
 	/** 0x00003FFC */
-}
-
-/** returns true if ( adj_x <= x && adj_x + size_x > x) */
-static inline uint32_t sol_ia_p_loc_in_range_x(uint32_t packed_location, uint32_t adjacent_packed_location, uint32_t adjacent_x_size_class)
-{
-	/** set y bits to force carry when adding x and avoid needing to mask them out later */
-	packed_location |= SOL_IA_P_LOC_Y_MASK;
-	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
-
-	return adjacent_packed_location <= packed_location && adjacent_packed_location + (1u << (adjacent_x_size_class * 2 + 0)) > packed_location;
-}
-
-static inline uint32_t sol_ia_p_loc_in_range_y(uint32_t packed_location, uint32_t adjacent_packed_location, uint32_t adjacent_y_size_class)
-{
-	/** set y bits to force carry when adding x and avoid needing to mask them out later */
-	packed_location |= SOL_IA_P_LOC_X_MASK;
-	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
-
-	return adjacent_packed_location <= packed_location && adjacent_packed_location + (1u << (adjacent_y_size_class * 2 + 1)) > packed_location;
 }
 
 static inline uint32_t sol_ia_p_loc_get_layer(uint32_t packed_location)
 {
 	return packed_location >> 24;
 }
+
+#warning should have function for getting x and y simultaneously, should be possible to improve perf with u64 ops...
+
+/** returns true if ( x >= adj_x  && x < adj_x + adj_size_x) */
+static inline bool sol_ia_p_loc_start_in_range_x(uint32_t packed_location, uint32_t adjacent_packed_location, uint32_t adjacent_x_size_class)
+{
+	/** set all y bits to force carry when adding x value*/
+	packed_location |= SOL_IA_P_LOC_Y_MASK;
+	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_x_size_class * 2 + 0))) | SOL_IA_P_LOC_Y_MASK;
+
+	return packed_location >= adjacent_packed_location && packed_location < adjacent_packed_location_end;
+}
+
+/** returns true if ( y >= adj_y  &&  y < adj_y + adj_size_y) */
+static inline bool sol_ia_p_loc_start_in_range_y(uint32_t packed_location, uint32_t adjacent_packed_location, uint32_t adjacent_y_size_class)
+{
+	/** set all x bits to force carry when adding y value*/
+	packed_location |= SOL_IA_P_LOC_X_MASK;
+	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_y_size_class * 2 + 1))) | SOL_IA_P_LOC_X_MASK;
+
+	return packed_location >= adjacent_packed_location && packed_location < adjacent_packed_location_end;
+}
+
+/** returns true if ( x + size_x >= adj_x  &&  x + size_x <= adj_x + adj_size_x) */
+static inline bool sol_ia_p_loc_end_in_range_x(uint32_t packed_location, uint32_t x_size_class, uint32_t adjacent_packed_location, uint32_t adjacent_x_size_class)
+{
+	/** set all y bits to force carry when adding x value*/
+	packed_location |= SOL_IA_P_LOC_Y_MASK;
+	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
+
+	/** get end packed location */
+	packed_location = (packed_location + (1u << (x_size_class * 2 + 0))) | SOL_IA_P_LOC_Y_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_x_size_class * 2 + 0))) | SOL_IA_P_LOC_Y_MASK;
+
+	return packed_location > adjacent_packed_location && packed_location <= adjacent_packed_location_end;
+}
+
+/** returns true if ( y + size_y >= adj_y  &&  y + size_y <= adj_y + adj_size_y) */
+static inline bool sol_ia_p_loc_end_in_range_y(uint32_t packed_location, uint32_t y_size_class, uint32_t adjacent_packed_location, uint32_t adjacent_y_size_class)
+{
+	/** set all x bits to force carry when adding y value and avoid needing to mask them out later */
+	packed_location |= SOL_IA_P_LOC_X_MASK;
+	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
+
+	/** get end packed location */
+	packed_location = (packed_location + (1u << (y_size_class * 2 + 1))) | SOL_IA_P_LOC_X_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_y_size_class * 2 + 1))) | SOL_IA_P_LOC_X_MASK;
+
+	return packed_location > adjacent_packed_location && packed_location <= adjacent_packed_location_end;
+}
+
 
 
 #define SOL_ARRAY_ENTRY_TYPE struct sol_image_atlas_entry
@@ -695,7 +729,6 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 		.is_available = true,
 	};
 
-
 	split_entry->adj_end_right = buddy_index;
 	split_entry->adj_end_down = 0;/** must be set */
 
@@ -704,6 +737,7 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+
 		if(adjacent_entry->adj_start_left != split_index)
 		{
 			assert(sol_ia_p_loc_get_y(adjacent_entry->packed_location) < sol_ia_p_loc_get_y(buddy_entry->packed_location));
@@ -719,7 +753,8 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		/** if(sol_ia_p_loc_get_x(adjacent_entry->packed_location) < sol_ia_p_loc_get_x(buddy_entry->packed_location)) */
+
+		/** equivalent to `if(sol_ia_p_loc_get_x(adjacent_entry->packed_location) < sol_ia_p_loc_get_x(buddy_entry->packed_location))` with fewer instructions */
 		if((adjacent_entry->packed_location & SOL_IA_P_LOC_X_MASK) < (buddy_entry->packed_location & SOL_IA_P_LOC_X_MASK))
 		{
 			assert(split_entry->adj_end_down == 0);
@@ -736,7 +771,8 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if(sol_ia_p_loc_in_range_x(buddy_entry->packed_location, adjacent_entry->packed_location, adjacent_entry->x_size_class))
+
+		if(sol_ia_p_loc_start_in_range_x(buddy_entry->packed_location, adjacent_entry->packed_location, adjacent_entry->x_size_class))
 		{
 			assert(buddy_entry->adj_start_up == 0);
 			buddy_entry->adj_start_up = adjacent_index;
@@ -744,16 +780,13 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 
 		if(adjacent_entry->adj_end_down != split_index)
 		{
-			#warning make this more consice
-			/** adjacent entry that fails index check must meet the corner of the coalesced range or be larger than the coalesced allocation */
-			assert(sol_ia_p_loc_get_x(adjacent_entry->packed_location) == sol_ia_p_loc_get_x(buddy_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << buddy_entry->x_size_class)
-				|| adjacent_entry->x_size_class > (split_entry->x_size_class + 1));
+			/** adjacent entry that fails index check must not have ended in the x range that would have referenced the entry before it was split */
+			assert(!sol_ia_p_loc_end_in_range_x(adjacent_entry->packed_location, adjacent_entry->x_size_class, split_entry->packed_location, split_entry->x_size_class + 1));
 			break;
 		}
 
-		/** NOTE: if adjacent would exceed the x range where it should set end_down to the buddy index, it would have hit break above */
-		/** if(sol_ia_p_loc_get_x(adjacent_entry->packed_location) >= sol_ia_p_loc_get_x(buddy_entry->packed_location)) */
-		if((adjacent_entry->packed_location & SOL_IA_P_LOC_X_MASK) >= (buddy_entry->packed_location & SOL_IA_P_LOC_X_MASK))
+		/** change the end down of an adjacent in the range that overlaps with the newly produced buddy */
+		if(sol_ia_p_loc_end_in_range_x(adjacent_entry->packed_location, adjacent_entry->x_size_class, buddy_entry->packed_location, buddy_entry->x_size_class))
 		{
 			adjacent_entry->adj_end_down = buddy_index;
 		}
@@ -823,6 +856,7 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
+
 		if(adjacent_entry->adj_start_up != split_index)
 		{
 			assert(sol_ia_p_loc_get_x(adjacent_entry->packed_location) < sol_ia_p_loc_get_x(buddy_entry->packed_location));
@@ -838,7 +872,7 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		/** if(sol_ia_p_loc_get_y(adjacent_entry->packed_location) < sol_ia_p_loc_get_y(buddy_entry->packed_location)) */
+		/** equivalent to `if(sol_ia_p_loc_get_y(adjacent_entry->packed_location) < sol_ia_p_loc_get_y(buddy_entry->packed_location))` with fewer instructions */
 		if((adjacent_entry->packed_location & SOL_IA_P_LOC_Y_MASK) < (buddy_entry->packed_location & SOL_IA_P_LOC_Y_MASK))
 		{
 			assert(split_entry->adj_end_right == 0);
@@ -855,7 +889,8 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	while(adjacent_index)
 	{
 		adjacent_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adjacent_index);
-		if(sol_ia_p_loc_in_range_y(buddy_entry->packed_location, adjacent_entry->packed_location, adjacent_entry->y_size_class))
+
+		if(sol_ia_p_loc_start_in_range_y(buddy_entry->packed_location, adjacent_entry->packed_location, adjacent_entry->y_size_class))
 		{
 			assert(buddy_entry->adj_start_left == 0);
 			buddy_entry->adj_start_left = adjacent_index;
@@ -863,16 +898,15 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 
 		if(adjacent_entry->adj_end_right != split_index)
 		{
-			#warning make this more consice
-			/** adjacent entry that fails index check must meet the corner of the coalesced range or be larger than the coalesced allocation */
-			assert(sol_ia_p_loc_get_y(adjacent_entry->packed_location) == sol_ia_p_loc_get_y(buddy_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << buddy_entry->y_size_class)
-				|| adjacent_entry->y_size_class > (split_entry->y_size_class + 1));
+			/** adjacent entry that fails index check must not have ended in the y range that would have referenced the entry before it was split */
+			assert(!sol_ia_p_loc_end_in_range_y(adjacent_entry->packed_location, adjacent_entry->y_size_class, split_entry->packed_location, split_entry->y_size_class + 1));
 			break;
 		}
 
 		/** NOTE: if adjacent would exceed the y range where it should set end_right to the buddy index, it would have hit break above */
 		/** if(sol_ia_p_loc_get_y(adjacent_entry->packed_location) >= sol_ia_p_loc_get_y(buddy_entry->packed_location)) */
-		if((adjacent_entry->packed_location & SOL_IA_P_LOC_Y_MASK) >= (buddy_entry->packed_location & SOL_IA_P_LOC_Y_MASK))
+		// if((adjacent_entry->packed_location & SOL_IA_P_LOC_Y_MASK) >= (buddy_entry->packed_location & SOL_IA_P_LOC_Y_MASK))
+		if(sol_ia_p_loc_end_in_range_y(adjacent_entry->packed_location, adjacent_entry->y_size_class, buddy_entry->packed_location, buddy_entry->y_size_class))
 		{
 			adjacent_entry->adj_end_right = buddy_index;
 		}
@@ -956,7 +990,7 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 	while(entry->x_size_class != x_req || entry->y_size_class != y_req)
 	{
 		/** preferentially split vertically if possible */
-		if(entry->y_size_class >= entry->x_size_class && entry->y_size_class != y_req)
+		if(entry->x_size_class == x_req || (entry->y_size_class >= entry->x_size_class && entry->y_size_class != y_req))
 		{
 			assert(entry->y_size_class > y_req);
 			sol_image_atlas_entry_split_vertically(atlas, entry, entry_index);
@@ -1066,6 +1100,8 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	/** populate availability for atlas image sized entries */
 	x_size_class = atlas->description.image_x_dimension_exponent - SOL_IA_MIN_TILE_SIZE_EXPONENT;
 	y_size_class = atlas->description.image_y_dimension_exponent - SOL_IA_MIN_TILE_SIZE_EXPONENT;
+
+	printf("image atlas populated with %u : 4*2^%u x 4*2^%u layers\n",atlas->description.image_array_dimension, x_size_class, y_size_class);
 
 	for(array_layer = 0; array_layer < atlas->description.image_array_dimension; array_layer++)
 	{
@@ -1395,4 +1431,100 @@ struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct 
 }
 
 
+void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
+{
+	struct sol_image_atlas_entry* entry;
+	struct sol_image_atlas_entry* adj_entry;
+	uint32_t entry_index;
+	uint32_t adj_index;
+	uint32_t total_size = 0;
+	uint32_t tile_count = 0;
 
+	for(entry_index = 0; entry_index < atlas->entry_array.count; entry_index++)
+	{
+		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
+
+		#warning assert adjacent entries share an edge as expected, i.e. down right will have same y limit as its neighbour
+
+		if(entry->is_tile_entry)
+		{
+			// printf("entry (%u) : %u, %u : %u, %u   %s =================\n", entry_index, sol_ia_p_loc_get_x(entry->packed_location), sol_ia_p_loc_get_y(entry->packed_location), entry->x_size_class, entry->y_size_class, entry->is_available ? "available" : "used");
+
+			tile_count++;
+			total_size += (SOL_IA_MIN_TILE_SIZE * SOL_IA_MIN_TILE_SIZE) << (entry->x_size_class + entry->y_size_class);
+
+			adj_index = entry->adj_start_left;
+			if(adj_index)
+			{
+				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
+
+				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
+
+				assert(sol_ia_p_loc_start_in_range_y(entry->packed_location, adj_entry->packed_location, adj_entry->y_size_class));
+				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class) == sol_ia_p_loc_get_x(entry->packed_location));
+				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) <=  sol_ia_p_loc_get_y(entry->packed_location));
+			}
+			else
+			{
+				assert(sol_ia_p_loc_get_x(entry->packed_location) == 0);
+			}
+
+
+			adj_index = entry->adj_start_up;
+			if(adj_index)
+			{
+				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
+
+				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
+
+				assert(sol_ia_p_loc_start_in_range_x(entry->packed_location, adj_entry->packed_location, adj_entry->x_size_class));
+				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class) == sol_ia_p_loc_get_y(entry->packed_location));
+				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) <=  sol_ia_p_loc_get_x(entry->packed_location));
+			}
+			else
+			{
+				assert(sol_ia_p_loc_get_y(entry->packed_location) == 0);
+			}
+
+
+			adj_index = entry->adj_end_right;
+			if(adj_index)
+			{
+				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
+
+				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
+
+				assert(sol_ia_p_loc_end_in_range_y(entry->packed_location, entry->y_size_class, adj_entry->packed_location, adj_entry->y_size_class));
+				assert(sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class) == sol_ia_p_loc_get_x(adj_entry->packed_location));
+				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class) >=  sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class));
+			}
+			else
+			{
+				assert(sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class) == 1 << atlas->description.image_x_dimension_exponent);
+			}
+
+
+			adj_index = entry->adj_end_down;
+			if(adj_index)
+			{
+				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
+
+				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
+
+				assert(sol_ia_p_loc_end_in_range_x(entry->packed_location, entry->x_size_class, adj_entry->packed_location, adj_entry->x_size_class));
+				assert(sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class) == sol_ia_p_loc_get_y(adj_entry->packed_location));
+				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class) >=  sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class));
+			}
+			else
+			{
+				assert(sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class) == 1 << atlas->description.image_y_dimension_exponent);
+			}
+		}
+	}
+
+	// printf("count : %u %u\n", tile_count, atlas->entry_array.count);
+
+	// printf("size : %u %u\n",total_size, (atlas->description.image_array_dimension << (atlas->description.image_x_dimension_exponent + atlas->description.image_y_dimension_exponent)));
+
+	assert(total_size == (atlas->description.image_array_dimension << (atlas->description.image_x_dimension_exponent + atlas->description.image_y_dimension_exponent)));
+}
