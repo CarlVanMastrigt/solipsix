@@ -86,6 +86,7 @@ struct sol_image_atlas_entry
 
 /** NOTE: 21 bits */
 #define SOL_IA_INVALID_IDX      0x001FFFFFu
+#define SOL_IA_MAX_ENTRIES      0x001FFFFFu
 
 #define SOL_IA_P_LOC_X_MASK     0x00555555u
 #define SOL_IA_P_LOC_Y_MASK     0x00AAAAAAu
@@ -124,6 +125,7 @@ static inline uint32_t sol_ia_p_loc_get_layer(uint32_t packed_location)
 /** returns true if ( x >= adj_x  && x < adj_x + adj_size_x) */
 static inline bool sol_ia_p_loc_start_in_range_x(uint32_t packed_location, uint32_t adjacent_packed_location, uint32_t adjacent_x_size_class)
 {
+	assert((packed_location & 0xFF000000u) == (adjacent_packed_location & 0xFF000000u));
 	/** set all y bits to force carry when adding x value*/
 	packed_location |= SOL_IA_P_LOC_Y_MASK;
 	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
@@ -135,6 +137,7 @@ static inline bool sol_ia_p_loc_start_in_range_x(uint32_t packed_location, uint3
 /** returns true if ( y >= adj_y  &&  y < adj_y + adj_size_y) */
 static inline bool sol_ia_p_loc_start_in_range_y(uint32_t packed_location, uint32_t adjacent_packed_location, uint32_t adjacent_y_size_class)
 {
+	assert((packed_location & 0xFF000000u) == (adjacent_packed_location & 0xFF000000u));
 	/** set all x bits to force carry when adding y value*/
 	packed_location |= SOL_IA_P_LOC_X_MASK;
 	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
@@ -146,6 +149,7 @@ static inline bool sol_ia_p_loc_start_in_range_y(uint32_t packed_location, uint3
 /** returns true if ( x + size_x >= adj_x  &&  x + size_x <= adj_x + adj_size_x) */
 static inline bool sol_ia_p_loc_end_in_range_x(uint32_t packed_location, uint32_t x_size_class, uint32_t adjacent_packed_location, uint32_t adjacent_x_size_class)
 {
+	assert((packed_location & 0xFF000000u) == (adjacent_packed_location & 0xFF000000u));
 	/** set all y bits to force carry when adding x value*/
 	packed_location |= SOL_IA_P_LOC_Y_MASK;
 	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
@@ -160,6 +164,7 @@ static inline bool sol_ia_p_loc_end_in_range_x(uint32_t packed_location, uint32_
 /** returns true if ( y + size_y >= adj_y  &&  y + size_y <= adj_y + adj_size_y) */
 static inline bool sol_ia_p_loc_end_in_range_y(uint32_t packed_location, uint32_t y_size_class, uint32_t adjacent_packed_location, uint32_t adjacent_y_size_class)
 {
+	assert((packed_location & 0xFF000000u) == (adjacent_packed_location & 0xFF000000u));
 	/** set all x bits to force carry when adding y value and avoid needing to mask them out later */
 	packed_location |= SOL_IA_P_LOC_X_MASK;
 	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
@@ -935,42 +940,45 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	atlas->availability_masks[buddy_entry->x_size_class] |= (1u << buddy_entry->y_size_class);
 }
 
-static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_image_atlas* atlas, u16_vec2 size, uint32_t* entry_index_ptr)
+static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_image_atlas* atlas, uint32_t required_x_size_class, uint32_t required_y_size_class, uint32_t* entry_index_ptr)
 {
 	struct sol_image_atlas_entry_availability_heap* availability_heap;
-	struct sol_image_atlas_entry* entry;
-	uint32_t entry_index, x_req, y_req, x_min, y_min, split_min, x, y, split;
+	uint32_t entry_index, x_min, y_min, min_split_count, x, y, split_count, y_mask;
 	uint16_t availiability_mask;
 	bool acquired_available;
 
-	x_req = sol_u32_exp_ge(size.x >> SOL_IA_MIN_TILE_SIZE_EXPONENT);
-	y_req = sol_u32_exp_ge(size.y >> SOL_IA_MIN_TILE_SIZE_EXPONENT);
+	min_split_count = UINT32_MAX;
+	y_mask = -(1u << required_y_size_class);
 
-	split_min = UINT32_MAX;
-
-	for(x = x_req; x < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x++)
+	for(x = required_x_size_class; x < SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT; x++)
 	{
-		availiability_mask = atlas->availability_masks[x] >> y_req;
+		availiability_mask = atlas->availability_masks[x] & y_mask;
 		if(availiability_mask)
 		{
 			y = sol_u32_ctz(availiability_mask);
-			split = y + x;
-			if(split <= split_min)
+			split_count = y + x;
+			if(split_count <= min_split_count)
 			{
-				split_min = split;
+				min_split_count = split_count;
 				x_min = x;
 				y_min = y;
 			}
 		}
 	}
 
-	if(split_min == UINT32_MAX)
+	if(min_split_count == UINT32_MAX)
 	{
 		return false;
 	}
 
-	/** y_min was calculated relative to y_req, x_min was not */
-	y_min += y_req;
+
+	/** must have index space to allocate newly split tiles */
+	split_count = min_split_count - required_x_size_class - required_y_size_class;
+	if( sol_image_atlas_entry_array_active_count(&atlas->entry_array) + split_count >= SOL_IA_MAX_ENTRIES)
+	{
+		return false;
+	}
+
 
 	availability_heap = &atlas->availablity_heaps[x_min][y_min];
 	acquired_available = sol_image_atlas_entry_availability_heap_remove(availability_heap, entry_index_ptr, atlas);
@@ -985,35 +993,33 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 	}
 
 
-	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 
 	/** validate entry really does look available */
-	assert(entry->is_available);
-	assert(entry->is_tile_entry);
-	assert(entry->identifier == 0);
-	assert(entry->prev_entry_index == SOL_IA_INVALID_IDX);
-	assert(entry->next_entry_index == SOL_IA_INVALID_IDX);
+	assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->is_available);
+	assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->is_tile_entry);
+	assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->identifier == 0);
+	assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->prev_entry_index == SOL_IA_INVALID_IDX);
+	assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->next_entry_index == SOL_IA_INVALID_IDX);
 
-	assert(entry->x_size_class == x_min);
-	assert(entry->y_size_class == y_min);
-
-	while(entry->x_size_class != x_req || entry->y_size_class != y_req)
+	while(x_min != required_x_size_class || y_min != required_y_size_class)
 	{
+		/** check entry is currently of expected size */
+		assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->x_size_class == x_min);
+		assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->y_size_class == y_min);
+
 		/** preferentially split vertically if possible */
-		if(entry->x_size_class == x_req || (entry->y_size_class >= entry->x_size_class && entry->y_size_class != y_req))
+		if(x_min == required_x_size_class || (y_min >= x_min && y_min != required_y_size_class))
 		{
-			assert(entry->y_size_class > y_req);
+			assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->y_size_class > required_y_size_class);
 			sol_image_atlas_entry_split_vertically(atlas, entry_index);
+			y_min--;
 		}
 		else
 		{
-			assert(entry->x_size_class > x_req);
+			assert(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index)->x_size_class > required_x_size_class);
 			sol_image_atlas_entry_split_horizontally(atlas, entry_index);
+			x_min--;
 		}
-
-		#warning this may be faster if instead it tracks size locally (without accessing ptr at all outside asserts)
-		/** old entry ptr may have been invalidated */
-		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 	}
 
 	return true;
@@ -1376,7 +1382,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	}
 
 	/** no entry, either not found or needs to be replaced */
-	if( ! sol_image_atlas_acquire_available_entry_of_size(atlas, size, &entry_index))
+	if( ! sol_image_atlas_acquire_available_entry_of_size(atlas, x_size_class, y_size_class, &entry_index))
 	{
 		/** no entry of requested size available, need to make space by freeing unused entries
 		 * NOTE: this invalidates the map result */
@@ -1404,7 +1410,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 				return SOL_IMAGE_ATLAS_FAIL_FULL;
 			}
 		}
-		while( ! sol_image_atlas_acquire_available_entry_of_size(atlas, size, &entry_index));
+		while( ! sol_image_atlas_acquire_available_entry_of_size(atlas, x_size_class, y_size_class, &entry_index));
 	}
 	/** if the map has been altered then the pointer to the old entry will have become invalid (indicated by being set to null)
 	 * as such the entrty in the map must be obtained again */
@@ -1445,120 +1451,6 @@ struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct 
 }
 
 
-void sol_image_atlas_validate_tiles(struct sol_image_atlas* atlas)
-{
-	struct sol_image_atlas_entry* entry;
-	struct sol_image_atlas_entry* adj_entry;
-	uint32_t entry_index;
-	uint32_t adj_index;
-	uint32_t total_size = 0;
-	uint32_t tile_count = 0;
-	bool could_combine;
-
-	for(entry_index = 0; entry_index < atlas->entry_array.count; entry_index++)
-	{
-		entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
-
-		if(entry->is_tile_entry)
-		{
-			tile_count++;
-			total_size += (SOL_IA_MIN_TILE_SIZE * SOL_IA_MIN_TILE_SIZE) << (entry->x_size_class + entry->y_size_class);
-
-			adj_index = entry->adj_start_left;
-			if(adj_index)
-			{
-				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
-
-				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
-
-				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class&& (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->x_size_class * 2 + 0));
-
-				assert(!could_combine);
-				assert(sol_ia_p_loc_start_in_range_y(entry->packed_location, adj_entry->packed_location, adj_entry->y_size_class));
-				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class) == sol_ia_p_loc_get_x(entry->packed_location));
-				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) <=  sol_ia_p_loc_get_y(entry->packed_location));
-			}
-			else
-			{
-				assert(sol_ia_p_loc_get_x(entry->packed_location) == 0);
-			}
 
 
-			adj_index = entry->adj_start_up;
-			if(adj_index)
-			{
-				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
 
-				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
-
-				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class && (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->y_size_class * 2 + 1));
-
-				if(could_combine)
-				{
-					printf("entry (%u) : %u, %u : %u, %u   %s \n", entry_index, sol_ia_p_loc_get_x(entry->packed_location), sol_ia_p_loc_get_y(entry->packed_location), SOL_IA_MIN_TILE_SIZE << entry->x_size_class, SOL_IA_MIN_TILE_SIZE << entry->y_size_class, entry->is_available ? "available" : "used");
-
-					printf("adj (%u) %u, %u : %u, %u   %s \n", adj_index, sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class, SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class, adj_entry->is_available ? "available" : "used");
-				}
-
-				assert(!could_combine);
-				assert(sol_ia_p_loc_start_in_range_x(entry->packed_location, adj_entry->packed_location, adj_entry->x_size_class));
-				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class) == sol_ia_p_loc_get_y(entry->packed_location));
-				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) <=  sol_ia_p_loc_get_x(entry->packed_location));
-			}
-			else
-			{
-				assert(sol_ia_p_loc_get_y(entry->packed_location) == 0);
-			}
-
-
-			adj_index = entry->adj_end_right;
-			if(adj_index)
-			{
-				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
-
-				// {
-				// 	printf("entry (%u) : %u, %u : %u, %u   %s \n", entry_index, sol_ia_p_loc_get_x(entry->packed_location), sol_ia_p_loc_get_y(entry->packed_location), SOL_IA_MIN_TILE_SIZE << entry->x_size_class, SOL_IA_MIN_TILE_SIZE << entry->y_size_class, entry->is_available ? "available" : "used");
-
-				// 	printf("adj (%u) %u, %u : %u, %u\n", adj_index, sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class, SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class);
-				// }
-
-				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class&& (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->x_size_class * 2 + 0));
-
-				assert(!could_combine);
-				assert(sol_ia_p_loc_end_in_range_y(entry->packed_location, entry->y_size_class, adj_entry->packed_location, adj_entry->y_size_class));
-				assert(sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class) == sol_ia_p_loc_get_x(adj_entry->packed_location));
-				assert(sol_ia_p_loc_get_y(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->y_size_class) >=  sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class));
-			}
-			else
-			{
-				assert(sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class) == 1 << atlas->description.image_x_dimension_exponent);
-			}
-
-
-			adj_index = entry->adj_end_down;
-			if(adj_index)
-			{
-				adj_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, adj_index);
-
-				// printf(" %u, %u : %u, %u\n",sol_ia_p_loc_get_x(adj_entry->packed_location), sol_ia_p_loc_get_y(adj_entry->packed_location), adj_entry->x_size_class, adj_entry->y_size_class);
-
-				could_combine = entry->is_available && adj_entry->is_available && entry->x_size_class == adj_entry->x_size_class && entry->y_size_class == adj_entry->y_size_class&& (adj_entry->packed_location ^ adj_entry->packed_location) == (1 << (entry->y_size_class * 2 + 1));
-
-				assert(!could_combine);
-				assert(sol_ia_p_loc_end_in_range_x(entry->packed_location, entry->x_size_class, adj_entry->packed_location, adj_entry->x_size_class));
-				assert(sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class) == sol_ia_p_loc_get_y(adj_entry->packed_location));
-				assert(sol_ia_p_loc_get_x(adj_entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << adj_entry->x_size_class) >=  sol_ia_p_loc_get_x(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->x_size_class));
-			}
-			else
-			{
-				assert(sol_ia_p_loc_get_y(entry->packed_location) + (SOL_IA_MIN_TILE_SIZE << entry->y_size_class) == 1 << atlas->description.image_y_dimension_exponent);
-			}
-		}
-	}
-
-	// printf("count : %u %u\n", tile_count, atlas->entry_array.count);
-
-	// printf("size : %u %u\n",total_size, (atlas->description.image_array_dimension << (atlas->description.image_x_dimension_exponent + atlas->description.image_y_dimension_exponent)));
-
-	assert(total_size == (atlas->description.image_array_dimension << (atlas->description.image_x_dimension_exponent + atlas->description.image_y_dimension_exponent)));
-}

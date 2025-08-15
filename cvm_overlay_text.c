@@ -19,23 +19,25 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solipsix.h"
 
-
+#warning move this to constrained font file (sol font)
 void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, char * filename, int pixel_size)
 {
     int r;
 
     r=FT_New_Face(*freetype_library ,filename, 0, &font->face);
-    assert(!r || !fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename));
+    if(r)fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename);
+    assert(!r);
 
     r=FT_Set_Pixel_Sizes(font->face,0,pixel_size);
-    assert(!r || !fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size));
+    if(r)fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size);
+    assert(!r);
 
     font->glyph_size=pixel_size;
-
     font->space_character_index=FT_Get_Char_Index(font->face,' ');
 
     r=FT_Load_Glyph(font->face,font->space_character_index,0);
-    assert(!r || !fprintf(stderr,"FONT DOES NOT CONTAIN SPACE CHARACTER %s\n",filename));
+    if(r)fprintf(stderr,"FONT DOES NOT CONTAIN SPACE CHARACTER %s\n",filename);
+    assert(!r);
 
     font->space_advance=font->face->glyph->advance.x>>6;
     font->max_advance= font->face->size->metrics.max_advance>>6;
