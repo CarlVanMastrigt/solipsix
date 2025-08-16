@@ -45,7 +45,7 @@ void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervise
     sol_vk_image_destroy(&supervised_image->image, device);
 }
 
-void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer cb, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask)
+void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer command_buffer, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask)
 {
     /// thse definitions do restrict future use, but there isnt a good way around that, would be good to specify these values on the device...
     static const VkAccessFlagBits2 all_image_read_access_mask =
@@ -155,7 +155,30 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
         }
     };
 
-    vkCmdPipelineBarrier2(cb, &barrier_dependencies);
+    vkCmdPipelineBarrier2(command_buffer, &barrier_dependencies);
 
     supervised_image->current_layout = new_layout;
 }
+
+
+void sol_vk_supervised_image_copy_regions_from_buffer(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
+{
+    uint32_t i;
+    VkBufferImageCopy* copy_actions = sol_vk_buf_img_copy_list_data(copy_list);
+    uint32_t copy_count = sol_vk_buf_img_copy_list_count(copy_list);
+
+    if(copy_count)
+    {
+        sol_vk_supervised_image_barrier(dst_image, command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
+        for(i = 0; i < copy_count; i++)
+        {
+            copy_actions[i].bufferOffset += src_buffer_offset;
+        }
+        vkCmdCopyBufferToImage(command_buffer, src_buffer, dst_image->image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_count ,copy_actions);
+    }
+
+    sol_vk_buf_img_copy_list_reset(copy_list);
+}
+
+

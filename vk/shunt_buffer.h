@@ -28,6 +28,8 @@ note: even if multithreaded requires external synchronization to ensure
     no reservations or modifications to the buffers contents are made after the buffer is copied (presumably to a staging buffer)
 */
 
+#warning does this even make sense ??? in particular as a vk construct, almost certainly better as a generic thing??
+
 struct sol_vk_shunt_buffer
 {
     bool multithreaded;

@@ -971,7 +971,6 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 		return false;
 	}
 
-
 	/** must have index space to allocate newly split tiles */
 	split_count = min_split_count - required_x_size_class - required_y_size_class;
 	if( sol_image_atlas_entry_array_active_count(&atlas->entry_array) + split_count >= SOL_IA_MAX_ENTRIES)
@@ -991,7 +990,6 @@ static inline bool sol_image_atlas_acquire_available_entry_of_size(struct sol_im
 	{
 		atlas->availability_masks[x_min] &= ~(1 << y_min);
 	}
-
 
 
 	/** validate entry really does look available */
@@ -1033,9 +1031,6 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 {
 	uint32_t x_size_class, y_size_class, array_layer, entry_index;
 	struct sol_image_atlas* atlas = malloc(sizeof(struct sol_image_atlas));
-	struct sol_image_atlas_entry* entry;
-	struct sol_image_atlas_entry* header_entry;
-	struct sol_image_atlas_entry* threshold_entry;
 
 	assert(description->image_x_dimension_exponent >= 8 && description->image_x_dimension_exponent <= 16);
 	assert(description->image_y_dimension_exponent >= 8 && description->image_y_dimension_exponent <= 16);
@@ -1126,8 +1121,7 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	for(array_layer = 0; array_layer < atlas->description.image_array_dimension; array_layer++)
 	{
 		/** for every array layer make an entry filling the slive available */
-		entry = sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &entry_index);
-		*entry = (struct sol_image_atlas_entry)
+		*sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &entry_index) = (struct sol_image_atlas_entry)
 		{
 			.identifier = 0, /** "invalid" identifier */
 			.next_entry_index = SOL_IA_INVALID_IDX,
