@@ -31,6 +31,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_IMAGE_ATLAS_AVAILIABILITY_HEAP_COUNT 13u
 /** [4,16384] inclusive ^^ */
 
+#define SOL_IA_IDENTIFIER_TRANSIENT_BIT ((uint64_t)(1llu << 63))
+
 struct sol_image_atlas_entry
 {
 	/** hash map key; used for hash map lookup upon defragmentation eviction top bit of this can be used to indicate the resource is transient*/
@@ -80,8 +82,7 @@ struct sol_image_atlas_entry
 	uint32_t x_size_class : 4;
 	uint32_t y_size_class : 4;
 
-	/** 3 bits left over */
-
+	/** 2 bits left over */
 };
 
 /** NOTE: 21 bits */
@@ -1080,23 +1081,20 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 	atlas->current_identifier = 0;
 	atlas->accessor_active = false;
 
-	atlas->header_entry_index = sol_image_atlas_entry_array_append_index(&atlas->entry_array);
-	atlas->threshold_entry_index = sol_image_atlas_entry_array_append_index(&atlas->entry_array);
-
-	*sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->header_entry_index) = (struct sol_image_atlas_entry)
-	{
-		.identifier = 0,
-		.is_tile_entry = false,
-		.prev_entry_index = atlas->threshold_entry_index,
-		.next_entry_index = atlas->threshold_entry_index,
-	};
-
-	*sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->threshold_entry_index) = (struct sol_image_atlas_entry)
+	*sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &atlas->header_entry_index) = (struct sol_image_atlas_entry)
 	{
 		.identifier = 0,
 		.is_tile_entry = false,
 		.prev_entry_index = atlas->header_entry_index,
 		.next_entry_index = atlas->header_entry_index,
+	};
+
+	*sol_image_atlas_entry_array_append_ptr(&atlas->entry_array, &atlas->threshold_entry_index) = (struct sol_image_atlas_entry)
+	{
+		.identifier = 0,
+		.is_tile_entry = false,
+		.prev_entry_index = SOL_IA_INVALID_IDX,
+		.next_entry_index = SOL_IA_INVALID_IDX,
 	};
 
 	/** for tile entries 2d structure (the buddy portion), index zero is reserved, make sure the unchanging root occupies this index */
@@ -1161,14 +1159,22 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	{
 		sol_vk_timeline_semaphore_moment_wait(&atlas->current_moment, device);
 	}
+
 	threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, atlas->threshold_entry_index);
-	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
+	/** the threshold entry must have been removed as part of the accessor being released */
+	assert(threshold_entry->next_entry_index == SOL_IA_INVALID_IDX);
+	assert(threshold_entry->prev_entry_index == SOL_IA_INVALID_IDX);
 
 
-	/** free all entries in the expired linked list queue */
+	/** free all entries in the expired linked list queue
+	 * NOTE: it is very important that nothing in this loop will alter the backing of the entry array
+	 * doing so would invalidate the header entry pointer */
 	header_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->header_entry_index);
 	while(header_entry->next_entry_index != atlas->header_entry_index)
 	{
+		/** check we arent encountering transient resources here */
+		assert((sol_image_atlas_entry_array_access_entry(&atlas->entry_array, header_entry->next_entry_index)->identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT) == 0);
+
 		sol_image_atlas_entry_evict(atlas, header_entry->next_entry_index);
 	}
 	assert(header_entry->next_entry_index == atlas->header_entry_index);
@@ -1222,13 +1228,10 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
 {
-	struct sol_image_atlas_entry* threshold_entry;
 	assert(!atlas->accessor_active);
 	atlas->accessor_active = true;
 
-	/** move the threshold to the front of the queue */
-	threshold_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->threshold_entry_index);
-	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
+	/** place the threshold to the front of the queue */
 	sol_image_atlas_entry_add_to_queue_before(atlas, atlas->threshold_entry_index, atlas->header_entry_index);
 
 	return atlas->current_moment;
@@ -1236,21 +1239,44 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct so
 
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
 {
-	assert(atlas->accessor_active);
-	atlas->accessor_active = false;
+	struct sol_image_atlas_entry* threshold_entry;
 
+	assert(atlas->accessor_active);
+
+	atlas->accessor_active = false;
 	atlas->current_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
+
+	/** NOTE: it is very important that nothing in this loop will alter the backing of the entry array
+	 * doing so would invalidate the threshold entry pointer */
+	threshold_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->threshold_entry_index);
+	while(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, threshold_entry->next_entry_index)->identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT)
+	{
+		sol_image_atlas_entry_evict(atlas, threshold_entry->next_entry_index);
+	}
+
+
+	/** remove the threshold from the queue */
+	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
+
 
 	return atlas->current_moment;
 }
 
 
 
-uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas)
+uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient)
 {
 	/** copied from sol random */
 	atlas->current_identifier = atlas->current_identifier * 0x5851F42D4C957F2Dlu + 0x7A4111AC0FFEE60Dlu;
-	return atlas->current_identifier;
+
+	if(transient)
+	{
+		return atlas->current_identifier | SOL_IA_IDENTIFIER_TRANSIENT_BIT;
+	}
+	else
+	{
+		return atlas->current_identifier & (~SOL_IA_IDENTIFIER_TRANSIENT_BIT);
+	}
 }
 
 enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location)
@@ -1275,7 +1301,14 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 		assert(entry->identifier == entry_identifier);
 
 		sol_image_atlas_entry_remove_from_queue(atlas, entry);
-		sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, atlas->threshold_entry_index);
+		if(entry_identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT)
+		{
+			sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, atlas->threshold_entry_index);
+		}
+		else
+		{
+			sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, atlas->header_entry_index);
+		}
 
 		entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
 		entry_location->x = sol_ia_p_loc_get_x(entry->packed_location);
@@ -1290,7 +1323,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 	}
 }
 
-enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, bool write_access, bool transient, struct sol_image_atlas_location* entry_location)
+enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, bool write_access, struct sol_image_atlas_location* entry_location)
 {
 	/** NOTE acquiring space (when required) will change the hash map
 	 * as such the pointer returned for obtain will no longer be valid and is not worth keeping around
@@ -1367,7 +1400,14 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 		{
 			/** put in entry queue sector of accessor,
 			 * found and NOT replaced (hot path) */
-			sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, atlas->threshold_entry_index);
+			if(entry_identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT)
+			{
+				sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, atlas->threshold_entry_index);
+			}
+			else
+			{
+				sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, atlas->header_entry_index);
+			}
 			entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
 			entry_location->x = sol_ia_p_loc_get_x(entry->packed_location);
 			entry_location->y = sol_ia_p_loc_get_y(entry->packed_location);
@@ -1381,13 +1421,16 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 		/** no entry of requested size available, need to make space by freeing unused entries
 		 * NOTE: this invalidates the map result */
 		entry_index_in_map = NULL;
+		/** NOTE: it is very important that nothing in this loop will alter the backing of the entry array
+		 * doing so would invalidate the header entry pointer */
 		header_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->header_entry_index);
-
 		do
 		{
-
 			if(header_entry->next_entry_index != atlas->threshold_entry_index)
 			{
+				/** check we arent encountering transient resources here */
+				assert((sol_image_atlas_entry_array_access_entry(&atlas->entry_array, header_entry->next_entry_index)->identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT) == 0);
+
 				sol_image_atlas_entry_evict(atlas, header_entry->next_entry_index);
 			}
 			else
@@ -1397,7 +1440,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 				{
 					/** should only fail to reallocate an entry if there was a size mismatch */
 					assert(size_mismatch);
-					/** if the entry did exist in the map it must be removed as we cannot actually back it */
+					/** if the entry did exist in the map it must be removed as we cannot actually back it, and an unbacked entry is illegal */
 					map_remove_result = sol_image_atlas_map_remove(&atlas->itentifier_entry_map, entry_identifier, NULL);
 					assert(map_remove_result == SOL_MAP_SUCCESS_REMOVED);
 				}
@@ -1430,7 +1473,15 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	// assert some things about entry here?
 	entry->identifier = entry_identifier;
 	entry->is_available = false;
-	sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, atlas->threshold_entry_index);
+	if(entry_identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT)
+	{
+		sol_image_atlas_entry_add_to_queue_after(atlas, entry_index, atlas->threshold_entry_index);
+	}
+	else
+	{
+		sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, atlas->header_entry_index);
+	}
+
 
 	entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
 	entry_location->x = sol_ia_p_loc_get_x(entry->packed_location);
