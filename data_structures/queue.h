@@ -203,6 +203,12 @@ static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_index_valid)(struc
     return index < q->count;
 }
 
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_index_is_front)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t index)
+{
+    /** get index as relative */
+    return (q->count) > 0 && (index == q->front);
+}
+
 
 #undef SOL_QUEUE_ENTRY_TYPE
 #undef SOL_QUEUE_FUNCTION_PREFIX

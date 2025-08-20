@@ -85,8 +85,8 @@ struct sol_gui_theme
     // rectangle   (*get_sliderbar_offsets)(overlay_theme * theme,uint32_t status);///returns offsets from each respective side
 };
 
-//
 static inline struct sol_font* sol_gui_theme_get_font(struct sol_gui_theme* theme)
 {
+    #warning  not sure about this, probably want more info, like font category and size
     return theme->font;
 }

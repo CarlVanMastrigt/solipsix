@@ -34,10 +34,10 @@ struct cvm_vk_device;
 /// for when its desirable to support a simple staging buffer or a more complex staging manager backing
 struct sol_vk_staging_buffer_allocation
 {
+    VkBuffer acquired_buffer;
     VkDeviceSize acquired_offset;/** byte offset in staging buffer, used for submission to vulkan functions */
     char* mapping;/** mapped location in staging buffer to write to, has already been offset */
     uint32_t segment_index;/** for internal use */
-    bool flushed;/** internal debugging use */
 };
 
 struct sol_vk_staging_buffer_segment

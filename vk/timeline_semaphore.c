@@ -84,7 +84,7 @@ VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct 
 
 static inline bool sol_vk_timeline_semaphore_moment_wait_multiple_timed(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, bool repeatedly_wait, uint64_t timeout, const struct cvm_vk_device* device)
 {
-    #warning do moments in batches and make the size opaque ??
+    /** working in batches won't work when "wait on any" */
     uint32_t i;
     VkResult result;
     VkSemaphore semaphores[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];

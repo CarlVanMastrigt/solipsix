@@ -51,7 +51,7 @@ void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervise
 void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer command_buffer, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask);
 /** TODO: want a function that manages similar to above but in the context of render passes */
 
-VkImageView sol_vk_supervised_image_view_get(struct sol_vk_supervised_image* supervised_image);
+// VkImageView sol_vk_supervised_image_view_get(struct sol_vk_supervised_image* supervised_image);
 
 
 /** it should be possible to track the current state across a QFOT and mark a supervised image as such

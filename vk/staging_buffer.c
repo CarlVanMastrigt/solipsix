@@ -233,10 +233,10 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 
     return (struct sol_vk_staging_buffer_allocation)
     {
+        .acquired_buffer = staging_buffer->backing.buffer,
         .acquired_offset = acquired_offset,
         .mapping = mapping,
         .segment_index = segment_index,
-        .flushed = false,
     };
 }
 
@@ -244,15 +244,15 @@ void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_bu
 {
     sol_vk_backed_buffer_flush_range(device, &staging_buffer->backing, allocation->acquired_offset + relative_offset, size);
 
-    assert(!allocation->flushed);/// only want to flush once
-    allocation->flushed = true;
+    assert(allocation->mapping);
+    allocation->mapping = NULL;
 }
 
 void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* staging_buffer, struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count)
 {
     struct sol_vk_staging_buffer_segment* segment;
     
-    assert(allocation->flushed);
+    assert(allocation->mapping == NULL);
     assert(release_moment_count > 0);
     assert(release_moment_count <= SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT);
 

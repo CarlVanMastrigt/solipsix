@@ -546,16 +546,17 @@ void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, cons
     ///flush all uploads
     sol_vk_staging_buffer_allocation_flush_range(staging_buffer, device, &batch->staging_buffer_allocation, 0, staging_space);
 
-    cvm_overlay_descriptor_set_write(device, descriptor_set, batch->colour_atlas->supervised_image.view, batch->alpha_atlas->supervised_image.view, staging_buffer->backing.buffer, staging_offset+uniform_offset);
+    const VkBuffer staging_buffer_backing = batch->staging_buffer_allocation.acquired_buffer;
+    cvm_overlay_descriptor_set_write(device, descriptor_set, batch->colour_atlas->supervised_image.view, batch->alpha_atlas->supervised_image.view, staging_buffer_backing, staging_offset+uniform_offset);
     batch->descriptor_set = descriptor_set;
 }
 
 /// `var` copy staged data and apply barriers to atlas images
 void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer)
 {
-    const VkBuffer staging_buffer = batch->staging_buffer->backing.buffer;
-    cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->colour_atlas, command_buffer, staging_buffer, batch->upload_offset, &batch->colour_atlas_copy_actions);
-    cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->alpha_atlas , command_buffer, staging_buffer, batch->upload_offset, &batch->alpha_atlas_copy_actions);
+    const VkBuffer staging_buffer_backing = batch->staging_buffer_allocation.acquired_buffer;
+    cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->colour_atlas, command_buffer, staging_buffer_backing, batch->upload_offset, &batch->colour_atlas_copy_actions);
+    cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->alpha_atlas , command_buffer, staging_buffer_backing, batch->upload_offset, &batch->alpha_atlas_copy_actions);
 }
 
 void cvm_overlay_render_batch_ready(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer)
@@ -589,7 +590,7 @@ void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, str
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rendering_resources->pipeline_layout, 0, 1, &batch->descriptor_set, 0, NULL);
 
     vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
-    vkCmdBindVertexBuffers(command_buffer, 0, 1, &batch->staging_buffer->backing.buffer, &batch->element_offset);
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, &batch->staging_buffer_allocation.acquired_buffer, &batch->element_offset);
     vkCmdDraw(command_buffer, 4, batch->render_elements.count, 0, 0);
 }
 

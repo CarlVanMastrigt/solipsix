@@ -1310,10 +1310,10 @@ void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_inf
     if(f)
     {
         fseek(f,0,SEEK_END);
-        length=ftell(f);
-        data_buffer=malloc(length);
+        length = ftell(f);
+        data_buffer = malloc(length);
         rewind(f);
-        fread(data_buffer,1,length,f);
+        fread(data_buffer, 1, length, f);
         fclose(f);
 
         VkShaderModuleCreateInfo shader_module_create_info=(VkShaderModuleCreateInfo)
@@ -1326,7 +1326,11 @@ void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_inf
         };
 
         VkResult r= vkCreateShaderModule(device->device, &shader_module_create_info, device->host_allocator, &stage_info->module);
-        assert(r==VK_SUCCESS || !fprintf(stderr,"ERROR CREATING SHADER MODULE FROM FILE: %s\n",filename));
+        if(r != VK_SUCCESS)
+        {
+            fprintf(stderr,"ERROR CREATING SHADER MODULE FROM FILE: %s\n",filename);
+        }
+        assert(r==VK_SUCCESS);
 
         free(data_buffer);
     }

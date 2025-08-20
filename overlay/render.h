@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "math/s16_rect.h"
 #include "vk/shunt_buffer.h"
 #include "vk/image.h"
+#include "vk/staging_buffer.h"
 #include "vk/image_atlas.h"
 
 #warning important to outline how bytes are used
@@ -32,7 +33,7 @@ struct sol_overlay_render_element
 {
     int16_t pos_rect[4];/// start(x,y), end(x,y)
     uint16_t tex_coords[4];/// base_tex(x,y), mask_tex(x,y)
-    uint32_t data1[4];// extra data - texture_id:2
+    uint32_t other_data[4];// extra data - texture_id:2
 };
 
 #define SOL_STACK_ENTRY_TYPE struct sol_overlay_render_element
@@ -40,20 +41,73 @@ struct sol_overlay_render_element
 #define SOL_STACK_STRUCT_NAME sol_overlay_render_element_stack
 #include "data_structures/stack.h"
 
+enum sol_overlay_image_atlas_type
+{
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
+};
+
+
+/** rename(?) static resources? base resources? */
+/** these are the resources that need only be set up once */
+struct sol_overlay_render_persistent_resources
+{
+    /** pool sized to fit the descriptor set layout that will be used, for as many sets as will be used */
+    VkDescriptorPool descriptor_pool;
+
+    VkDescriptorSet* descriptor_sets;
+    uint32_t descriptor_set_count;
+
+    /** for creating the render pipeline */
+    VkPipelineLayout pipeline_layout;
+    VkDescriptorSetLayout descriptor_set_layout;
+    VkPipelineShaderStageCreateInfo vertex_pipeline_stage;
+    VkPipelineShaderStageCreateInfo fragment_pipeline_stage;
+};
+
+/** this should only be called once at program start, only need one sol_overlay_render_resources */
+VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count);
+void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device);
+
+VkResult sol_overlay_descriptor_set_fetch(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet* set);
+
+/** the pipeline is the only resource that needs to change when the window changes (may want to change this for compositing purposes!) */
+#warning consider make resolution dynamic state for the purposes of compositing! - removes need for this AND allows compositing with different resolutions
+/** maybe a hybrid approach is warranted, if dynamic pipelines cannot be guaranteed... or a solution that takes advantage of a potential compositing image atlas... */
+struct sol_overlay_pipeline
+{
+    VkPipeline pipeline;
+    VkExtent2D extent;
+};
+
+
+
+VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
+void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device);
+
+
+
 struct sol_overlay_render_context
 {
     /** atlases used for storing backing information for verious purposes
      * some of these may be null depending on implementation details
      * these will, in order, match bind points in shader that renders overlay elements */
-    struct sol_image_atlas* bc4_atlas;
-    struct sol_image_atlas* r8_atlas;
-    struct sol_image_atlas* rgba8_atlas;
+    // struct sol_image_atlas* bc4_atlas;
+    // struct sol_image_atlas* r8_atlas;
+    // struct sol_image_atlas* rgba8_atlas;
+    struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+
+    struct sol_vk_staging_buffer* staging_buffer;
 };
+
 
 /** batch is a bad name, need context, sub context stack/ranges for (potential) compositing passes
  * at that point is it maybe better to just handle the backing manually? */
 struct sol_overlay_render_batch
 {
+    #warning add stage tracking, allows it to be
     struct sol_overlay_render_context* context;
 
     /** bounds/limit of the current point in the render, this is almost a stack allocated value as it can change at any point in the render and that must then be carried forward */
@@ -62,11 +116,40 @@ struct sol_overlay_render_batch
     /** actual UI element instance data */
     struct sol_overlay_render_element_stack elements;
 
+    /** this and count should be in an array per composite range */
+    VkDeviceSize element_offset;
+
+
     /** miscellaneous inline upload buffer */
     struct sol_vk_shunt_buffer upload_shunt_buffer;
+
+    /** copy ops required to upload all glyph information */
+    struct sol_vk_buf_img_copy_list copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    /** offset applied to all copies */
+    VkDeviceSize upload_offset;
+
+    /** this is just a data container for when the staging allocayion is made */
+    struct sol_vk_staging_buffer_allocation staging_buffer_allocation;
+
+    /** following variables tracked from point where they become necessary to prevent needing them multiple times */
+
+    /** extent set at compose stage */
+    VkExtent2D target_extent;
+    VkDescriptorSet descriptor_set;
 };
 
 
+void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize shunt_buffer_size);
+void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch);
 
 
 
+
+
+
+void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
+
+/** render resources must have been acquired with `sol_overlay_rendering_resources_initialise` */
+void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
+
+void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment);

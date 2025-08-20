@@ -46,10 +46,14 @@ struct sol_vk_timeline_semaphore_moment sol_vk_timeline_semaphore_get_current_mo
 
 VkSemaphoreSubmitInfo sol_vk_timeline_semaphore_moment_submit_info(const struct sol_vk_timeline_semaphore_moment* moment, VkPipelineStageFlags2 stages);
 
+/** will stall until the moment has been signalled, use only when necessary, stalling a thread is generally a bad idea */
 void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
+
+/** will return true if the moment has been signalled */
 bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
+
+/** will signal the specified moment, allows signalling the device from the host */
 void sol_vk_timeline_semaphore_moment_signal(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
-/// ^ returns true if this moment has elapsed
 
 #define SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT 8
 
