@@ -118,10 +118,38 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
     return vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, pipeline_layout);
 }
 
+static VkResult sol_overlay_descriptor_sets_allocate(VkDescriptorSet* sets, uint32_t set_count, struct cvm_vk_device * device, VkDescriptorPool pool, VkDescriptorSetLayout set_layout)
+{
+    uint32_t i;
+    VkDescriptorSetLayout layouts[32];
+
+    for(i = 0; i < set_count; i++)
+    {
+        sets[i] = VK_NULL_HANDLE;
+        layouts[i] = set_layout;
+    }
+
+    VkDescriptorSetAllocateInfo allocate_info=
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = NULL,
+        .descriptorPool = pool,
+        .descriptorSetCount = set_count,
+        .pSetLayouts = layouts,
+    };
+
+    return vkAllocateDescriptorSets(device->device, &allocate_info, sets);
+}
+
 
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count)
 {
     VkResult result = VK_SUCCESS;
+    assert(active_render_count <= 32);
+
+    persistent_resources->descriptor_sets = malloc(sizeof(VkDescriptorSet) * active_render_count);
+    persistent_resources->total_set_count = active_render_count;
+    persistent_resources->available_set_count = active_render_count;
 
     result = sol_overlay_descriptor_pool_create(&persistent_resources->descriptor_pool, device, active_render_count);
     assert(result == VK_SUCCESS);
@@ -132,41 +160,48 @@ VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_r
     result = sol_overlay_pipeline_layout_create(&persistent_resources->pipeline_layout, device, persistent_resources->descriptor_set_layout);
     assert(result == VK_SUCCESS);
 
-    cvm_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,  device, "solipsix/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage,device, "solipsix/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    result = sol_overlay_descriptor_sets_allocate(persistent_resources->descriptor_sets, active_render_count, device, persistent_resources->descriptor_pool, persistent_resources->descriptor_set_layout);
+    assert(result == VK_SUCCESS);
+
+    cvm_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,   device, "solipsix/shaders/overlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device, "solipsix/shaders/overlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     return result;
 }
 
 void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device)
 {
+    VkResult result;
+
+    /** should release all descriptor sets */
+    assert(persistent_resources->available_set_count == persistent_resources->total_set_count);
+
     cvm_vk_destroy_shader_stage_info(&persistent_resources->vertex_pipeline_stage  , device);
     cvm_vk_destroy_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device);
 
     vkDestroyPipelineLayout(device->device, persistent_resources->pipeline_layout, device->host_allocator);
 
+    /** this isn't strictly necessary, just nice to do the tracking */
+    result = vkFreeDescriptorSets(device->device, persistent_resources->descriptor_pool, persistent_resources->total_set_count, persistent_resources->descriptor_sets);
+    assert(result == VK_SUCCESS);
+
     vkDestroyDescriptorPool(device->device, persistent_resources->descriptor_pool, device->host_allocator);
     vkDestroyDescriptorSetLayout(device->device, persistent_resources->descriptor_set_layout, device->host_allocator);
+
+    free(persistent_resources->descriptor_sets);
 }
 
 
-
-
-
-VkResult sol_overlay_descriptor_set_fetch(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet* set)
+VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources)
 {
-    VkDescriptorSetAllocateInfo allocate_info=
-    {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .pNext = NULL,
-        .descriptorPool = persistent_resources->descriptor_pool,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &persistent_resources->descriptor_set_layout,
-    };
+    assert(persistent_resources->available_set_count > 0);
+    return persistent_resources->descriptor_sets[--persistent_resources->available_set_count];
+}
 
-    #warning move this into resources initialise
-
-    return vkAllocateDescriptorSets(device->device, &allocate_info, set);
+void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set)
+{
+    assert(persistent_resources->available_set_count < persistent_resources->total_set_count);
+    persistent_resources->descriptor_sets[persistent_resources->available_set_count++] = set;
 }
 
 
@@ -330,62 +365,6 @@ void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline
 
 
 
-// static void sol_overlay_descriptor_set_write(struct cvm_vk_device * device, VkDescriptorSet descriptor_set, const VkImageView* atlas_views, VkBuffer uniform_buffer, VkDeviceSize uniform_offset)
-// {
-//     uint32_t i;
-//     VkDescriptorImageInfo atlas_descriptor_image_info[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-
-//     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
-//     {
-//         atlas_descriptor_image_info[i] = (VkDescriptorImageInfo)
-//         {
-//             .sampler = NULL,
-//             .imageView = atlas_views[i],
-//             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//         };
-//     }
-
-//     VkWriteDescriptorSet writes[2] =
-//     {
-//         {
-//             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//             .pNext = NULL,
-//             .dstSet = descriptor_set,
-//             .dstBinding = 0,
-//             .dstArrayElement = 0,
-//             .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
-//             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//             .pImageInfo = atlas_descriptor_image_info,
-//             .pBufferInfo = NULL,
-//             .pTexelBufferView = NULL
-//         },
-//         {
-//             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//             .pNext = NULL,
-//             .dstSet = descriptor_set,
-//             .dstBinding = 1,
-//             .dstArrayElement = 0,
-//             .descriptorCount = 1,
-//             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here... then use either RGBA8 unorm colour or possibly RGBA16
-//             .pImageInfo = NULL,
-//             .pBufferInfo = (VkDescriptorBufferInfo[1])
-//             {
-//                 {
-//                     .buffer = uniform_buffer,
-//                     .offset = uniform_offset,
-//                     .range = OVERLAY_NUM_COLOURS * 4 * sizeof(float),
-//                     #warning make above a struct maybe?
-//                 }
-//             },
-//             .pTexelBufferView = NULL
-//         }
-//     };
-
-//     vkUpdateDescriptorSets(device->device, 2, writes, 0, NULL);
-// }
-
-
-
 
 void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize shunt_buffer_size)
 {
@@ -479,12 +458,10 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     sol_vk_shunt_buffer_copy(&batch->upload_shunt_buffer, staging_mapping + upload_offset);
     sol_overlay_render_element_stack_copy(&batch->elements, staging_mapping + elements_offset);
 
-    ///flush all uploads
+    /** flush all uploads */
     sol_vk_staging_buffer_allocation_flush_range(context->staging_buffer, device, &batch->staging_buffer_allocation, 0, staging_space);
 
-
-
-    #warning this is super strange to put here... could/should go closer to writes
+    // this is super strange to put here... could/should go closer to writes
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
         atlas_supervised_image = sol_image_atlas_acquire_supervised_image(context->atlases[i]);

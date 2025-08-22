@@ -58,7 +58,8 @@ struct sol_overlay_render_persistent_resources
     VkDescriptorPool descriptor_pool;
 
     VkDescriptorSet* descriptor_sets;
-    uint32_t descriptor_set_count;
+    uint32_t total_set_count;
+    uint32_t available_set_count;
 
     /** for creating the render pipeline */
     VkPipelineLayout pipeline_layout;
@@ -71,7 +72,8 @@ struct sol_overlay_render_persistent_resources
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count);
 void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device);
 
-VkResult sol_overlay_descriptor_set_fetch(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet* set);
+VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources);
+void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set);
 
 /** the pipeline is the only resource that needs to change when the window changes (may want to change this for compositing purposes!) */
 #warning consider make resolution dynamic state for the purposes of compositing! - removes need for this AND allows compositing with different resolutions
@@ -144,8 +146,11 @@ void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch);
 
 
 
+void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, VkExtent2D target_extent);
 
+void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, const float* colour_array, VkDescriptorSet descriptor_set);
 
+void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
 void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
