@@ -23,15 +23,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_vk.h"
 
-void sol_vk_supervised_image_initialise_default(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info)
-{
-    #warning either here or in image atlas probably want `size_t bytes_per_pixel` (derived from format)
 
-    sol_vk_image_create(&supervised_image->image, device, image_create_info, true);
+void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info)
+{
+    sol_vk_image_create(&supervised_image->image, device, image_create_info, view_create_info);
 
     supervised_image->current_layout = image_create_info->initialLayout;
-
-    #warning should be able to infer valid stage/access masks based on usage, then assert they are being respected
 
     supervised_image->write_stage_mask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
     supervised_image->write_access_mask = VK_ACCESS_2_NONE;
@@ -121,19 +118,19 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
 
     VkDependencyInfo barrier_dependencies =
     {
-        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext=NULL,
-        .dependencyFlags=0,
-        .memoryBarrierCount=0,
-        .pMemoryBarriers=NULL,
-        .bufferMemoryBarrierCount=0,
-        .pBufferMemoryBarriers=NULL,
-        .imageMemoryBarrierCount=1,
-        .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext = NULL,
+        .dependencyFlags = 0,
+        .memoryBarrierCount = 0,
+        .pMemoryBarriers = NULL,
+        .bufferMemoryBarrierCount = 0,
+        .pBufferMemoryBarriers = NULL,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = (VkImageMemoryBarrier2[1])
         {
             {
-                .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext=NULL,
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .pNext = NULL,
                 .srcStageMask = src_stage_mask,
                 .srcAccessMask = src_access_mask,
                 .dstStageMask = dst_stage_mask,
@@ -145,11 +142,11 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
                 .image = supervised_image->image.image,
                 .subresourceRange=(VkImageSubresourceRange)
                 {
-                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel=0,
-                    .levelCount=1,
-                    .baseArrayLayer=0,
-                    .layerCount=1
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = VK_REMAINING_MIP_LEVELS,
+                    .baseArrayLayer = 0,
+                    .layerCount = VK_REMAINING_ARRAY_LAYERS
                 }
             }
         }

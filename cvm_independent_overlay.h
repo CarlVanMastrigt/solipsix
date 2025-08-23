@@ -31,7 +31,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 struct sol_gui_context;
-
+struct sol_overlay_render_context;
 
 
 
@@ -63,17 +63,17 @@ struct cvm_overlay_target
     VkImageMemoryBarrier2 release_barriers[4];
 };
 
-typedef struct cvm_overlay_renderer cvm_overlay_renderer;
+struct cvm_overlay_renderer;
 
 
 
 
-struct cvm_overlay_renderer* cvm_overlay_renderer_create(const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count);
-void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, const struct cvm_vk_device* device);
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_render_context* overlay_render_context, uint32_t active_render_count);
+void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, struct cvm_vk_device* device);
 
-struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, struct sol_gui_context* gui_context, const struct cvm_overlay_target* target);
+struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_vk_device* device, struct cvm_overlay_renderer* renderer, struct sol_gui_context* gui_context, const struct cvm_overlay_target* target);
 
-struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, struct sol_gui_context* gui_context, cvm_vk_swapchain_presentable_image* presentable_image, bool last_use);
+struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(struct cvm_vk_device* device, struct cvm_overlay_renderer* renderer, struct sol_gui_context* gui_context, cvm_vk_swapchain_presentable_image* presentable_image, bool last_use);
 
 
 

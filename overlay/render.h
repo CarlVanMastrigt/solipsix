@@ -80,12 +80,13 @@ void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persist
 /** maybe a hybrid approach is warranted, if dynamic pipelines cannot be guaranteed... or a solution that takes advantage of a potential compositing image atlas... */
 struct sol_overlay_pipeline
 {
+    #warning remove this and make rendering dynamic, seriously
     VkPipeline pipeline;
     VkExtent2D extent;
 };
 
 
-
+/** render pass and subpass are intentionally not managed here */
 VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
 void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device);
 
@@ -145,16 +146,20 @@ void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch,
 void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch);
 
 
-
+/** step 1: traverse the widget tree, creating the commands to render each element and loading resources (or creating instructions to load resources) when a requirement is encountered */
 void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, VkExtent2D target_extent);
 
+/** step 2: move all resources (e.g. new image atlas pixel data) and draw instructions to staging and write the descriptors for resources rendering will use */
 void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, const float* colour_array, VkDescriptorSet descriptor_set);
 
+/** step 3: perform all copy operations (if any) necessary to set up data (e.g. copy image pixels from staging to the image atlas) */
 void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
+/** step 4: write barriers to put required resources (e.g. image atlases) in correct state to e read from while drawing overlay elements to the render target*/
 void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
-/** render resources must have been acquired with `sol_overlay_rendering_resources_initialise` */
-void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
+/** step 5: encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
+void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct sol_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
 
+/** step 6: when rendering is known to have completed (e.g. after the render pass in which the render was submitted) use a semaphore moment to synchronise/signal the completion of rendering */
 void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment);

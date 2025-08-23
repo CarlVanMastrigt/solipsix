@@ -32,7 +32,7 @@ struct sol_gui_panel
 	uint32_t inset_content: 1;
 };
 
-void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
+void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;

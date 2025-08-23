@@ -332,11 +332,13 @@ struct sol_vk_image
 {
     // VkImageCreateInfo image_create_info; // may want to keep properties around
     VkImage image;
-    VkImageView default_view;
+    VkImageView base_view;
     VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by
 };
 
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, bool create_default_view);
+/** if view_create_info is NULL, the default view will be created 
+ * otherwise the image field will be set after the image has been created */
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info);
 void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
 
 

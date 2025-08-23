@@ -111,7 +111,7 @@ static inline const void* sol_gui_button_get_buffer_const(const struct sol_gui_b
 
 
 
-static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
+static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
@@ -171,7 +171,7 @@ struct sol_gui_object* sol_gui_text_button_object_create(struct sol_gui_context*
 
 
 
-static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
+static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
 	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;

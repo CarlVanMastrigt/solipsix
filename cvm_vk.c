@@ -1635,13 +1635,12 @@ VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateIn
     return result;
 }
 
-
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, bool create_default_view)
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info)
 {
     VkResult result;
     uint32_t memory_type_index;
+    VkImageViewCreateInfo view_create_info_internal;
 
-    VkImageViewCreateInfo view_create_info;
     VkMemoryDedicatedRequirements dedicated_requirements =
     {
         .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
@@ -1654,12 +1653,12 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
     };
 
 
-    #warning merge this concept with managed image?
+    #warning merge/move this concept with managed image?
     *image = (struct sol_vk_image)
     {
-        .image        = VK_NULL_HANDLE,
-        .default_view = VK_NULL_HANDLE,
-        .memory       = VK_NULL_HANDLE,
+        .image     = VK_NULL_HANDLE,
+        .base_view = VK_NULL_HANDLE,
+        .memory    = VK_NULL_HANDLE,
     };
 
 
@@ -1712,10 +1711,19 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
         result = vkBindImageMemory(cvm_vk_.device, image->image, image->memory, 0);
     }
 
-    if(result == VK_SUCCESS && create_default_view)
+    if(result == VK_SUCCESS)
     {
-        cvm_vk_set_view_create_info_using_image_create_info(&view_create_info, image_create_info, image->image);
-        result = vkCreateImageView(device->device, &view_create_info, device->host_allocator, &image->default_view);
+        if(view_create_info == NULL)
+        {
+            cvm_vk_set_view_create_info_using_image_create_info(&view_create_info_internal, image_create_info, image->image);
+        }
+        else
+        {
+            view_create_info_internal = *view_create_info;
+            view_create_info_internal.image = image->image;
+        }
+
+        result = vkCreateImageView(device->device, &view_create_info_internal, device->host_allocator, &image->base_view);
     }
 
     if(result != VK_SUCCESS)
@@ -1726,6 +1734,7 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
     return result;
 }
 
+
 void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device)
 {
     if(image->image != VK_NULL_HANDLE)
@@ -1733,10 +1742,10 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
         vkDestroyImage(device->device, image->image, device->host_allocator);
         image->image = VK_NULL_HANDLE;
     }
-    if(image->default_view != VK_NULL_HANDLE)
+    if(image->base_view != VK_NULL_HANDLE)
     {
-        vkDestroyImageView(device->device, image->default_view, device->host_allocator);
-        image->default_view = VK_NULL_HANDLE;
+        vkDestroyImageView(device->device, image->base_view, device->host_allocator);
+        image->base_view = VK_NULL_HANDLE;
     }
     if(image->memory != VK_NULL_HANDLE)
     {

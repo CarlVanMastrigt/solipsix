@@ -56,7 +56,16 @@ static VkResult sol_overlay_descriptor_pool_create(VkDescriptorPool* pool, struc
 #warning why again was it that images got incorporated into a per-frame layout rather than being shared? (was it just for simplicity?)
 static VkResult sol_overlay_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, struct cvm_vk_device * device)
 {
+    uint32_t i;
+    VkSampler immutable_samplers[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+
     *set_layout = VK_NULL_HANDLE;
+
+    for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        /** everything should use nearest/fetch sampler */
+        immutable_samplers[i] = device->defaults.fetch_sampler;
+    }
 
     VkDescriptorSetLayoutCreateInfo create_info =
     {
@@ -71,11 +80,8 @@ static VkResult sol_overlay_descriptor_set_layout_create(VkDescriptorSetLayout* 
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
                 .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = (VkSampler[2]) /// also test w/ null & setting samplers directly
-                {
-                    device->defaults.fetch_sampler,
-                    device->defaults.fetch_sampler
-                },
+                .pImmutableSamplers = immutable_samplers,
+                #warning ^^ also test w/ null & setting samplers directly, probably MUCH preferred
             },
             {
                 .binding = 1,
@@ -181,9 +187,8 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
 
     vkDestroyPipelineLayout(device->device, persistent_resources->pipeline_layout, device->host_allocator);
 
-    /** this isn't strictly necessary, just nice to do the tracking */
-    result = vkFreeDescriptorSets(device->device, persistent_resources->descriptor_pool, persistent_resources->total_set_count, persistent_resources->descriptor_sets);
-    assert(result == VK_SUCCESS);
+    /*result = vkFreeDescriptorSets(device->device, persistent_resources->descriptor_pool, persistent_resources->total_set_count, persistent_resources->descriptor_sets);
+    assert(result == VK_SUCCESS);*/
 
     vkDestroyDescriptorPool(device->device, persistent_resources->descriptor_pool, device->host_allocator);
     vkDestroyDescriptorSetLayout(device->device, persistent_resources->descriptor_set_layout, device->host_allocator);
@@ -244,8 +249,9 @@ VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pip
                 {
                     .location = 1,
                     .binding = 0,
-                    .format = VK_FORMAT_R32G32_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element,tex_coords)
+                    .format = VK_FORMAT_R16G16B16A16_UINT,
+                    #warning update the interpretation of this
+                    .offset = offsetof(struct sol_overlay_render_element, tex_coords)
                 },
                 {
                     .location = 2,
@@ -399,7 +405,7 @@ void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch)
 }
 
 
-
+#warning require render context as input (i.e. set it here)
 void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, VkExtent2D target_extent)
 {
     /** copy actions should be reset when copied, this must have been done before resetting the batch
@@ -426,7 +432,7 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
         fprintf(stderr, "overlay doesn't fit on screen\n");
     }
 
-    #warning sol_gui_context_render(gui_context, batch);
+    sol_gui_context_render(gui_context, batch);
 }
 
 void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, const float* colour_array, VkDescriptorSet descriptor_set)
@@ -440,6 +446,8 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     /** upload all staged resources needed by this frame (uniforms, uploaded data, elements),
      * track the offset progressively including total required space */
     uniform_offset  = 0;
+
+    assert(batch->context);
 
     #warning if a non-ring buffer implementation (buddy allocator) for staging is preferred it may be worthwhile to break this into chunks (by comparing required size across approaches?)
     upload_offset   = sol_vk_staging_buffer_allocation_align_offset(context->staging_buffer, uniform_offset  + sizeof(float) * 4 * OVERLAY_NUM_COLOURS);
@@ -468,7 +476,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
         atlas_descriptor_image_info[i] = (VkDescriptorImageInfo)
         {
             .sampler = NULL,
-            .imageView = atlas_supervised_image->image.default_view,
+            .imageView = atlas_supervised_image->image.base_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
     }
@@ -510,6 +518,8 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     };
 
     vkUpdateDescriptorSets(device->device, 2, writes, 0, NULL);
+
+    batch->descriptor_set = descriptor_set;
 }
 
 void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer)
@@ -538,13 +548,12 @@ void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch*
     }
 }
 
-/// pass in `struct cvm_overlay_rendering_resources*` instead of pipeline layout
 /**
 pipeline_layout: completely static, singular
 pipeline: changes with target, singular
 descriptor set (from batch): must come from managed per-frame resources, dynamic and numerous
 */
-void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer)
+void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct sol_overlay_pipeline* pipeline, VkCommandBuffer command_buffer)
 {
     const uint32_t element_count = sol_overlay_render_element_stack_count(&batch->elements);
     VkBuffer draw_buffer = batch->staging_buffer_allocation.acquired_buffer;
@@ -563,7 +572,7 @@ void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batc
     /** set index (firstSet) is defined in pipeline creation (index in array) */
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, persistent_resources->pipeline_layout, 0, 1, &batch->descriptor_set, 0, NULL);
 
-    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     vkCmdBindVertexBuffers(command_buffer, 0, 1, &draw_buffer, &batch->element_offset);
     vkCmdDraw(command_buffer, 4, element_count, 0, 0);
 }
@@ -583,6 +592,8 @@ void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, 
 
     sol_vk_shunt_buffer_reset(&batch->upload_shunt_buffer);
     sol_overlay_render_element_stack_reset(&batch->elements);
+
+    batch->context = NULL;
 }
 
 

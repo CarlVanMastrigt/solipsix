@@ -36,7 +36,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 /// not sure if headers for these should be included, probably should
-struct cvm_overlay_render_batch;
+struct sol_overlay_render_batch;
 struct sol_input;
 
 #warning possibly want render batch to know screen/window dimension to prevent rendering offscreen items
@@ -49,7 +49,7 @@ struct sol_gui_object_structure_functions
 	#warning should obj be const for most of these?
 
 	// put in the batch to be passed into overlay rendererer
-    void (*const render) (struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch);
+    void (*const render) (struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch);
     // position is in target space, determined from the object
     #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
     // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)
@@ -114,7 +114,7 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 
 
 // these perform any meta operations on objects and call their internal functions if present
-void                   sol_gui_object_render       (struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch);
+void                   sol_gui_object_render       (struct sol_gui_object* obj, s16_vec2 offset, struct sol_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_object_hit_scan     (struct sol_gui_object* obj, s16_vec2 offset, const s16_vec2 location);
 s16_vec2               sol_gui_object_min_size     (struct sol_gui_object* obj, uint32_t position_flags);
 void                   sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_rect);

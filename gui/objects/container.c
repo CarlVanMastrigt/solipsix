@@ -27,7 +27,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #warning container should only perform actions on enabled children
 #warning is it better to remove the concept of enabled/disabled entirely? would require altering structure to add/remove elements (add in random locations)
 
-void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch)
+void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;

@@ -1064,7 +1064,33 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
-	sol_vk_supervised_image_initialise_default(&atlas->image, device, &image_create_info);
+	const VkImageViewCreateInfo view_create_info =
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		//.image = , // IMAGE WILL BE OVERWRITTEN !
+		.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+		.format = description->format,
+		.components = (VkComponentMapping)
+        {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange = (VkImageSubresourceRange)
+        {
+        	/** do we want/need non colour atlases ??? */
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = description->image_array_dimension,
+        }
+	};
+
+	sol_vk_supervised_image_initialise(&atlas->image, device, &image_create_info, &view_create_info);
 
 	sol_image_atlas_entry_array_initialise(&atlas->entry_array, 1024);
 

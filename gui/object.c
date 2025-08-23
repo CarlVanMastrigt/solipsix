@@ -87,7 +87,7 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj)
 
 
 
-void sol_gui_object_render(struct sol_gui_object* obj, s16_vec2 offset, struct cvm_overlay_render_batch* batch)
+void sol_gui_object_render(struct sol_gui_object* obj, s16_vec2 offset, struct sol_overlay_render_batch* batch)
 {
 	assert(obj);
 

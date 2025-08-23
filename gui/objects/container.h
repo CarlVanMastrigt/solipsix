@@ -37,7 +37,7 @@ struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* c
 struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container);
 
 // min_size and place content should be varied by anything that would use this, the following however may be shared
-void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct cvm_overlay_render_batch* batch);
+void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location);
 void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child);

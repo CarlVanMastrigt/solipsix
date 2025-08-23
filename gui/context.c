@@ -293,7 +293,7 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 	return context->content_fit;
 }
 
-void sol_gui_context_render(struct sol_gui_context* context, struct cvm_overlay_render_batch* batch)
+void sol_gui_context_render(struct sol_gui_context* context, struct sol_overlay_render_batch* batch)
 {
 	struct sol_gui_object* root_container = context->root_container;
 

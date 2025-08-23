@@ -224,17 +224,17 @@ struct overlay_theme
 
 
 
-struct cvm_overlay_image_atlases
-{
-    struct sol_vk_image alpha_image;
-    cvm_vk_image_atlas alpha_atlas;
+// struct cvm_overlay_image_atlases
+// {
+//     struct sol_vk_image alpha_image;
+//     cvm_vk_image_atlas alpha_atlas;
 
-    struct sol_vk_image colour_image;
-    cvm_vk_image_atlas colour_atlas;
-};
+//     struct sol_vk_image colour_image;
+//     cvm_vk_image_atlas colour_atlas;
+// };
 
-VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded);
-void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device);
+// VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded);
+// void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device);
 
 
 
@@ -242,23 +242,23 @@ void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image
 
 
 /// static resources? base resources?
-struct cvm_overlay_rendering_resources
-{
-    VkDescriptorSetLayout descriptor_set_layout;
+// struct cvm_overlay_rendering_resources
+// {
+//     VkDescriptorSetLayout descriptor_set_layout;
 
-    VkDescriptorPool descriptor_pool;
+//     VkDescriptorPool descriptor_pool;
 
-    /// for creating pipelines
-    VkPipelineLayout pipeline_layout;
-    VkPipelineShaderStageCreateInfo vertex_pipeline_stage;
-    VkPipelineShaderStageCreateInfo fragment_pipeline_stage;
-};
+//     /// for creating pipelines
+//     VkPipelineLayout pipeline_layout;
+//     VkPipelineShaderStageCreateInfo vertex_pipeline_stage;
+//     VkPipelineShaderStageCreateInfo fragment_pipeline_stage;
+// };
 
-struct cvm_overlay_pipeline
-{
-    VkPipeline pipeline;
-    VkExtent2D extent;
-};
+// struct cvm_overlay_pipeline
+// {
+//     VkPipeline pipeline;
+//     VkExtent2D extent;
+// };
 
 /// data to be passed form setup stage to rendering batch/packet
 /// used both in setup/prep and actual_render functions
@@ -310,43 +310,43 @@ struct cvm_overlay_render_batch
 };
 
 /// this could reasonably also create the descriptor sets which could then simply be accessed/acquired later
-VkResult cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
-void cvm_overlay_rendering_resources_terminate (struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device);
+// VkResult cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
+// void cvm_overlay_rendering_resources_terminate (struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device);
 
-VkResult cvm_overlay_descriptor_set_fetch(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkDescriptorSet* set);
+// VkResult cvm_overlay_descriptor_set_fetch(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkDescriptorSet* set);
 /// not sure if we should be releasing as its not strictly necessary
 
-VkResult cvm_overlay_render_pipeline_initialise(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
-void cvm_overlay_render_pipeline_terminate(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device);
+// VkResult cvm_overlay_render_pipeline_initialise(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
+// void cvm_overlay_render_pipeline_terminate(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device);
 
 
-void cvm_overlay_render_batch_initialise(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, VkDeviceSize shunt_buffer_max_size);
-void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch);
+// void cvm_overlay_render_batch_initialise(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, VkDeviceSize shunt_buffer_max_size);
+// void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch);
 
 
 /// there are 6 stages to rendering the overlay, they must be externally synchronised both on cpu and GPU (submitting in order to the same command buffer is enough to ensure GPU ordering)
 
 
 
-/// `root_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
-/// we should know resolution of presentable image/target/viewport of pipeline to be used here, and organise menu widget accordingly
-void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
+// /// `root_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
+// /// we should know resolution of presentable image/target/viewport of pipeline to be used here, and organise menu widget accordingly
+// void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
 
-/// `descriptor_set` must have been fetched with `cvm_overlay_descriptor_set_fetch`
-#warning these need better names, "stage" implies its the batching stage, instead:  `render_batch_step_<step_name>` , this being render_batch_step_element_staging, step_image_upload, image_transition,
-void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
+// /// `descriptor_set` must have been fetched with `cvm_overlay_descriptor_set_fetch`
+// #warning these need better names, "stage" implies its the batching stage, instead:  `render_batch_step_<step_name>` , this being render_batch_step_element_staging, step_image_upload, image_transition,
+// void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
 
-/// copies staged data into atlases used by rendering
-void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);
+// /// copies staged data into atlases used by rendering
+// void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
-/// transitions the rendering resources so must be called after all changes to image atlases (for example if some parts of the atlas are rendered to)
-void cvm_overlay_render_batch_ready(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);
+// /// transitions the rendering resources so must be called after all changes to image atlases (for example if some parts of the atlas are rendered to)
+// void cvm_overlay_render_batch_ready(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
-/// `pipeline` must have been created with `cvm_overlay_render_pipeline_create` and be called inside the render pass and subpass used to create it, must also have the same extent as what was passed to batch_build
-void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
+// /// `pipeline` must have been created with `cvm_overlay_render_pipeline_create` and be called inside the render pass and subpass used to create it, must also have the same extent as what was passed to batch_build
+// void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
 
-/// used to schedule the release of resources used/held by this batch, must ensure completion moment occurs after `render` has completed
-void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment);
+// /// used to schedule the release of resources used/held by this batch, must ensure completion moment occurs after `render` has completed
+// void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment);
 
 /// stage, upload and ready could reasonably be combined if all the contents of the atlases are uploaded rather than rendered
 

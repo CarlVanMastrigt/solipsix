@@ -18,16 +18,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdlib.h>
+// #include <stdio.h>
 
 #include "gui/theme.h"
 #include "gui/enums.h"
 #include "overlay/enums.h"
-// probably need/want more includes from overlay
+#include "overlay/render.h"
 #include "sol_font.h"
-
-
-#include "cvm_overlay.h"
-#include <stdio.h>
 
 struct sol_gui_theme_simple_data
 {
@@ -45,11 +42,11 @@ struct sol_gui_theme_simple_data
 // ^ either sub components of the whole struct, allowing it to be substituted at appropriate points
 //   ^also by allowing transient image use we can do sub-renders, *compositor style*, with sub regions of the instance array to render and re-order when needed
 
-static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch)
+static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	cvm_overlay_element_render_data* render_data = cvm_overlay_element_render_data_stack_append_ptr(&batch->render_elements);
+	struct sol_overlay_render_element* render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
@@ -72,15 +69,15 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
-	rect = s16_rect_intersect(rect, batch->current_render_bounds);
+	rect = s16_rect_intersect(rect, batch->bounds);
 
 	if(s16_rect_valid(rect))
 	{
 		#warning should also check rect is positive at this point
-		*render_data =(cvm_overlay_element_render_data)
+		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
-	        {CVM_OVERLAY_ELEMENT_FILL, colour<<24},
+	        {CVM_OVERLAY_ELEMENT_FILL, colour<<8, 0, 0},
 	        {0,0,0,0}
 	    };
 	}
@@ -134,11 +131,11 @@ static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint3
 
 
 
-static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct cvm_overlay_render_batch * batch)
+static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	cvm_overlay_element_render_data* render_data = cvm_overlay_element_render_data_stack_append_ptr(&batch->render_elements);
+	struct sol_overlay_render_element* render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
@@ -151,15 +148,15 @@ static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint3
 		rect = s16_rect_sub_border(rect, simple_theme_data->panel_border);
 	}
 
-	rect = s16_rect_intersect(rect, batch->current_render_bounds);
+	rect = s16_rect_intersect(rect, batch->bounds);
 
 	if(s16_rect_valid(rect))
 	{
 		#warning should also check rect is positive at this point
-		*render_data =(cvm_overlay_element_render_data)
+		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
-	        {CVM_OVERLAY_ELEMENT_FILL, colour<<24},
+	        {CVM_OVERLAY_ELEMENT_FILL, colour<<8, 0, 0},
 	        {0,0,0,0}
 	    };
 	}

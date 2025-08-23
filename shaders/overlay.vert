@@ -20,12 +20,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #version 450
 
 layout (location=0) in uvec4 rect;
-layout (location=1) in uvec2 data1;
+layout (location=1) in uvec4 data1;
 layout (location=2) in uvec4 data2;
 
 
 layout(location=0) flat out uvec4 out_rect;
-layout(location=1) flat out uvec2 d1;
+layout(location=1) flat out uvec4 d1;
 layout(location=2) flat out uvec4 d2;
 
 layout (push_constant) uniform screen_dimensions
@@ -43,6 +43,8 @@ void main()
         case 2 : p=rect.zy; break;
         default: p=rect.zw;// 3
     }
+
+
 
     gl_Position=vec4(p*inv_screen_size_doubled-1.0, 0.0, 1.0);
 

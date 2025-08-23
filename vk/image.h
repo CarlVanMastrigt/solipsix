@@ -45,7 +45,9 @@ struct sol_vk_supervised_image
     VkAccessFlagBits2 read_access_mask;
 };
 
-void sol_vk_supervised_image_initialise_default(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info);
+/** if view_create_info is NULL, the default view will be created
+ * otherwise the image field will be set after the image has been created */
+void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info);
 void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device);//does nothing
 
 void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer command_buffer, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask);
