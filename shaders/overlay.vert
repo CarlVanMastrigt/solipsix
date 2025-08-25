@@ -19,14 +19,14 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #version 450
 
-layout (location=0) in uvec4 rect;
-layout (location=1) in uvec4 data1;
-layout (location=2) in uvec4 data2;
+layout (location=0) in uvec4 rect;/** note: u16 */
+layout (location=1) in uvec4 data1;/** note: u16 */
+layout (location=2) in uvec4 data2;/** note: u32 */
 
 
-layout(location=0) flat out uvec4 out_rect;
-layout(location=1) flat out uvec4 d1;
-layout(location=2) flat out uvec4 d2;
+layout(location=0) flat out uvec4 out_rect;/** note: u16 */
+layout(location=1) flat out uvec4 d1;/** note: u16 */
+layout(location=2) flat out uvec4 d2;/** note: u32 */
 
 layout (push_constant) uniform screen_dimensions
 {

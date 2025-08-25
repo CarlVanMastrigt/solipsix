@@ -70,10 +70,10 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 
 /** must wait on returned moment before doing anything with the atlas
  * (reading or writing accessed entries) */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas);
 
 /** moment must be signalled after all reads and writes to the atlas have completed */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas);
 
 
 /** acquire a unique identifier for accessing/indexing entries in the atlas

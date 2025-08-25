@@ -250,7 +250,6 @@ VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pip
                     .location = 1,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    #warning update the interpretation of this
                     .offset = offsetof(struct sol_overlay_render_element, tex_coords)
                 },
                 {
@@ -270,7 +269,7 @@ VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pip
             .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///not the default
             .primitiveRestartEnable = VK_FALSE
         },
-        .pTessellationState = NULL,///not needed (yet)
+        .pTessellationState = NULL,
         .pViewportState = &(VkPipelineViewportStateCreateInfo)
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -415,6 +414,7 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
         assert(sol_vk_buf_img_copy_list_count(batch->copy_lists + i) == 0);
+        batch->atlas_acquire_moments[i] = sol_image_atlas_acquire_access(batch->context->atlases[i]);
     }
     assert(sol_vk_shunt_buffer_get_space_used(&batch->upload_shunt_buffer) == 0);
     assert(sol_overlay_render_element_stack_count(&batch->elements) == 0);
@@ -433,6 +433,11 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
     }
 
     sol_gui_context_render(gui_context, batch);
+
+    for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        batch->atlas_release_moments[i] = sol_image_atlas_release_access(batch->context->atlases[i]);
+    }
 }
 
 void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, const float* colour_array, VkDescriptorSet descriptor_set)
@@ -475,7 +480,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
         atlas_supervised_image = sol_image_atlas_acquire_supervised_image(context->atlases[i]);
         atlas_descriptor_image_info[i] = (VkDescriptorImageInfo)
         {
-            .sampler = NULL,
+            .sampler = device->defaults.fetch_sampler,
             .imageView = atlas_supervised_image->image.base_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
@@ -520,6 +525,14 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     vkUpdateDescriptorSets(device->device, 2, writes, 0, NULL);
 
     batch->descriptor_set = descriptor_set;
+
+
+    #warning HACK - do this properly with an interface
+    for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        #warning  NO NO NO
+        sol_vk_timeline_semaphore_moment_signal_multiple(batch->atlas_release_moments, SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT, device);
+    }
 }
 
 void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer)

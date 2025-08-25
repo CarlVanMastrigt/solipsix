@@ -21,9 +21,36 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <vulkan/vulkan.h>
 
-#include "cvm_vk.h"
-#warning instead: move sol_vk_image to its own header! possibly this one!
-// struct cvm_vk_device;
+#include "vk/image_utils.h"
+
+struct cvm_vk_device;
+
+struct sol_vk_image
+{
+    VkImageCreateInfo image_create_info; // may want to keep properties around
+    struct
+    {
+        VkImageCreateFlags       flags;
+        VkImageType              imageType;
+        VkFormat                 format;
+        VkExtent3D               extent;
+        uint32_t                 mipLevels;
+        uint32_t                 arrayLayers;
+        VkSampleCountFlagBits    samples;
+        VkImageTiling            tiling;
+        VkImageUsageFlags        usage;
+        VkSharingMode            sharingMode;
+    } properties;
+
+    VkImage image;
+    VkImageView base_view;
+    VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by
+};
+
+/** if view_create_info is NULL, the default view will be created
+ * otherwise the image field will be set after the image has been created */
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info);
+void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
 
 struct sol_vk_supervised_image
 {
@@ -63,10 +90,7 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
 
 
 
-#define SOL_STACK_ENTRY_TYPE VkBufferImageCopy
-#define SOL_STACK_FUNCTION_PREFIX sol_vk_buf_img_copy_list
-#define SOL_STACK_STRUCT_NAME sol_vk_buf_img_copy_list
-#include "data_structures/stack.h"
+
 
 void sol_vk_supervised_image_copy_regions_from_buffer(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);
 

@@ -25,7 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 
 #include "vk/timeline_semaphore.h"
-#include "cvm_vk.h"
+
 
 #warning separate out backed buffer from cvm_vk
 
@@ -39,6 +39,8 @@ struct sol_vk_staging_buffer_allocation
     char* mapping;/** mapped location in staging buffer to write to, has already been offset */
     uint32_t segment_index;/** for internal use */
 };
+
+#include "cvm_vk.h"
 
 struct sol_vk_staging_buffer_segment
 {

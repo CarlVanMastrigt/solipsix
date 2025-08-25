@@ -35,6 +35,10 @@ struct sol_gui_theme_simple_data
 	s16_vec2 box_text_border;
 	s16_vec2 panel_border;
 	s16_vec2 panel_content_border;
+
+	uint32_t test_checkerboard_id_set : 1;
+
+	uint64_t test_checkerboard_id;
 };
 
 #warning put bounds and animatable properties on the batch, and have batch setup struct for this information,
@@ -73,14 +77,90 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 	if(s16_rect_valid(rect))
 	{
+		uint32_t d0 = (0 << 30) | (colour << 24) ;
 		#warning should also check rect is positive at this point
 		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
-	        {CVM_OVERLAY_ELEMENT_FILL, colour<<8, 0, 0},
-	        {0,0,0,0}
+	        {0, 0, 0, 0},
+	        {d0, 0, 0, 0}
 	    };
 	}
+
+
+
+	struct sol_image_atlas* r8_atlas = batch->context->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM];
+	struct sol_vk_buf_img_copy_list* r8_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM;
+	enum sol_image_atlas_result atlas_obtain_result;
+	u16_vec2 test_size = u16_vec2_set(13, 13);
+	struct sol_image_atlas_location test_loc;
+	uint8_t* buffer;
+	VkDeviceSize copy_offset;
+	int x,y;
+
+	if(simple_theme_data->test_checkerboard_id_set == false)
+	{
+		simple_theme_data->test_checkerboard_id = sol_image_atlas_acquire_entry_identifier(r8_atlas, false);
+		simple_theme_data->test_checkerboard_id_set = true;
+	}
+
+	atlas_obtain_result = sol_image_atlas_entry_obtain(r8_atlas, simple_theme_data->test_checkerboard_id, test_size, false, &test_loc);
+
+	/** note intentional fallthrough */
+	switch (atlas_obtain_result)
+	{
+	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
+		#warning add a utility function for this copy ??
+		buffer = sol_vk_shunt_buffer_reserve_bytes(&batch->upload_shunt_buffer, 169, &copy_offset);
+		for(x=0;x<13;x++)
+		{
+			for(y=0;y<13;y++)
+			{
+				buffer[y*13+x] = 255 * ((x ^ y ^ 1) & 1);
+			}
+		}
+		#warning instead consider making this a union with a custom struct which can then be re-interpreted at buffer offset injection time ??
+		#warning possibly have a sol_image_atlas_location -> VkBufferImageCopy instruction?
+		*sol_vk_buf_img_copy_list_append_ptr(r8_copy_list) = (VkBufferImageCopy)
+		{
+			.bufferOffset = copy_offset,
+			/** 0 indicates tightly packed */
+			.bufferRowLength = 0,
+			.bufferImageHeight = 0,
+			.imageSubresource =
+			{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = test_loc.array_layer,
+				.layerCount = 1,
+			},
+			.imageOffset =
+			{
+				.x = test_loc.x,
+				.y = test_loc.y,
+				.z = 0,
+			},
+			.imageExtent =
+			{
+				.width = 13,
+				.height = 13,
+				.depth = 1,
+			}
+		};
+
+	case SOL_IMAGE_ATLAS_SUCCESS_FOUND:
+		#warning need to standardise layout of data in render elements
+		uint32_t d0 = (1 << 30) | (SOL_OVERLAY_COLOUR_STANDARD_TEXT << 24) | (SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM << 8) | (test_loc.array_layer);
+		render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
+		*render_data =(struct sol_overlay_render_element)
+	    {
+	        {rect.start.x+4, rect.start.y+4, rect.start.x+17, rect.start.y+17},
+	        {0, 0, test_loc.x, test_loc.y},
+	        {d0, 0, 0, 0}
+	    };
+	default:
+	}
+
 
 	// printf("render box: %d %d  %d %d\n",rect.start.x, rect.start.y, rect.end.x,rect.end.y);
 }
@@ -152,12 +232,13 @@ static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint3
 
 	if(s16_rect_valid(rect))
 	{
+		uint32_t d0 = (0 << 30) | (colour << 24) ;
 		#warning should also check rect is positive at this point
 		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
-	        {CVM_OVERLAY_ELEMENT_FILL, colour<<8, 0, 0},
-	        {0,0,0,0}
+	        {0, 0, 0, 0},
+	        {d0, 0, 0, 0}
 	    };
 	}
 }
@@ -258,6 +339,10 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			};
 			break;
 	}
+
+	simple_theme_data->test_checkerboard_id_set = false;
+	#warning instead making this fixed sounds much preferable
+	#warning REALLY need a way to track which atlas a resource came from, perhaps should have a universal resource vendor that also tracks container in identifier ???
 
 	*theme = (struct sol_gui_theme)
 	{

@@ -1384,7 +1384,7 @@ void cvm_vk_destroy_image(VkImage image)
     vkDestroyImage(cvm_vk_.device,image,NULL);
 }
 
-static uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
+uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
 {
     uint32_t i;
     for(i=0; i<device->memory_properties.memoryTypeCount; i++)
@@ -1635,124 +1635,6 @@ VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateIn
     return result;
 }
 
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info)
-{
-    VkResult result;
-    uint32_t memory_type_index;
-    VkImageViewCreateInfo view_create_info_internal;
-
-    VkMemoryDedicatedRequirements dedicated_requirements =
-    {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
-        .pNext = NULL,
-    };
-    VkMemoryRequirements2 memory_requirements =
-    {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-        .pNext = &dedicated_requirements,
-    };
-
-
-    #warning merge/move this concept with managed image?
-    *image = (struct sol_vk_image)
-    {
-        .image     = VK_NULL_HANDLE,
-        .base_view = VK_NULL_HANDLE,
-        .memory    = VK_NULL_HANDLE,
-    };
-
-
-
-    result = vkCreateImage(device->device, image_create_info, device->host_allocator, &image->image);
-
-    if(result == VK_SUCCESS)
-    {
-        const VkImageMemoryRequirementsInfo2 image_requirements_info =
-        {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
-            .pNext = NULL,
-            .image = image->image,
-        };
-
-        vkGetImageMemoryRequirements2(device->device, &image_requirements_info, &memory_requirements);
-
-        printf("sol_vk_image_create: %d : %d @ %lu\n", dedicated_requirements.prefersDedicatedAllocation, dedicated_requirements.requiresDedicatedAllocation,  memory_requirements.memoryRequirements.size);
-
-        memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
-        {
-            memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, 0);
-        }
-
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
-        {
-            result = VK_ERROR_UNKNOWN;
-        }
-    }
-
-    if(result == VK_SUCCESS)
-    {
-        #warning unless dedicated allocation is required; can probably use an existing memory allocation with some offset (same w/ binding)
-        #warning VkMemoryDedicatedAllocateInfo in next!
-        const VkMemoryAllocateInfo memory_allocate_info =
-        {
-            .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext=NULL,
-            .allocationSize = memory_requirements.memoryRequirements.size,
-            .memoryTypeIndex = memory_type_index
-        };
-
-        result = vkAllocateMemory(device->device, &memory_allocate_info, device->host_allocator, &image->memory);
-    }
-
-    if(result == VK_SUCCESS)
-    {
-        result = vkBindImageMemory(cvm_vk_.device, image->image, image->memory, 0);
-    }
-
-    if(result == VK_SUCCESS)
-    {
-        if(view_create_info == NULL)
-        {
-            cvm_vk_set_view_create_info_using_image_create_info(&view_create_info_internal, image_create_info, image->image);
-        }
-        else
-        {
-            view_create_info_internal = *view_create_info;
-            view_create_info_internal.image = image->image;
-        }
-
-        result = vkCreateImageView(device->device, &view_create_info_internal, device->host_allocator, &image->base_view);
-    }
-
-    if(result != VK_SUCCESS)
-    {
-        sol_vk_image_destroy(image, device);
-    }
-
-    return result;
-}
-
-
-void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device)
-{
-    if(image->image != VK_NULL_HANDLE)
-    {
-        vkDestroyImage(device->device, image->image, device->host_allocator);
-        image->image = VK_NULL_HANDLE;
-    }
-    if(image->base_view != VK_NULL_HANDLE)
-    {
-        vkDestroyImageView(device->device, image->base_view, device->host_allocator);
-        image->base_view = VK_NULL_HANDLE;
-    }
-    if(image->memory != VK_NULL_HANDLE)
-    {
-        vkFreeMemory(device->device, image->memory, device->host_allocator);
-        image->memory = VK_NULL_HANDLE;
-    }
-}
 
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info)

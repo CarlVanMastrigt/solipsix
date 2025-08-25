@@ -328,18 +328,7 @@ void cvm_vk_destroy_sampler(VkSampler sampler);
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
 
-struct sol_vk_image
-{
-    // VkImageCreateInfo image_create_info; // may want to keep properties around
-    VkImage image;
-    VkImageView base_view;
-    VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by
-};
-
-/** if view_create_info is NULL, the default view will be created 
- * otherwise the image field will be set after the image has been created */
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info);
-void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
+uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties);
 
 
 

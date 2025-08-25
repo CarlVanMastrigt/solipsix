@@ -1069,7 +1069,7 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		//.image = , // IMAGE WILL BE OVERWRITTEN !
+		//.image = , // not necessary, will be set as part of image initialise
 		.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
 		.format = description->format,
 		.components = (VkComponentMapping)
@@ -1252,7 +1252,7 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	free(atlas);
 }
 
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas)
 {
 	assert(!atlas->accessor_active);
 	atlas->accessor_active = true;
@@ -1263,7 +1263,7 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct so
 	return atlas->current_moment;
 }
 
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct cvm_vk_device* device)
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas)
 {
 	struct sol_image_atlas_entry* threshold_entry;
 
