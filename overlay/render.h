@@ -22,7 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 
 #include "math/s16_rect.h"
-#include "vk/shunt_buffer.h"
+#include "data_structures/buffer.h"
 #include "vk/image.h"
 #include "vk/image_utils.h"
 #include "vk/staging_buffer.h"
@@ -125,7 +125,7 @@ struct sol_overlay_render_batch
 
 
     /** miscellaneous inline upload buffer */
-    struct sol_vk_shunt_buffer upload_shunt_buffer;
+    struct sol_buffer upload_buffer;
 
     /** copy ops required to upload all glyph information */
     struct sol_vk_buf_img_copy_list copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];

@@ -22,11 +22,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 
 #include "math/u16_vec2.h"
+#include "data_structures/buffer.h"
 
 
 struct cvm_vk_device;
-
-struct sol_vk_shunt_buffer;
 
 struct sol_vk_buf_img_copy_list;
 
@@ -60,8 +59,8 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
 void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
 
 /** these will automatically apply copy operations */
-void* sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource);
-void* sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer);
+struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource);
+struct sol_buffer_allocation sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer);
 
 void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);
 
@@ -104,6 +103,6 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
 
 
 
-void sol_vk_supervised_image_copy_regions_from_buffer(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);
+void sol_vk_supervised_image_execute_copies(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);
 
 

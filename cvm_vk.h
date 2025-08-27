@@ -67,6 +67,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_STACK_STRUCT_NAME sol_vk_semaphore_stack
 #include "data_structures/stack.h"
 
+#define SOL_STACK_ENTRY_TYPE VkSemaphoreSubmitInfo
+#define SOL_STACK_FUNCTION_PREFIX sol_vk_semaphore_submit_list
+#define SOL_STACK_STRUCT_NAME sol_vk_semaphore_submit_list
+#include "data_structures/stack.h"
+
 
 typedef struct cvm_vk_managed_buffer cvm_vk_managed_buffer;
 typedef struct cvm_vk_managed_buffer_dismissal_list cvm_vk_managed_buffer_dismissal_list;

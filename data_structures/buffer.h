@@ -17,10 +17,26 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#pragma once
+
 #include <inttypes.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
+
+// struct sol_vk_shunt_buffer
+// {
+//     bool multithreaded;
+//     char* backing;
+//     VkDeviceSize alignment;
+//     VkDeviceSize size;
+//     union
+//     {
+//         VkDeviceSize offset;/** non-multithreaded */
+//         atomic_uint_fast64_t atomic_offset;/** multithreaded */
+//     };
+// };
 struct sol_buffer
 {
 	char* allocation;
@@ -28,15 +44,16 @@ struct sol_buffer
 	uint32_t used_space;
 };
 
-/** cannot be terminated */
+/** cannot be terminated
+ * NOTE: provided offset should not be applied when indexing */
 struct sol_buffer_allocation
 {
-	char* allocation;
+	void* allocation;
 	uint32_t size;
 	uint32_t offset;
 };
 
-static inline void sol_buffer_initialise(struct sol_buffer* b, uint32_t space)
+static inline void sol_buffer_initialise(struct sol_buffer* b, uint32_t space, uint32_t alignment)
 {
 	assert(space);
 	b->allocation = malloc(space);
@@ -53,9 +70,16 @@ static inline void sol_buffer_reset(struct sol_buffer* b)
 	b->used_space = 0;
 }
 
-/** will return empty allocation if insufficient space remains */
-static inline struct sol_buffer_allocation sol_buffer_fetch_allocation(struct sol_buffer* b, uint32_t size, uint32_t alignment)
+static inline void sol_buffer_copy(struct sol_buffer* b, void* dst)
 {
+	memcpy(dst, b->allocation, b->used_space);
+}
+
+/** will return empty allocation if insufficient space remains */
+static inline struct sol_buffer_allocation sol_buffer_fetch_aligned_allocation(struct sol_buffer* b, uint32_t size, uint32_t alignment)
+{
+	/** make sure not to ask for more space than buffer has */
+	assert(size <= b->total_space);
 	const uint32_t offset = (b->used_space + alignment - 1) & (- alignment);
 
 	if(offset + size > b->total_space)

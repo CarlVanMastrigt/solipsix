@@ -119,7 +119,7 @@ static void cubic_create_shape(overlay_theme * theme, cvm_vk_image_atlas_tile **
     assert(r<=40);///CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED
 
     *tile = cvm_vk_acquire_image_atlas_tile(render_batch->alpha_atlas, r*2,r*2);
-    data = cvm_vk_stage_image_atlas_upload(&render_batch->upload_shunt_buffer, &render_batch->alpha_atlas_copy_actions, *tile, r*2, r*2, render_batch->alpha_atlas->bytes_per_pixel);
+    data = (uint8_t*)cvm_vk_stage_image_atlas_upload(&render_batch->upload_shunt_buffer, &render_batch->alpha_atlas_copy_actions, *tile, r*2, r*2, render_batch->alpha_atlas->bytes_per_pixel).allocation;
 
     if(*tile)
     {

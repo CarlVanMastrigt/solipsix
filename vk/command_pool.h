@@ -25,6 +25,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_COMMAND_POOL_H
 #define CVM_VK_COMMAND_POOL_H
 
+#warning move this somewhere more appropriate
+
+
+
 typedef struct cvm_vk_command_pool
 {
     uint32_t device_queue_family_index;
@@ -50,6 +54,9 @@ typedef struct cvm_vk_command_buffer
     VkSemaphoreSubmitInfo signal_info[4];/// left open in case we add a way to signal arbitrary semphores
     VkSemaphoreSubmitInfo wait_info[11];
     ///above relatively arbitrarily chosen for struct size reasons
+
+    struct sol_vk_semaphore_submit_list signal_list;
+    struct sol_vk_semaphore_submit_list wait_list;
 }
 cvm_vk_command_buffer;
 

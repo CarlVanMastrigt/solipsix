@@ -19,6 +19,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <assert.h>
 
+#include "data_structures/buffer.h"
+
 #include "vk/image.h"
 #include "vk/image_utils.h"
 
@@ -46,8 +48,6 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
         .pNext = &dedicated_requirements,
     };
 
-
-    #warning merge/move this concept with managed image?
     *image = (struct sol_vk_image)
     {
         .properties =
@@ -161,15 +161,14 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
 }
 
 
-#warning convert this to use sol_buffer instead of shunt buffer (which should be removed)
-
-void* sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
+struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
 {
     struct sol_vk_format_block_properties block_properties;
+    struct sol_buffer_allocation upload_allocation;
     VkDeviceSize byte_offset;
     VkDeviceSize byte_count;
+    uint32_t alignemt;
     VkDeviceSize w, h;
-    void* buffer_bytes;
 
     block_properties = sol_vk_format_block_properties(image->properties.format);
 
@@ -179,11 +178,28 @@ void* sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_im
     assert(extent.width  % block_properties.texel_width  == 0);
     assert(extent.height % block_properties.texel_height == 0);
 
+    /** copy must fit inside image */
+    assert(offset.x + extent.width  <= image->properties.extent.width);
+    assert(offset.y + extent.height <= image->properties.extent.height);
+    assert(offset.z + extent.depth  <= image->properties.extent.depth);
+    assert(subresource.baseArrayLayer + subresource.layerCount <= image->properties.arrayLayers);
+
     w = (VkDeviceSize)extent.width  / (VkDeviceSize)block_properties.texel_width;
     h = (VkDeviceSize)extent.height / (VkDeviceSize)block_properties.texel_height;
     byte_count = w * h * (VkDeviceSize)block_properties.bytes;
 
-    buffer_bytes = sol_vk_shunt_buffer_reserve_bytes(shunt_buffer, byte_count, &byte_offset);
+    /** alignment must be a multiple of 4 (in case the queue for the command buffer isnt graphics/compute) and must be a multiple of the formats required alignment */
+    alignemt = block_properties.alignment;
+    if(alignemt & 1)
+    {
+        alignemt *= 4;
+    }
+    else if(alignemt & 2)
+    {
+        alignemt *= 2;
+    }
+
+    upload_allocation = sol_buffer_fetch_aligned_allocation(upload_buffer, byte_count, alignemt);
 
     *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
     {
@@ -196,10 +212,10 @@ void* sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_im
         .imageExtent = extent,
     };
 
-    return buffer_bytes;
+    return upload_allocation;
 }
 
-void* sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
+struct sol_buffer_allocation sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
 {
     VkImageSubresourceLayers vk_subresource =
     {
@@ -221,7 +237,7 @@ void* sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk
         .depth = 1,
     };
 
-    return sol_vk_image_prepare_copy(image, copy_list, shunt_buffer, vk_offset, vk_extent, vk_subresource);
+    return sol_vk_image_prepare_copy(image, copy_list, upload_buffer, vk_offset, vk_extent, vk_subresource);
 }
 
 void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
@@ -384,25 +400,13 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
     supervised_image->current_layout = new_layout;
 }
 
-
-void sol_vk_supervised_image_copy_regions_from_buffer(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
+void sol_vk_supervised_image_execute_copies(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
 {
-    uint32_t i;
-    VkBufferImageCopy* copy_actions = sol_vk_buf_img_copy_list_data(copy_list);
-    uint32_t copy_count = sol_vk_buf_img_copy_list_count(copy_list);
-
-    if(copy_count)
+    if(sol_vk_buf_img_copy_list_count(copy_list) > 0)
     {
         sol_vk_supervised_image_barrier(dst_image, command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-
-        for(i = 0; i < copy_count; i++)
-        {
-            copy_actions[i].bufferOffset += src_buffer_offset;
-        }
-        vkCmdCopyBufferToImage(command_buffer, src_buffer, dst_image->image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_count ,copy_actions);
+        sol_vk_image_execute_copies(&dst_image->image, copy_list, command_buffer, src_buffer, src_buffer_offset);
     }
-
-    sol_vk_buf_img_copy_list_reset(copy_list);
 }
 
 

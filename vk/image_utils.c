@@ -44,6 +44,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 1,
+			.alignment    = 1,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -76,6 +77,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 2,
+			.alignment    = 2,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -97,6 +99,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 3,
+			.alignment    = 3,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -151,6 +154,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 4,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -165,6 +169,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 6,
+			.alignment    = 6,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -185,6 +190,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -195,6 +201,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 12,
+			.alignment    = 12,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -208,6 +215,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -218,6 +226,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 24,
+			.alignment    = 24,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -228,6 +237,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 32,
+			.alignment    = 32,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -236,6 +246,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 2,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -244,6 +255,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 4,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -252,6 +264,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 4,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -260,6 +273,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 1,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -268,6 +282,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 3,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -276,6 +291,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 4,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -284,6 +300,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 5,
+			.alignment    = 4,
 			.compressed   = false,
 			.texel_width  = 1,
 			.texel_height = 1,
@@ -293,6 +310,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -302,6 +320,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -311,6 +330,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -320,6 +340,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -329,6 +350,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -338,6 +360,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -347,6 +370,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -356,6 +380,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -365,6 +390,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -374,6 +400,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -383,6 +410,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -392,6 +420,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 8,
+			.alignment    = 8,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -401,6 +430,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -411,6 +441,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 4,
 			.texel_height = 4,
@@ -421,6 +452,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 5,
 			.texel_height = 4,
@@ -431,6 +463,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 5,
 			.texel_height = 5,
@@ -441,6 +474,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 6,
 			.texel_height = 5,
@@ -451,6 +485,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 6,
 			.texel_height = 6,
@@ -461,6 +496,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 8,
 			.texel_height = 5,
@@ -471,6 +507,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 8,
 			.texel_height = 6,
@@ -481,6 +518,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 8,
 			.texel_height = 8,
@@ -491,6 +529,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 10,
 			.texel_height = 5,
@@ -501,6 +540,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 10,
 			.texel_height = 6,
@@ -511,6 +551,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 10,
 			.texel_height = 8,
@@ -521,6 +562,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 10,
 			.texel_height = 10,
@@ -531,6 +573,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 12,
 			.texel_height = 10,
@@ -541,6 +584,7 @@ struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat fo
 		return (struct sol_vk_format_block_properties)
 		{
 			.bytes        = 16,
+			.alignment    = 16,
 			.compressed   = true,
 			.texel_width  = 12,
 			.texel_height = 12,

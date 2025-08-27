@@ -24,7 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_OVERLAY_H
 #define CVM_OVERLAY_H
 
-#include "vk/shunt_buffer.h"
+#include "data_structures/buffer.h"
 #include "vk/staging_buffer.h"
 
 #define CVM_OVERLAY_ELEMENT_FILL        0x00000000
@@ -270,7 +270,7 @@ struct cvm_overlay_render_batch
     /// preparation resources
     struct cvm_overlay_element_render_data_stack render_elements;// essentailly overlay element instances
 
-    struct sol_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
+    struct sol_buffer upload_shunt_buffer;// used for putting data in atlases
 
 
         // information regarding current rendering stack position (as part of compositing), this will probably need to be handled better

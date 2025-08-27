@@ -25,7 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_IMAGE_H
 #define CVM_VK_IMAGE_H
 
-#include "vk/shunt_buffer.h"
+#include "data_structures/buffer.h"
 
 /// image that has it's state tracking managed
 /// administered better name?
@@ -160,7 +160,7 @@ void cvm_vk_image_atlas_barrier(cvm_vk_image_atlas* atlas, VkCommandBuffer cb, V
 void cvm_vk_image_atlas_prepare_for_fragment_sampling(cvm_vk_image_atlas* atlas, VkCommandBuffer cb);
 
 /// change this? improve/remove, is a helper function so move elsewhere?
-void * cvm_vk_stage_image_atlas_upload(struct sol_vk_shunt_buffer* shunt_buffer, struct cvm_vk_buffer_image_copy_stack* copy_buffer, const struct cvm_vk_image_atlas_tile * atlas_tile, uint32_t width,uint32_t height, uint32_t bytes_per_pixel);
+struct sol_buffer_allocation cvm_vk_stage_image_atlas_upload(struct sol_buffer* upload_buffer, struct cvm_vk_buffer_image_copy_stack* copy_buffer, const struct cvm_vk_image_atlas_tile * atlas_tile, uint32_t width,uint32_t height, uint32_t bytes_per_pixel);
 
 /// this should be done externally (not REALLY image atlas specific enough)
 void cvm_vk_image_atlas_submit_all_pending_copy_actions(struct cvm_vk_image_atlas* atlas,VkCommandBuffer transfer_cb, VkBuffer staging_buffer, VkDeviceSize staging_base_offset, struct cvm_vk_buffer_image_copy_stack* pending_copy_actions);

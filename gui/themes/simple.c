@@ -98,6 +98,7 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 	struct sol_vk_buf_img_copy_list* r8_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM;
 	struct sol_vk_buf_img_copy_list* bc4_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4;
 	enum sol_image_atlas_result atlas_obtain_result;
+	struct sol_buffer_allocation upload_allocation;
 	u16_vec2 test_size = u16_vec2_set(12, 12);
 	struct sol_image_atlas_location test_loc;
 	uint8_t* r8_ptr;
@@ -111,14 +112,13 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 		simple_theme_data->test_checkerboard_id_set = true;
 	}
 
-	atlas_obtain_result = sol_image_atlas_entry_obtain(r8_atlas, simple_theme_data->test_checkerboard_id, test_size, false, &test_loc);
+	atlas_obtain_result = sol_image_atlas_entry_obtain(bc4_atlas, simple_theme_data->test_checkerboard_id, test_size, SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD, &test_loc, &upload_allocation);
 
 	/** note intentional fallthrough */
 	switch (atlas_obtain_result)
 	{
 	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
-		// bc_ptr = sol_vk_prepare_copy_to_image(bc4_copy_list, &batch->upload_shunt_buffer, test_loc.offset, test_size, test_loc.array_layer, bc4_supervised_image->image.properties.format );
-		bc_ptr = sol_vk_image_prepare_copy_simple(&bc4_supervised_image->image, bc4_copy_list, &batch->upload_shunt_buffer, test_loc.offset, test_size, test_loc.array_layer);
+		bc_ptr = upload_allocation.allocation;
 		for(x=0;x<9;x++)
 		{
 			uint64_t v = 0;
@@ -153,7 +153,6 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 	    };
 	default:
 	}
-
 
 	// printf("render box: %d %d  %d %d\n",rect.start.x, rect.start.y, rect.end.x,rect.end.y);
 }

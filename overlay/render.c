@@ -374,11 +374,11 @@ void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline
 void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize shunt_buffer_size)
 {
     uint32_t i;
-    VkDeviceSize shunt_buffer_alignment = cvm_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    VkDeviceSize upload_buffer_alignment = cvm_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     sol_overlay_render_element_stack_initialise(&batch->elements, 64);
 
-    sol_vk_shunt_buffer_initialise(&batch->upload_shunt_buffer, shunt_buffer_alignment, shunt_buffer_size, false);///256k, plenty for per frame
+    sol_buffer_initialise(&batch->upload_buffer, shunt_buffer_size, upload_buffer_alignment);///256k, plenty for per frame
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
@@ -398,7 +398,7 @@ void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch)
         sol_vk_buf_img_copy_list_terminate(batch->copy_lists + i);
     }
 
-    sol_vk_shunt_buffer_terminate(&batch->upload_shunt_buffer);
+    sol_buffer_terminate(&batch->upload_buffer);
 
     sol_overlay_render_element_stack_terminate(&batch->elements);
 }
@@ -414,9 +414,9 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
         assert(sol_vk_buf_img_copy_list_count(batch->copy_lists + i) == 0);
-        batch->atlas_acquire_moments[i] = sol_image_atlas_acquire_access(batch->context->atlases[i]);
+        batch->atlas_acquire_moments[i] = sol_image_atlas_acquire_access(batch->context->atlases[i], &batch->upload_buffer, batch->copy_lists + i);
     }
-    assert(sol_vk_shunt_buffer_get_space_used(&batch->upload_shunt_buffer) == 0);
+    assert(batch->upload_buffer.used_space == 0);
     assert(sol_overlay_render_element_stack_count(&batch->elements) == 0);
 
     batch->bounds = s16_rect_set(0, 0, target_extent.width, target_extent.height);
@@ -456,7 +456,8 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
 
     #warning if a non-ring buffer implementation (buddy allocator) for staging is preferred it may be worthwhile to break this into chunks (by comparing required size across approaches?)
     upload_offset   = sol_vk_staging_buffer_allocation_align_offset(context->staging_buffer, uniform_offset  + sizeof(float) * 4 * OVERLAY_NUM_COLOURS);
-    elements_offset = sol_vk_staging_buffer_allocation_align_offset(context->staging_buffer, upload_offset   + sol_vk_shunt_buffer_get_space_used(&batch->upload_shunt_buffer));
+    elements_offset = sol_vk_staging_buffer_allocation_align_offset(context->staging_buffer, upload_offset   + batch->upload_buffer.used_space);
+    #warning have function for buffer space?
     staging_space   = sol_vk_staging_buffer_allocation_align_offset(context->staging_buffer, elements_offset + sol_overlay_render_element_stack_size(&batch->elements));
 
     batch->staging_buffer_allocation = sol_vk_staging_buffer_allocation_acquire(context->staging_buffer, device, staging_space, true);
@@ -468,7 +469,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     batch->upload_offset  = staging_offset + upload_offset;
 
     memcpy(staging_mapping + uniform_offset, colour_array, sizeof(float) * 4 * OVERLAY_NUM_COLOURS);
-    sol_vk_shunt_buffer_copy(&batch->upload_shunt_buffer, staging_mapping + upload_offset);
+    sol_buffer_copy(&batch->upload_buffer, staging_mapping + upload_offset);
     sol_overlay_render_element_stack_copy(&batch->elements, staging_mapping + elements_offset);
 
     /** flush all uploads */
@@ -528,6 +529,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
 
 
     #warning HACK - do this properly with an interface
+    #warning need to track HOW data has been set
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
         #warning  NO NO NO
@@ -544,7 +546,7 @@ void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
         atlas_supervised_image = sol_image_atlas_acquire_supervised_image(context->atlases[i]);
-        sol_vk_supervised_image_copy_regions_from_buffer(atlas_supervised_image, batch->copy_lists + i, command_buffer, batch->staging_buffer_allocation.acquired_buffer, batch->upload_offset);
+        sol_vk_supervised_image_execute_copies(atlas_supervised_image, batch->copy_lists + i, command_buffer, batch->staging_buffer_allocation.acquired_buffer, batch->upload_offset);
     }
 }
 
@@ -603,7 +605,7 @@ void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, 
         sol_vk_buf_img_copy_list_reset(batch->copy_lists + i);
     }
 
-    sol_vk_shunt_buffer_reset(&batch->upload_shunt_buffer);
+    sol_buffer_reset(&batch->upload_buffer);
     sol_overlay_render_element_stack_reset(&batch->elements);
 
     batch->context = NULL;

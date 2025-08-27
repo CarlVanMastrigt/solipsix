@@ -29,24 +29,31 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "math/u16_vec2.h"
 
 #include "vk/timeline_semaphore.h"
-#include "data_structures/hash_map_defines.h"
 
-/** external syncrronization of contents must be performed
-*/
+/** external syncrronization of contents must be performed */
 
 struct cvm_vk_device;
 
 struct sol_image_atlas;
 
+struct sol_buffer;
+struct sol_buffer_allocation;
+
+struct sol_vk_buf_img_copy_list;
 
 #warning these need better names
 enum sol_image_atlas_result
 {
-    SOL_IMAGE_ATLAS_FAIL_FULL        = SOL_MAP_FAIL_FULL, /** either hash map is full or there are no remaining tiles, either way need to wait for space to be made */
-    SOL_IMAGE_ATLAS_FAIL_ABSENT      = SOL_MAP_FAIL_ABSENT, /** if not forcing a dependency this may appear if a resource is written */
-    SOL_IMAGE_ATLAS_SUCCESS_FOUND    = SOL_MAP_SUCCESS_FOUND, /** existing entry found; no need to initalise */
-    SOL_IMAGE_ATLAS_SUCCESS_INSERTED = SOL_MAP_SUCCESS_INSERTED, /** existing entry not found; space was made but contents must be initialised */
+    SOL_IMAGE_ATLAS_FAIL_IMAGE_FULL, /** there are no remaining tiles, need to wait for space to be made */
+    SOL_IMAGE_ATLAS_FAIL_MAP_FULL, /** hash map is full, need to wait for space to be made */
+    SOL_IMAGE_ATLAS_FAIL_UPLOAD_FULL, /** desire to upload contents for this tile, but there is no remaining space in upload buffer */
+    SOL_IMAGE_ATLAS_FAIL_ABSENT, /** if not forcing a dependency this may appear if a resource is written */
+    SOL_IMAGE_ATLAS_SUCCESS_FOUND, /** existing entry found; no need to initalise */
+    SOL_IMAGE_ATLAS_SUCCESS_INSERTED, /** existing entry not found; space was made but contents must be initialised */
 };
+
+#define SOL_IMAGE_ATLAS_OBTAIN_FLAG_WRITE  0x00000001u
+#define SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD 0x00000002u
 
 struct sol_image_atlas_description
 {
@@ -68,8 +75,10 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
 /** must wait on returned moment before doing anything with the atlas
- * (reading or writing accessed entries) */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas);
+ * (reading or writing accessed entries)
+ * `upload_buffer` may be NULL, in which case no calls to obtain should be passed SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD
+ * NOTE: it's necessary to provide a copy list (rather than have one internal to the atlas) because setting up operations that will be executed after access release is an intended use case */
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list);
 
 /** moment must be signalled after all reads and writes to the atlas have completed */
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas);
@@ -86,7 +95,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 	this must be used with write if its contents will be modified in any way
 	if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised
 	NOTE: transient resources obtained will be made available immediately when access is released */
-enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, bool write_access, struct sol_image_atlas_location* entry_location);
+enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, uint32_t flags, struct sol_image_atlas_location* entry_location, struct sol_buffer_allocation* upload_allocation);
 
 
 struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas);
