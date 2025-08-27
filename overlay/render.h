@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "math/s16_rect.h"
 #include "vk/shunt_buffer.h"
 #include "vk/image.h"
+#include "vk/image_utils.h"
 #include "vk/staging_buffer.h"
 #include "vk/image_atlas.h"
 

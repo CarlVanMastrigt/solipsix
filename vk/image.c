@@ -20,6 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include "vk/image.h"
+#include "vk/image_utils.h"
 
 #include "cvm_vk.h"
 
@@ -66,7 +67,6 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
         .base_view = VK_NULL_HANDLE,
         .memory    = VK_NULL_HANDLE,
     };
-
 
 
     result = vkCreateImage(device->device, image_create_info, device->host_allocator, &image->image);
@@ -160,6 +160,89 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
     }
 }
 
+
+#warning convert this to use sol_buffer instead of shunt buffer (which should be removed)
+
+void* sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
+{
+    struct sol_vk_format_block_properties block_properties;
+    VkDeviceSize byte_offset;
+    VkDeviceSize byte_count;
+    VkDeviceSize w, h;
+    void* buffer_bytes;
+
+    block_properties = sol_vk_format_block_properties(image->properties.format);
+
+    /** offset and extent must be aligned to block texel size */
+    assert(offset.x      % block_properties.texel_width  == 0);
+    assert(offset.y      % block_properties.texel_height == 0);
+    assert(extent.width  % block_properties.texel_width  == 0);
+    assert(extent.height % block_properties.texel_height == 0);
+
+    w = (VkDeviceSize)extent.width  / (VkDeviceSize)block_properties.texel_width;
+    h = (VkDeviceSize)extent.height / (VkDeviceSize)block_properties.texel_height;
+    byte_count = w * h * (VkDeviceSize)block_properties.bytes;
+
+    buffer_bytes = sol_vk_shunt_buffer_reserve_bytes(shunt_buffer, byte_count, &byte_offset);
+
+    *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
+    {
+        .bufferOffset = byte_offset,
+        /** 0 indicates tightly packed */
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = subresource,
+        .imageOffset = offset,
+        .imageExtent = extent,
+    };
+
+    return buffer_bytes;
+}
+
+void* sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
+{
+    VkImageSubresourceLayers vk_subresource =
+    {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel = 0,
+        .baseArrayLayer = array_layer,
+        .layerCount = 1,
+    };
+    VkOffset3D vk_offset =
+    {
+        .x = offset.x,
+        .y = offset.y,
+        .z = 0,
+    };
+    VkExtent3D vk_extent =
+    {
+        .width = extent.x,
+        .height = extent.y,
+        .depth = 1,
+    };
+
+    return sol_vk_image_prepare_copy(image, copy_list, shunt_buffer, vk_offset, vk_extent, vk_subresource);
+}
+
+void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
+{
+    uint32_t i, copy_count;
+    VkBufferImageCopy* copy_actions;
+
+    copy_count = sol_vk_buf_img_copy_list_count(copy_list);
+    copy_actions = sol_vk_buf_img_copy_list_data(copy_list);
+
+    if(copy_count)
+    {
+        for(i = 0; i < copy_count; i++)
+        {
+            copy_actions[i].bufferOffset += src_buffer_offset;
+        }
+        vkCmdCopyBufferToImage(command_buffer, src_buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_count, copy_actions);
+
+        sol_vk_buf_img_copy_list_reset(copy_list);
+    }
+}
 
 
 
@@ -316,7 +399,6 @@ void sol_vk_supervised_image_copy_regions_from_buffer(struct sol_vk_supervised_i
         {
             copy_actions[i].bufferOffset += src_buffer_offset;
         }
-        printf("copy %u \n", copy_count);
         vkCmdCopyBufferToImage(command_buffer, src_buffer, dst_image->image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_count ,copy_actions);
     }
 

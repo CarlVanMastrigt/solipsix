@@ -22,17 +22,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 #include <inttypes.h>
 
-#include "math/u16_vec2.h"
-
-#include "vk/shunt_buffer.h"
 
 #define SOL_STACK_ENTRY_TYPE VkBufferImageCopy
 #define SOL_STACK_FUNCTION_PREFIX sol_vk_buf_img_copy_list
 #define SOL_STACK_STRUCT_NAME sol_vk_buf_img_copy_list
 #include "data_structures/stack.h"
 
-/** may return null if no space left in shunt buffer */
-void* sol_vk_prepare_copy_to_image(struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer, VkFormat format);
 
 #warning add a compatibility class parameter with 0 indicating incompatible with any other format
 struct sol_vk_format_block_properties

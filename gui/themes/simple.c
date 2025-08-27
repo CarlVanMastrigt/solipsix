@@ -100,7 +100,8 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 	enum sol_image_atlas_result atlas_obtain_result;
 	u16_vec2 test_size = u16_vec2_set(12, 12);
 	struct sol_image_atlas_location test_loc;
-	uint8_t* buffer;
+	uint8_t* r8_ptr;
+	uint64_t* bc_ptr;
 	VkDeviceSize copy_offset;
 	int x,y;
 
@@ -116,8 +117,8 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 	switch (atlas_obtain_result)
 	{
 	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
-		buffer = sol_vk_prepare_copy_to_image(bc4_copy_list, &batch->upload_shunt_buffer, test_loc.offset, test_size, test_loc.array_layer, bc4_supervised_image->image.properties.format );
-		uint64_t* bc_ptr = (uint64_t*)buffer;
+		// bc_ptr = sol_vk_prepare_copy_to_image(bc4_copy_list, &batch->upload_shunt_buffer, test_loc.offset, test_size, test_loc.array_layer, bc4_supervised_image->image.properties.format );
+		bc_ptr = sol_vk_image_prepare_copy_simple(&bc4_supervised_image->image, bc4_copy_list, &batch->upload_shunt_buffer, test_loc.offset, test_size, test_loc.array_layer);
 		for(x=0;x<9;x++)
 		{
 			uint64_t v = 0;
@@ -131,6 +132,7 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 			}
 			bc_ptr[x] = v;
 		}
+
 		// for(x=0;x<12;x++)
 		// {
 		// 	for(y=0;y<12;y++)

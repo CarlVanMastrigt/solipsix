@@ -17,72 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+
+#include <assert.h>
+
 #include "vk/image_utils.h"
-
-
-
-
-
-
-
-void* sol_vk_prepare_copy_to_image(struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer, VkFormat format)
-{
-	struct sol_vk_format_block_properties block_properties;
-	VkDeviceSize byte_offset;
-	VkDeviceSize byte_count;
-	VkDeviceSize w, h;
-	void* buffer_bytes;
-
-	block_properties = sol_vk_format_block_properties(format);
-
-	/** offset and extent must be aligned to block texel size */
-	assert(offset.x % block_properties.texel_width == 0);
-	assert(extent.x % block_properties.texel_width == 0);
-	assert(offset.y % block_properties.texel_height == 0);
-	assert(extent.y % block_properties.texel_height == 0);
-
-	w = (VkDeviceSize)extent.x / (VkDeviceSize)block_properties.texel_width;
-	h = (VkDeviceSize)extent.y / (VkDeviceSize)block_properties.texel_height;
-	byte_count = w * h * (VkDeviceSize)block_properties.bytes;
-
-	buffer_bytes = sol_vk_shunt_buffer_reserve_bytes(shunt_buffer, byte_count, &byte_offset);
-
-	*sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
-	{
-		.bufferOffset = byte_offset,
-		/** 0 indicates tightly packed */
-		.bufferRowLength = 0,
-		.bufferImageHeight = 0,
-		.imageSubresource =
-		{
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = array_layer,
-			.layerCount = 1,
-		},
-		.imageOffset =
-		{
-			.x = offset.x,
-			.y = offset.y,
-			.z = 0,
-		},
-		.imageExtent =
-		{
-			.width = extent.x,
-			.height = extent.y,
-			.depth = 1,
-		}
-	};
-
-	return buffer_bytes;
-}
-
-
-
-
-
-
-
 
 
 

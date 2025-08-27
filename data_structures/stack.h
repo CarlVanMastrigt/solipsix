@@ -42,6 +42,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_STACK_STRUCT_NAME placeholder_stack
 #endif
 
+#ifndef SOL_STACK_DEFAULT_STARTING_SIZE
+#define SOL_STACK_DEFAULT_STARTING_SIZE 64
+#endif
+
 struct SOL_STACK_STRUCT_NAME
 {
     SOL_STACK_ENTRY_TYPE* data;
@@ -51,22 +55,40 @@ struct SOL_STACK_STRUCT_NAME
 
 static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_initialise)(struct SOL_STACK_STRUCT_NAME* s, uint32_t initial_size)
 {
-    assert(initial_size>3 && !(initial_size & (initial_size-1)));
-    s->data = malloc(sizeof(SOL_STACK_ENTRY_TYPE) * initial_size);
+    s->data = initial_size ? malloc(sizeof(SOL_STACK_ENTRY_TYPE) * initial_size) : NULL;
     s->space = initial_size;
     s->count = 0;
 }
 
 static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_terminate)(struct SOL_STACK_STRUCT_NAME* s)
 {
-    free(s->data);
+    if(s->space)
+    {
+        assert(s->data);
+        free(s->data);
+    }
+    else
+    {
+        assert(s->data == NULL);
+    }
 }
 
 static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_many)(struct SOL_STACK_STRUCT_NAME* s, const SOL_STACK_ENTRY_TYPE* values, uint32_t count)
 {
-    while(s->count + count > s->space)
+    if(s->count + count > s->space)
     {
-        s->space *= 2;
+        do
+        {
+            if(s->space == 0)
+            {
+                s->space = SOL_STACK_DEFAULT_STARTING_SIZE;
+            }
+            else
+            {
+                s->space *= 2;
+            }
+        }
+        while(s->count + count > s->space);
         s->data = realloc(s->data, sizeof(SOL_STACK_ENTRY_TYPE) * s->space);
     }
     memcpy(s->data + s->count, values, sizeof(SOL_STACK_ENTRY_TYPE) * count);
@@ -92,7 +114,14 @@ static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_a
 {
     if(s->count == s->space)
     {
-        s->space *= 2;
+        if(s->space == 0)
+        {
+            s->space = SOL_STACK_DEFAULT_STARTING_SIZE;
+        }
+        else
+        {
+            s->space *= 2;
+        }
         s->data = realloc(s->data, sizeof(SOL_STACK_ENTRY_TYPE) * s->space);
     }
     return s->data + s->count++;
@@ -154,4 +183,4 @@ static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_d
 #undef SOL_STACK_ENTRY_TYPE
 #undef SOL_STACK_FUNCTION_PREFIX
 #undef SOL_STACK_STRUCT_NAME
-
+#undef SOL_STACK_DEFAULT_STARTING_SIZE
