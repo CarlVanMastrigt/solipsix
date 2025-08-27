@@ -60,7 +60,7 @@ struct sol_font_library* sol_font_library_create(void)
 	struct sol_font_library* font_library = malloc(sizeof(struct sol_font_library));
 	int freetype_error = FT_Init_FreeType(&font_library->freetype_library);
 
-    assert(!freetype_error);///COULD NOT CREATE FREETYPE LIBRARY
+    assert(!freetype_error);
 
     return font_library;
 }
@@ -68,10 +68,14 @@ struct sol_font_library* sol_font_library_create(void)
 void sol_font_library_destroy(struct sol_font_library* font_library)
 {
 	int freetype_error = FT_Done_FreeType(font_library->freetype_library);
-    assert(!freetype_error);///COULD NOT DESTROY FREETYPE LIBRARY
+    assert(!freetype_error);
 
 	free(font_library);
 }
+
+
+
+
 
 struct sol_font* sol_font_create(const struct sol_font_library* font_library, char* ttf_filename, int pixel_size)
 {

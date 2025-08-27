@@ -1,0 +1,683 @@
+/**
+Copyright 2025 Carl van Mastrigt
+
+This file is part of solipsix.
+
+solipsix is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+solipsix is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "vk/image_utils.h"
+
+
+
+
+
+
+
+void* sol_vk_prepare_copy_to_image(struct sol_vk_buf_img_copy_list* copy_list, struct sol_vk_shunt_buffer* shunt_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer, VkFormat format)
+{
+	struct sol_vk_format_block_properties block_properties;
+	VkDeviceSize byte_offset;
+	VkDeviceSize byte_count;
+	VkDeviceSize w, h;
+	void* buffer_bytes;
+
+	block_properties = sol_vk_format_block_properties(format);
+
+	/** offset and extent must be aligned to block texel size */
+	assert(offset.x % block_properties.texel_width == 0);
+	assert(extent.x % block_properties.texel_width == 0);
+	assert(offset.y % block_properties.texel_height == 0);
+	assert(extent.y % block_properties.texel_height == 0);
+
+	w = (VkDeviceSize)extent.x / (VkDeviceSize)block_properties.texel_width;
+	h = (VkDeviceSize)extent.y / (VkDeviceSize)block_properties.texel_height;
+	byte_count = w * h * (VkDeviceSize)block_properties.bytes;
+
+	buffer_bytes = sol_vk_shunt_buffer_reserve_bytes(shunt_buffer, byte_count, &byte_offset);
+
+	*sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
+	{
+		.bufferOffset = byte_offset,
+		/** 0 indicates tightly packed */
+		.bufferRowLength = 0,
+		.bufferImageHeight = 0,
+		.imageSubresource =
+		{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = array_layer,
+			.layerCount = 1,
+		},
+		.imageOffset =
+		{
+			.x = offset.x,
+			.y = offset.y,
+			.z = 0,
+		},
+		.imageExtent =
+		{
+			.width = extent.x,
+			.height = extent.y,
+			.depth = 1,
+		}
+	};
+
+	return buffer_bytes;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat format)
+{
+	switch(format)
+	{
+	case VK_FORMAT_R4G4_UNORM_PACK8:
+	case VK_FORMAT_R8_UNORM:
+	case VK_FORMAT_R8_SNORM:
+	case VK_FORMAT_R8_USCALED:
+	case VK_FORMAT_R8_SSCALED:
+	case VK_FORMAT_R8_UINT:
+	case VK_FORMAT_R8_SINT:
+	case VK_FORMAT_R8_SRGB:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 1,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R10X6_UNORM_PACK16:
+	case VK_FORMAT_R12X4_UNORM_PACK16:
+	case VK_FORMAT_A4R4G4B4_UNORM_PACK16:
+	case VK_FORMAT_A4B4G4R4_UNORM_PACK16:
+	case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
+	case VK_FORMAT_B4G4R4A4_UNORM_PACK16:
+	case VK_FORMAT_R5G6B5_UNORM_PACK16:
+	case VK_FORMAT_B5G6R5_UNORM_PACK16:
+	case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
+	case VK_FORMAT_B5G5R5A1_UNORM_PACK16:
+	case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+	case VK_FORMAT_R8G8_UNORM:
+	case VK_FORMAT_R8G8_SNORM:
+	case VK_FORMAT_R8G8_USCALED:
+	case VK_FORMAT_R8G8_SSCALED:
+	case VK_FORMAT_R8G8_UINT:
+	case VK_FORMAT_R8G8_SINT:
+	case VK_FORMAT_R8G8_SRGB:
+	case VK_FORMAT_R16_UNORM:
+	case VK_FORMAT_R16_SNORM:
+	case VK_FORMAT_R16_USCALED:
+	case VK_FORMAT_R16_SSCALED:
+	case VK_FORMAT_R16_UINT:
+	case VK_FORMAT_R16_SINT:
+	case VK_FORMAT_R16_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 2,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R8G8B8_UNORM:
+	case VK_FORMAT_R8G8B8_SNORM:
+	case VK_FORMAT_R8G8B8_USCALED:
+	case VK_FORMAT_R8G8B8_SSCALED:
+	case VK_FORMAT_R8G8B8_UINT:
+	case VK_FORMAT_R8G8B8_SINT:
+	case VK_FORMAT_R8G8B8_SRGB:
+	case VK_FORMAT_B8G8R8_UNORM:
+	case VK_FORMAT_B8G8R8_SNORM:
+	case VK_FORMAT_B8G8R8_USCALED:
+	case VK_FORMAT_B8G8R8_SSCALED:
+	case VK_FORMAT_B8G8R8_UINT:
+	case VK_FORMAT_B8G8R8_SINT:
+	case VK_FORMAT_B8G8R8_SRGB:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 3,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R10X6G10X6_UNORM_2PACK16:
+	case VK_FORMAT_R12X4G12X4_UNORM_2PACK16:
+	case VK_FORMAT_R8G8B8A8_UNORM:
+	case VK_FORMAT_R8G8B8A8_SNORM:
+	case VK_FORMAT_R8G8B8A8_USCALED:
+	case VK_FORMAT_R8G8B8A8_SSCALED:
+	case VK_FORMAT_R8G8B8A8_UINT:
+	case VK_FORMAT_R8G8B8A8_SINT:
+	case VK_FORMAT_R8G8B8A8_SRGB:
+	case VK_FORMAT_B8G8R8A8_UNORM:
+	case VK_FORMAT_B8G8R8A8_SNORM:
+	case VK_FORMAT_B8G8R8A8_USCALED:
+	case VK_FORMAT_B8G8R8A8_SSCALED:
+	case VK_FORMAT_B8G8R8A8_UINT:
+	case VK_FORMAT_B8G8R8A8_SINT:
+	case VK_FORMAT_B8G8R8A8_SRGB:
+	case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+	case VK_FORMAT_A8B8G8R8_SNORM_PACK32:
+	case VK_FORMAT_A8B8G8R8_USCALED_PACK32:
+	case VK_FORMAT_A8B8G8R8_SSCALED_PACK32:
+	case VK_FORMAT_A8B8G8R8_UINT_PACK32:
+	case VK_FORMAT_A8B8G8R8_SINT_PACK32:
+	case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+	case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+	case VK_FORMAT_A2R10G10B10_SNORM_PACK32:
+	case VK_FORMAT_A2R10G10B10_USCALED_PACK32:
+	case VK_FORMAT_A2R10G10B10_SSCALED_PACK32:
+	case VK_FORMAT_A2R10G10B10_UINT_PACK32:
+	case VK_FORMAT_A2R10G10B10_SINT_PACK32:
+	case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+	case VK_FORMAT_A2B10G10R10_SNORM_PACK32:
+	case VK_FORMAT_A2B10G10R10_USCALED_PACK32:
+	case VK_FORMAT_A2B10G10R10_SSCALED_PACK32:
+	case VK_FORMAT_A2B10G10R10_UINT_PACK32:
+	case VK_FORMAT_A2B10G10R10_SINT_PACK32:
+	case VK_FORMAT_R16G16_UNORM:
+	case VK_FORMAT_R16G16_SNORM:
+	case VK_FORMAT_R16G16_USCALED:
+	case VK_FORMAT_R16G16_SSCALED:
+	case VK_FORMAT_R16G16_UINT:
+	case VK_FORMAT_R16G16_SINT:
+	case VK_FORMAT_R16G16_SFLOAT:
+	case VK_FORMAT_R32_UINT:
+	case VK_FORMAT_R32_SINT:
+	case VK_FORMAT_R32_SFLOAT:
+	case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
+	case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 4,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R16G16B16_UNORM:
+	case VK_FORMAT_R16G16B16_SNORM:
+	case VK_FORMAT_R16G16B16_USCALED:
+	case VK_FORMAT_R16G16B16_SSCALED:
+	case VK_FORMAT_R16G16B16_UINT:
+	case VK_FORMAT_R16G16B16_SINT:
+	case VK_FORMAT_R16G16B16_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 6,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R16G16B16A16_UNORM:
+	case VK_FORMAT_R16G16B16A16_SNORM:
+	case VK_FORMAT_R16G16B16A16_USCALED:
+	case VK_FORMAT_R16G16B16A16_SSCALED:
+	case VK_FORMAT_R16G16B16A16_UINT:
+	case VK_FORMAT_R16G16B16A16_SINT:
+	case VK_FORMAT_R16G16B16A16_SFLOAT:
+	case VK_FORMAT_R32G32_UINT:
+	case VK_FORMAT_R32G32_SINT:
+	case VK_FORMAT_R32G32_SFLOAT:
+	case VK_FORMAT_R64_UINT:
+	case VK_FORMAT_R64_SINT:
+	case VK_FORMAT_R64_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R32G32B32_UINT:
+	case VK_FORMAT_R32G32B32_SINT:
+	case VK_FORMAT_R32G32B32_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 12,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R32G32B32A32_UINT:
+	case VK_FORMAT_R32G32B32A32_SINT:
+	case VK_FORMAT_R32G32B32A32_SFLOAT:
+	case VK_FORMAT_R64G64_UINT:
+	case VK_FORMAT_R64G64_SINT:
+	case VK_FORMAT_R64G64_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R64G64B64_UINT:
+	case VK_FORMAT_R64G64B64_SINT:
+	case VK_FORMAT_R64G64B64_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 24,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_R64G64B64A64_UINT:
+	case VK_FORMAT_R64G64B64A64_SINT:
+	case VK_FORMAT_R64G64B64A64_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 32,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_D16_UNORM:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 2,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_X8_D24_UNORM_PACK32:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 4,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_D32_SFLOAT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 4,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_S8_UINT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 1,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 3,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 4,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 5,
+			.compressed   = false,
+			.texel_width  = 1,
+			.texel_height = 1,
+		};
+	case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+	case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+	case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC2_UNORM_BLOCK:
+	case VK_FORMAT_BC2_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC3_UNORM_BLOCK:
+	case VK_FORMAT_BC3_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC4_UNORM_BLOCK:
+	case VK_FORMAT_BC4_SNORM_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC5_UNORM_BLOCK:
+	case VK_FORMAT_BC5_SNORM_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+	case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_BC7_UNORM_BLOCK:
+	case VK_FORMAT_BC7_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK:
+	case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK:
+	case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK:
+	case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_EAC_R11_UNORM_BLOCK:
+	case VK_FORMAT_EAC_R11_SNORM_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 8,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_EAC_R11G11_UNORM_BLOCK:
+	case VK_FORMAT_EAC_R11G11_SNORM_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 4,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_ASTC_5x4_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_5x4_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 5,
+			.texel_height = 4,
+		};
+	case VK_FORMAT_ASTC_5x5_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 5,
+			.texel_height = 5,
+		};
+	case VK_FORMAT_ASTC_6x5_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_6x5_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 6,
+			.texel_height = 5,
+		};
+	case VK_FORMAT_ASTC_6x6_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 6,
+			.texel_height = 6,
+		};
+	case VK_FORMAT_ASTC_8x5_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_8x5_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 8,
+			.texel_height = 5,
+		};
+	case VK_FORMAT_ASTC_8x6_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_8x6_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 8,
+			.texel_height = 6,
+		};
+	case VK_FORMAT_ASTC_8x8_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 8,
+			.texel_height = 8,
+		};
+	case VK_FORMAT_ASTC_10x5_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_10x5_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 10,
+			.texel_height = 5,
+		};
+	case VK_FORMAT_ASTC_10x6_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_10x6_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 10,
+			.texel_height = 6,
+		};
+	case VK_FORMAT_ASTC_10x8_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_10x8_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 10,
+			.texel_height = 8,
+		};
+	case VK_FORMAT_ASTC_10x10_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 10,
+			.texel_height = 10,
+		};
+	case VK_FORMAT_ASTC_12x10_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_12x10_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 12,
+			.texel_height = 10,
+		};
+	case VK_FORMAT_ASTC_12x12_SFLOAT_BLOCK:
+	case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
+	case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
+		return (struct sol_vk_format_block_properties)
+		{
+			.bytes        = 16,
+			.compressed   = true,
+			.texel_width  = 12,
+			.texel_height = 12,
+		};
+	// case VK_FORMAT_G8B8G8R8_422_UNORM:
+	// 	return 4;
+	// case VK_FORMAT_B8G8R8G8_422_UNORM:
+	// 	return 4;
+	// case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+	// 	return 3;
+	// case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+	// 	return 3;
+	// case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
+	// 	return 3;
+	// case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
+	// 	return 3;
+	// case VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM:
+	// 	return 3;
+	// case VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16:
+	// 	return 8;
+	// case VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16:
+	// 	return 8;
+	// case VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16:
+	// 	return 8;
+	// case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16:
+	// 	return 8;
+	// case VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16:
+	// 	return 8;
+	// case VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16:
+	// 	return 8;
+	// case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G16B16G16R16_422_UNORM:
+	// 	return 8;
+	// case VK_FORMAT_B16G16R16G16_422_UNORM:
+	// 	return 8;
+	// case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
+	// 	return 6;
+	// case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
+	// 	return 6;
+	// case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
+	// 	return 6;
+	// case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM:
+	// 	return 6;
+	// case VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM:
+	// 	return 6;
+	// case VK_FORMAT_G8_B8R8_2PLANE_444_UNORM:
+	// 	return 3;
+	// case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_444_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_444_UNORM_3PACK16:
+	// 	return 6;
+	// case VK_FORMAT_G16_B16R16_2PLANE_444_UNORM:
+	// 	return 6;
+	default:
+		/** unknown/unsupported format */
+		assert(false);
+		return (struct sol_vk_format_block_properties){};
+	}
+}

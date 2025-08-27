@@ -98,22 +98,38 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
 {
     uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,width,height;
     VkBool32 surface_supported;
-    VkSurfaceFormatKHR * formats;
+    VkSurfaceFormat2KHR * formats;
     VkPresentModeKHR * present_modes;
     VkImage * images;
 
     instance->out_of_date = false;
     instance->acquired_image_count = 0;
 
-    /// select format (image format and colourspace)
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(device->physical_device, swapchain->setup_info.surface, &format_count, NULL));
-    formats = malloc(sizeof(VkSurfaceFormatKHR)*format_count);
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(device->physical_device, swapchain->setup_info.surface, &format_count, formats));
+    VkPhysicalDeviceSurfaceInfo2KHR surface_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+        .pNext = NULL,
+        .surface = swapchain->setup_info.surface,
+    };
 
-    instance->surface_format = formats[0];///fallback in case preferred isnt found, required to have at least 1 at this point
+    /// select format (image format and colourspace)
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormats2KHR(device->physical_device, &surface_info, &format_count, NULL));
+    formats = malloc(sizeof(VkSurfaceFormat2KHR) * format_count);
+    for(i = 0; i < format_count; i++)
+    {
+        formats[i] = (VkSurfaceFormat2KHR)
+        {
+            .sType = VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR,
+            .pNext = NULL,
+        };
+    }
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormats2KHR(device->physical_device, &surface_info, &format_count, formats));
+
+    instance->surface_format = formats[0].surfaceFormat;///fallback in case preferred isnt found, required to have at least 1 at this point
     for(i=0;i<format_count;i++)
     {
-        if(swapchain->setup_info.preferred_surface_format.colorSpace==formats[i].colorSpace && swapchain->setup_info.preferred_surface_format.format==formats[i].format)
+        printf("swapchain surface - colourspace:%u , format:%u\n", formats[i].surfaceFormat.colorSpace, formats[i].surfaceFormat.format);
+        if(swapchain->setup_info.preferred_surface_format.colorSpace==formats[i].surfaceFormat.colorSpace && swapchain->setup_info.preferred_surface_format.format==formats[i].surfaceFormat.format)
         {
             ///preferred format exists
             instance->surface_format = swapchain->setup_info.preferred_surface_format;

@@ -27,7 +27,6 @@ struct cvm_vk_device;
 
 struct sol_vk_image
 {
-    VkImageCreateInfo image_create_info; // may want to keep properties around
     struct
     {
         VkImageCreateFlags       flags;
@@ -40,7 +39,8 @@ struct sol_vk_image
         VkImageTiling            tiling;
         VkImageUsageFlags        usage;
         VkSharingMode            sharingMode;
-    } properties;
+    }
+    properties;
 
     VkImage image;
     VkImageView base_view;
@@ -49,9 +49,15 @@ struct sol_vk_image
 
 /** if view_create_info is NULL, the default view will be created
  * otherwise the image field will be set after the image has been created */
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info);
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* default_view_create_info);
 void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
 
+
+
+
+/** it should be possible to track the current state across a QFOT and mark a supervised image as such
+ * also new access/stage masks are ignored on release making this very easy
+ * DEFINITELY worth looking into! */
 struct sol_vk_supervised_image
 {
     /** conceptually: this relies on write->write barriers being transitive
@@ -75,7 +81,7 @@ struct sol_vk_supervised_image
 /** if view_create_info is NULL, the default view will be created
  * otherwise the image field will be set after the image has been created */
 void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info);
-void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device);//does nothing
+void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device);
 
 void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer command_buffer, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask);
 /** TODO: want a function that manages similar to above but in the context of render passes */
@@ -83,9 +89,7 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
 // VkImageView sol_vk_supervised_image_view_get(struct sol_vk_supervised_image* supervised_image);
 
 
-/** it should be possible to track the current state across a QFOT and mark a supervised image as such
- * also new access/stage masks are ignored on release making this very easy
- * DEFINITELY worth looking into! */
+
 
 
 

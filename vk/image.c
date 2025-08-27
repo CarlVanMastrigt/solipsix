@@ -28,7 +28,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info)
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* default_view_create_info)
 {
     VkResult result;
     uint32_t memory_type_index;
@@ -49,6 +49,19 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
     #warning merge/move this concept with managed image?
     *image = (struct sol_vk_image)
     {
+        .properties =
+        {
+            .flags       = image_create_info->flags,
+            .imageType   = image_create_info->imageType,
+            .format      = image_create_info->format,
+            .extent      = image_create_info->extent,
+            .mipLevels   = image_create_info->mipLevels,
+            .arrayLayers = image_create_info->arrayLayers,
+            .samples     = image_create_info->samples,
+            .tiling      = image_create_info->tiling,
+            .usage       = image_create_info->usage,
+            .sharingMode = image_create_info->sharingMode,
+        },
         .image     = VK_NULL_HANDLE,
         .base_view = VK_NULL_HANDLE,
         .memory    = VK_NULL_HANDLE,
@@ -106,13 +119,13 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
 
     if(result == VK_SUCCESS)
     {
-        if(view_create_info == NULL)
+        if(default_view_create_info == NULL)
         {
-            cvm_vk_set_view_create_info_using_image_create_info(&view_create_info_internal, image_create_info, image->image);
+            sol_vk_default_view_for_image(&view_create_info_internal, image_create_info, image->image);
         }
         else
         {
-            view_create_info_internal = *view_create_info;
+            view_create_info_internal = *default_view_create_info;
             view_create_info_internal.image = image->image;
         }
 
@@ -146,6 +159,8 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
         image->memory = VK_NULL_HANDLE;
     }
 }
+
+
 
 
 

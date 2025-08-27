@@ -1337,8 +1337,8 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 		}
 
 		entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
-		entry_location->x = sol_ia_p_loc_get_x(entry->packed_location);
-		entry_location->y = sol_ia_p_loc_get_y(entry->packed_location);
+		entry_location->offset.x = sol_ia_p_loc_get_x(entry->packed_location);
+		entry_location->offset.y = sol_ia_p_loc_get_y(entry->packed_location);
 
 		return SOL_IMAGE_ATLAS_SUCCESS_FOUND;
 	}
@@ -1435,8 +1435,8 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 				sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, atlas->header_entry_index);
 			}
 			entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
-			entry_location->x = sol_ia_p_loc_get_x(entry->packed_location);
-			entry_location->y = sol_ia_p_loc_get_y(entry->packed_location);
+			entry_location->offset.x = sol_ia_p_loc_get_x(entry->packed_location);
+			entry_location->offset.y = sol_ia_p_loc_get_y(entry->packed_location);
 			return SOL_IMAGE_ATLAS_SUCCESS_FOUND;
 		}
 	}
@@ -1510,8 +1510,8 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 
 
 	entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
-	entry_location->x = sol_ia_p_loc_get_x(entry->packed_location);
-	entry_location->y = sol_ia_p_loc_get_y(entry->packed_location);
+	entry_location->offset.x = sol_ia_p_loc_get_x(entry->packed_location);
+	entry_location->offset.y = sol_ia_p_loc_get_y(entry->packed_location);
 	return SOL_IMAGE_ATLAS_SUCCESS_INSERTED;
 }
 

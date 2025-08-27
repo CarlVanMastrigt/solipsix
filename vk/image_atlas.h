@@ -60,8 +60,7 @@ struct sol_image_atlas_description
 
 struct sol_image_atlas_location
 {
-	uint16_t x;
-	uint16_t y;
+	u16_vec2 offset;
 	uint8_t array_layer;
 };
 

@@ -41,6 +41,8 @@ struct sol_gui_theme_simple_data
 	uint64_t test_checkerboard_id;
 };
 
+
+
 #warning put bounds and animatable properties on the batch, and have batch setup struct for this information,
 // mark sub components as mutable/inherited and pass them in as a const pointer that can be substituted?
 // ^ either sub components of the whole struct, allowing it to be substituted at appropriate points
@@ -90,9 +92,13 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 
 	struct sol_image_atlas* r8_atlas = batch->context->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM];
+	struct sol_image_atlas* bc4_atlas = batch->context->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4];
+	struct sol_vk_supervised_image* r8_supervised_image = sol_image_atlas_acquire_supervised_image(r8_atlas);
+	struct sol_vk_supervised_image* bc4_supervised_image = sol_image_atlas_acquire_supervised_image(bc4_atlas);
 	struct sol_vk_buf_img_copy_list* r8_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM;
+	struct sol_vk_buf_img_copy_list* bc4_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4;
 	enum sol_image_atlas_result atlas_obtain_result;
-	u16_vec2 test_size = u16_vec2_set(13, 13);
+	u16_vec2 test_size = u16_vec2_set(12, 12);
 	struct sol_image_atlas_location test_loc;
 	uint8_t* buffer;
 	VkDeviceSize copy_offset;
@@ -110,52 +116,37 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 	switch (atlas_obtain_result)
 	{
 	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
-		#warning add a utility function for this copy ??
-		buffer = sol_vk_shunt_buffer_reserve_bytes(&batch->upload_shunt_buffer, 169, &copy_offset);
-		for(x=0;x<13;x++)
+		buffer = sol_vk_prepare_copy_to_image(bc4_copy_list, &batch->upload_shunt_buffer, test_loc.offset, test_size, test_loc.array_layer, bc4_supervised_image->image.properties.format );
+		uint64_t* bc_ptr = (uint64_t*)buffer;
+		for(x=0;x<9;x++)
 		{
-			for(y=0;y<13;y++)
+			uint64_t v = 0;
+			uint64_t o = 0;
+			v |= 0x40 << o; o += 8;
+			v |= 0x40 << o; o += 8;
+			for(y=0;y<16;y++)
 			{
-				buffer[y*13+x] = 255 * ((x ^ y ^ 1) & 1);
+				v |= (uint64_t)(6+ ((y + 1 + (y>>2))&1)) << o;
+				o += 3;
 			}
+			bc_ptr[x] = v;
 		}
-		#warning instead consider making this a union with a custom struct which can then be re-interpreted at buffer offset injection time ??
-		#warning possibly have a sol_image_atlas_location -> VkBufferImageCopy instruction?
-		*sol_vk_buf_img_copy_list_append_ptr(r8_copy_list) = (VkBufferImageCopy)
-		{
-			.bufferOffset = copy_offset,
-			/** 0 indicates tightly packed */
-			.bufferRowLength = 0,
-			.bufferImageHeight = 0,
-			.imageSubresource =
-			{
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = 0,
-				.baseArrayLayer = test_loc.array_layer,
-				.layerCount = 1,
-			},
-			.imageOffset =
-			{
-				.x = test_loc.x,
-				.y = test_loc.y,
-				.z = 0,
-			},
-			.imageExtent =
-			{
-				.width = 13,
-				.height = 13,
-				.depth = 1,
-			}
-		};
+		// for(x=0;x<12;x++)
+		// {
+		// 	for(y=0;y<12;y++)
+		// 	{
+		// 		buffer[y*12+x] = 255 * ((x ^ y ^ 1) & 1);
+		// 	}
+		// }
 
 	case SOL_IMAGE_ATLAS_SUCCESS_FOUND:
 		#warning need to standardise layout of data in render elements
-		uint32_t d0 = (1 << 30) | (SOL_OVERLAY_COLOUR_STANDARD_TEXT << 24) | (SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM << 8) | (test_loc.array_layer);
+		uint32_t d0 = (1 << 30) | (SOL_OVERLAY_COLOUR_STANDARD_TEXT << 24) | (SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4 << 8) | (test_loc.array_layer);
 		render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
 		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x+4, rect.start.y+4, rect.start.x+17, rect.start.y+17},
-	        {0, 0, test_loc.x, test_loc.y},
+	        {0, 0, test_loc.offset.x, test_loc.offset.y},
 	        {d0, 0, 0, 0}
 	    };
 	default:

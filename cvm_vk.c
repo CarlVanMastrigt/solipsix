@@ -1398,7 +1398,7 @@ uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint3
 }
 
 
-void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* view_create_info, const VkImageCreateInfo* image_create_info, VkImage image)
+void sol_vk_default_view_for_image(VkImageViewCreateInfo* view_create_info, const VkImageCreateInfo* image_create_info, VkImage image)
 {
     VkImageViewType view_type;
     VkImageAspectFlags aspect;
@@ -1562,78 +1562,6 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
     return result;
 }
 
-#warning unify the approach used here and in buffer creation, either pass in all variables or pass in struct(s) for in/out
-VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory* memory,VkImage* images, VkImageView* default_image_views)
-{
-    #warning REMOVE THIS FUNCTION
-    uint32_t i;
-    VkResult result = VK_SUCCESS;
-    VkImageViewCreateInfo view_create_info;
-    #warning have this unwind resources created upon failure
-
-    *memory = VK_NULL_HANDLE;
-
-    for(i=0;i<image_count;i++)
-    {
-        images[i] = VK_NULL_HANDLE;
-    }
-
-    if(default_image_views)
-    {
-        for(i=0;i<image_count;i++)
-        {
-            default_image_views[i] = VK_NULL_HANDLE;
-        }
-    }
-
-    for(i=0;i<image_count;i++)
-    {
-        result = vkCreateImage(device->device, image_create_infos+i, device->host_allocator, images+i);
-        if(result != VK_SUCCESS)
-        {
-            break;
-        }
-    }
-
-    if(result == VK_SUCCESS)
-    {
-        result = cvm_vk_allocate_and_bind_memory_for_images(memory, images, image_count, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        if(default_image_views && result == VK_SUCCESS)
-        {
-            for(i=0;i<image_count;i++)
-            {
-                cvm_vk_set_view_create_info_using_image_create_info(&view_create_info, image_create_infos+i, images[i]);
-                result = vkCreateImageView(device->device, &view_create_info, device->host_allocator, default_image_views+i);
-                if(result != VK_SUCCESS)
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    if(result != VK_SUCCESS)
-    {
-        for(i=0;i<image_count;i++)
-        {
-            if(images[i] != VK_NULL_HANDLE)
-            {
-                vkDestroyImage(device->device, images[i], device->host_allocator);
-            }
-            if(default_image_views && default_image_views[i] != VK_NULL_HANDLE)
-            {
-                vkDestroyImageView(device->device, default_image_views[i], device->host_allocator);
-            }
-        }
-        if(*memory != VK_NULL_HANDLE)
-        {
-            vkFreeMemory(device->device, *memory, device->host_allocator);
-        }
-    }
-
-    return result;
-}
 
 
 
