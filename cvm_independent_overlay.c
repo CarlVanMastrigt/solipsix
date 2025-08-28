@@ -91,8 +91,10 @@ struct cvm_overlay_transient_resources
 
 struct cvm_overlay_renderer
 {
-    /// for uploading to images, is NOT locally owned
-    struct sol_overlay_render_context* overlay_render_context;
+    /** for uploading to images, is NOT locally owned*/
+    #warning instead provide these on calling it?
+    struct sol_overlay_rendering_resources* overlay_render_context;
+    struct sol_vk_staging_buffer* staging_buffer;
 
     uint32_t transient_count;
     uint32_t transient_count_initialised;
@@ -462,7 +464,7 @@ static inline void cvm_overlay_transient_resources_release(struct cvm_overlay_re
 
 
 
-struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_render_context* overlay_render_context, uint32_t active_render_count)
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_render_context, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count)
 {
     struct cvm_overlay_renderer* renderer;
     renderer = malloc(sizeof(struct cvm_overlay_renderer));
@@ -478,6 +480,7 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* d
     cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue, 16);
 
     renderer->overlay_render_context = overlay_render_context;
+    renderer->staging_buffer = staging_buffer;
 
     cvm_overlay_target_resources_queue_initialise(&renderer->target_resources, 16);
 
@@ -525,8 +528,6 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     struct cvm_overlay_target_resources* target_resources;
     struct cvm_overlay_frame_resources* frame_resources;
     struct cvm_overlay_transient_resources* transient_resources;
-    VkDeviceSize staging_offset;
-    char * staging_mapping;
     float screen_w,screen_h;
 
 
@@ -564,7 +565,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     sol_overlay_render_step_append_waits(render_batch, &cb.wait_list, VK_PIPELINE_STAGE_2_NONE);
 
-    sol_overlay_render_step_write_descriptors(render_batch, device, overlay_colours, transient_resources->descriptor_set);
+    sol_overlay_render_step_write_descriptors(render_batch, device, renderer->staging_buffer, overlay_colours, transient_resources->descriptor_set);
     sol_overlay_render_step_submit_vk_transfers(render_batch, cb.buffer);
 
     sol_overlay_render_step_insert_vk_barriers(render_batch, cb.buffer);

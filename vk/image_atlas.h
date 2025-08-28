@@ -71,12 +71,17 @@ struct sol_image_atlas_location
 	uint8_t array_layer;
 };
 
-/** this is intended for setting up device side work/bindings/state changes after an access has been completed
+/** this is largely a utility intended for setting up device side work/bindings/state changes after an access has been completed
  * it is only safe to schedule mutation of the supervised images state between the acquire and release moments
- * NOTE: due to accesses to the supervised images internal state it's necessary to externally synchronise modifications of the supervised image */
-struct sol_overlay_atlas_usage_range
+ * NOTE: due to accesses to the supervised images internal state it's necessary to externally synchronise modifications of the supervised image
+ * NOTE: upload list is the one provided to `sol_image_atlas_acquire_access` and should not be accessed externally */
+struct sol_overlay_atlas_access_range
 {
     struct sol_vk_supervised_image* supervised_image;
+
+    /** the upload list will be set here only for convenience, it is the same one provided to `sol_image_atlas_acquire_access` so could be tracked externally */
+    struct sol_vk_buf_img_copy_list* upload_list;
+
     struct sol_vk_timeline_semaphore_moment acquire_moment;
     struct sol_vk_timeline_semaphore_moment release_moment;
 };
@@ -84,14 +89,20 @@ struct sol_overlay_atlas_usage_range
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-/** must wait on returned moment before doing anything with the atlas
- * (reading or writing accessed entries)
- * `upload_buffer` may be NULL, in which case no calls to obtain should be passed SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD
- * NOTE: it's necessary to provide a copy list (rather than have one internal to the atlas) because setting up operations that will be executed after access release is an intended use case */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list);
+/** must wait on returned moment before doing anything with the atlas (reading or writing accessed entries)
+ * `upload_buffer` and `upload_list` may be NULL, in which case no calls to obtain should be passed SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD
+ * `upload buffer` will only be used within the range of the access and its contents must be staged and provided to `sol_overlay_atlas_usage_range_execute_copies` with the range returned on release
+ * NOTE: it's necessary to provide a copy list (rather than have one internal to the atlas) because setting up operations that will be executed after access release is an intended use case
+ * NOTE: its necessary to provide this such that an obtained entry can have guarantees that it's contents can be initialised (otherwise there is no way to guarantee that there is space to stage the upload) */
+void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list);
 
-/** moment must be signalled after all reads and writes to the atlas have completed */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas);
+/** the access range set as part of this function describes the scope of the callers (i.e. external) permissions and responsibilities
+ * NOTE: this will fully initialise `access_range` which may be discarded after all its responsibilities are fulfilled
+ * the only access after release permitted is via the supervised_image,
+ * 		^ NOTE: this must be externally synchronised across multiple accesses
+ * the acquire semaphore must be waited on before any accesses (read or write) to the atlas
+ * the release remaphore must be signalled after any accesses (read or write) to the atlas */
+void sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_range* access_range);
 
 
 /** acquire a unique identifier for accessing/indexing entries in the atlas
@@ -108,15 +119,17 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, uint32_t flags, struct sol_image_atlas_location* entry_location, struct sol_buffer_allocation* upload_allocation);
 
 
-struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas);
+/** NOTE: this is mostly just a utility function with limited value (it could be implemented externally quite trivially)
+ * if `upload_buffer` & `upload_list` were provided to `sol_image_atlas_acquire_access` then this MUST be called on a command buffer between the acquire and release semaphores returned in the usage range
+ * provided staging buffer at provided staging offset must contain the contents of the `upload_buffer`
+ * provided to `sol_image_atlas_acquire_access` AFTER `sol_image_atlas_release_access` has been called
+ * NOTE: an inmplementation may wish to share a single upload buffer across multiple atlases and other use cases, this must be externally synchronised
+ * NOTE: the `upload_list` provided to `sol_image_atlas_acquire_access` will become available again after this has been called */
+void sol_overlay_atlas_access_range_execute_copies(struct sol_overlay_atlas_access_range* access_range, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset);
 
-
-#warning should readonly access be a viable option? (allowing only find operations) could also make this immediate in that incomplete writes are NOT vended
-
-#warning make `write_access` and `transient` (in obtain) flags instead?
 
 #warning if write access requested and there is a better slot to place the size of content desired (or a different size is requested) \
-use that new spot and wait on the appropriate entry to be made free to clear it
+use that new spot (consider allowing image->image copy list to facilitate this type of behaviour)
 
 
 

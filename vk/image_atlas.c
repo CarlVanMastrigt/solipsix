@@ -1263,7 +1263,7 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	free(atlas);
 }
 
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list)
+void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list)
 {
 	assert(!atlas->accessor_active);
 	atlas->accessor_active = true;
@@ -1278,20 +1278,29 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_acquire_access(struct so
 
 	/** place the threshold to the front of the queue */
 	sol_image_atlas_entry_add_to_queue_before(atlas, atlas->threshold_entry_index, atlas->header_entry_index);
-
-	return atlas->current_moment;
 }
 
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct sol_image_atlas* atlas)
+void sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_range* access_range)
 {
 	struct sol_image_atlas_entry* threshold_entry;
 
 	assert(atlas->accessor_active);
 
+	struct sol_vk_timeline_semaphore_moment acquire_moment = atlas->current_moment;
+    struct sol_vk_timeline_semaphore_moment release_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
+
+	*access_range = (struct sol_overlay_atlas_access_range)
+	{
+		.acquire_moment = atlas->current_moment,
+		.supervised_image = &atlas->image,
+		.upload_list = atlas->upload_list,
+		.release_moment = release_moment,
+	};
+
 	atlas->accessor_active = false;
 	atlas->upload_buffer = NULL;
 	atlas->upload_list = NULL;
-	atlas->current_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
+	atlas->current_moment = release_moment;
 
 	/** NOTE: it is very important that nothing in this loop will alter the backing of the entry array
 	 * doing so would invalidate the threshold entry pointer */
@@ -1301,12 +1310,8 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_release_access(struct so
 		sol_image_atlas_entry_evict(atlas, threshold_entry->next_entry_index);
 	}
 
-
 	/** remove the threshold from the queue */
 	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
-
-
-	return atlas->current_moment;
 }
 
 
@@ -1579,6 +1584,12 @@ struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct 
 }
 
 
-
+void sol_overlay_atlas_access_range_execute_copies(struct sol_overlay_atlas_access_range* access_range, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset)
+{
+	if(access_range->upload_list)
+	{
+		sol_vk_supervised_image_execute_copies(access_range->supervised_image, access_range->upload_list, command_buffer, staging_buffer, staging_offset);
+	}
+}
 
 

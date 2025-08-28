@@ -91,10 +91,8 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 
 
-	struct sol_image_atlas* r8_atlas = batch->render_context->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM];
-	struct sol_image_atlas* bc4_atlas = batch->render_context->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4];
-	struct sol_vk_supervised_image* r8_supervised_image = sol_image_atlas_acquire_supervised_image(r8_atlas);
-	struct sol_vk_supervised_image* bc4_supervised_image = sol_image_atlas_acquire_supervised_image(bc4_atlas);
+	struct sol_image_atlas* r8_atlas = batch->rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM];
+	struct sol_image_atlas* bc4_atlas = batch->rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4];
 	struct sol_vk_buf_img_copy_list* r8_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM;
 	struct sol_vk_buf_img_copy_list* bc4_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4;
 	enum sol_image_atlas_result atlas_obtain_result;

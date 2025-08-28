@@ -93,7 +93,8 @@ void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline
 
 
 
-struct sol_overlay_render_context
+#warning rename to sol_overlay_rendering_resources
+struct sol_overlay_rendering_resources
 {
     /** atlases used for storing backing information for verious purposes
      * some of these may be null depending on implementation details
@@ -102,8 +103,6 @@ struct sol_overlay_render_context
     // struct sol_image_atlas* r8_atlas;
     // struct sol_image_atlas* rgba8_atlas;
     struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-
-    struct sol_vk_staging_buffer* staging_buffer;
 };
 
 
@@ -114,9 +113,9 @@ struct sol_overlay_render_context
  * at that point is it maybe better to just handle the backing manually? */
 struct sol_overlay_render_batch
 {
-    #warning add stage tracking, to assert things are being called in correct order
-    struct sol_overlay_render_context* render_context;
-    #warning rather than tracking the context in this way, it's very likely better to reference resources used by it
+    /** unowned, held only for the duration of `sol_overlay_render_step_compose_elements`
+     * type safety here could be a good reason to provide a wrapped atlas type for access purposes */
+    struct sol_overlay_rendering_resources* rendering_resources;
 
     /** bounds/limit of the current point in the render, this is almost a stack allocated value as it can change at any point in the render and that must then be carried forward */
     s16_rect bounds;
@@ -133,21 +132,20 @@ struct sol_overlay_render_batch
 
     /** copy ops required to upload all glyph information */
     struct sol_vk_buf_img_copy_list copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    struct sol_overlay_atlas_usage_range atlas_use_ranges[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    
-    struct sol_vk_timeline_semaphore_moment atlas_acquire_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    struct sol_vk_timeline_semaphore_moment atlas_release_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    struct sol_overlay_atlas_access_range atlas_access_ranges[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     /** offset applied to all copies */
     VkDeviceSize upload_offset;
 
     /** this is just a data container for when the staging allocayion is made */
     struct sol_vk_staging_buffer_allocation staging_buffer_allocation;
 
-    /** following variables tracked from point where they become necessary to prevent needing them multiple times */
+    /** following variables tracked from point where they become necessary to prevent needing to provide them multiple times */
 
     /** extent set at compose stage */
     VkExtent2D target_extent;
     VkDescriptorSet descriptor_set;
+    /*staging buffer provided to `sol_overlay_render_step_write_descriptors`, used to track the release of this allocation properly */
+    struct sol_vk_staging_buffer* staging_buffer;
 };
 
 
@@ -156,10 +154,10 @@ void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch);
 
 
 /** step : traverse the widget tree, creating the commands to render each element and loading resources (or creating instructions to load resources) when a requirement is encountered */
-void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct sol_overlay_render_context* render_context, VkExtent2D target_extent);
+void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct sol_overlay_rendering_resources* render_context, VkExtent2D target_extent);
 
 /** step : move all resources (e.g. new image atlas pixel data) and draw instructions to staging and write the descriptors for resources rendering will use */
-void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, const float* colour_array, VkDescriptorSet descriptor_set);
+void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
 
 /** step : add the resource(atlas) management semaphores that must be waited on to the list that will be waited on before work is executed (likely the command buffer wait list) */
 void sol_overlay_render_step_append_waits(struct sol_overlay_render_batch* batch, struct sol_vk_semaphore_submit_list* wait_list, VkPipelineStageFlags2 combined_stage_masks);

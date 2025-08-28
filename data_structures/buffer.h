@@ -103,3 +103,8 @@ static inline struct sol_buffer_allocation sol_buffer_fetch_aligned_allocation(s
 	}
 }
 
+static inline uint32_t sol_buffer_used_space(struct sol_buffer* b)
+{
+	return b->used_space;
+}
+
