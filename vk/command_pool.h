@@ -37,6 +37,10 @@ typedef struct cvm_vk_command_pool
     VkCommandPool pool;
 
     VkCommandBuffer * buffers;/// this almost certainly wants to be a list/stack and init as necessary
+    #warning REALLY need to handle this better... use the fixed pool to manage command buffers instead and vend pointers??
+    struct sol_vk_semaphore_submit_list* signal_lists;
+    struct sol_vk_semaphore_submit_list* wait_lists;
+
     uint32_t acquired_buffer_count;
     uint32_t submitted_buffer_count;
     uint32_t total_buffer_count;
@@ -45,15 +49,9 @@ cvm_vk_command_pool;
 
 typedef struct cvm_vk_command_buffer
 {
+    /** nothing in this is owned */
     const cvm_vk_command_pool * parent_pool;
     VkCommandBuffer buffer;
-
-    uint32_t signal_count;
-    uint32_t wait_count;
-
-    VkSemaphoreSubmitInfo signal_info[4];/// left open in case we add a way to signal arbitrary semphores
-    VkSemaphoreSubmitInfo wait_info[11];
-    ///above relatively arbitrarily chosen for struct size reasons
 
     struct sol_vk_semaphore_submit_list signal_list;
     struct sol_vk_semaphore_submit_list wait_list;
@@ -65,12 +63,9 @@ void cvm_vk_command_pool_terminate(cvm_vk_command_pool* pool, const struct cvm_v
 void cvm_vk_command_pool_reset(cvm_vk_command_pool* pool, const struct cvm_vk_device* device);
 
 void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer);
+/** note: submit is also "release" */
 struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages);
 
-void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const struct sol_vk_timeline_semaphore_moment* moment, VkPipelineStageFlags2 wait_stages);
-
-void cvm_vk_command_buffer_add_wait_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count);
-void cvm_vk_command_buffer_add_signal_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count);
 
 
 #endif

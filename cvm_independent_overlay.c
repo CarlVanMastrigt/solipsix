@@ -361,7 +361,7 @@ static inline void cvm_overlay_target_resources_release(struct cvm_overlay_targe
 
 static inline void cvm_overlay_add_target_acquire_instructions(cvm_vk_command_buffer * command_buffer, const struct cvm_overlay_target * target)
 {
-    cvm_vk_command_buffer_add_wait_info(command_buffer, target->wait_semaphores, target->wait_semaphore_count);
+    sol_vk_semaphore_submit_list_append_many(&command_buffer->wait_list, target->wait_semaphores, target->wait_semaphore_count);
 
     if(target->acquire_barrier_count)
     {
@@ -384,7 +384,7 @@ static inline void cvm_overlay_add_target_acquire_instructions(cvm_vk_command_bu
 
 static inline void cvm_overlay_add_target_release_instructions(cvm_vk_command_buffer * command_buffer, const struct cvm_overlay_target * target)
 {
-    cvm_vk_command_buffer_add_signal_info(command_buffer, target->signal_semaphores, target->signal_semaphore_count);
+    sol_vk_semaphore_submit_list_append_many(&command_buffer->signal_list, target->signal_semaphores, target->signal_semaphore_count);
 
     if(target->release_barrier_count)
     {
@@ -532,10 +532,9 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
 
     render_batch = &renderer->render_batch;
-    render_batch->context = renderer->overlay_render_context;
 
     /// setup/reset the render batch
-    sol_overlay_render_step_compose_elements(render_batch, gui_context, target->extent);
+    sol_overlay_render_step_compose_elements(render_batch, gui_context, renderer->overlay_render_context, target->extent);
 
 
 
@@ -563,7 +562,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     cvm_vk_command_pool_acquire_command_buffer(&transient_resources->command_pool, device, &cb);
 
-    ///this uses the shunt buffer!
+    sol_overlay_render_step_append_waits(render_batch, &cb.wait_list, VK_PIPELINE_STAGE_2_NONE);
 
     sol_overlay_render_step_write_descriptors(render_batch, device, overlay_colours, transient_resources->descriptor_set);
     sol_overlay_render_step_submit_vk_transfers(render_batch, cb.buffer);
@@ -594,6 +593,8 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     sol_overlay_render_step_draw_elements(render_batch, &renderer->persistent_rendering_resources, &target_resources->pipeline, cb.buffer);
 
     vkCmdEndRenderPass(cb.buffer);///================
+
+    sol_overlay_render_step_append_signals(render_batch, &cb.signal_list, VK_PIPELINE_STAGE_2_NONE);
 
 
     cvm_overlay_add_target_release_instructions(&cb, target);

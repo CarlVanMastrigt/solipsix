@@ -71,6 +71,16 @@ struct sol_image_atlas_location
 	uint8_t array_layer;
 };
 
+/** this is intended for setting up device side work/bindings/state changes after an access has been completed
+ * it is only safe to schedule mutation of the supervised images state between the acquire and release moments
+ * NOTE: due to accesses to the supervised images internal state it's necessary to externally synchronise modifications of the supervised image */
+struct sol_overlay_atlas_usage_range
+{
+    struct sol_vk_supervised_image* supervised_image;
+    struct sol_vk_timeline_semaphore_moment acquire_moment;
+    struct sol_vk_timeline_semaphore_moment release_moment;
+};
+
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 

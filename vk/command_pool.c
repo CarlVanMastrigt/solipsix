@@ -22,8 +22,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_device * device, uint32_t device_queue_family_index, uint32_t device_queue_index)
 {
-    uint32_t i;
-
     VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -38,25 +36,26 @@ void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_dev
     pool->device_queue_index=device_queue_index;
     pool->acquired_buffer_count=0;
     pool->submitted_buffer_count=0;
-    pool->total_buffer_count=4;
-    pool->buffers=malloc(sizeof(VkCommandBuffer)*4);
-
-    VkCommandBufferAllocateInfo allocate_info=
-    {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .pNext=NULL,
-        .commandPool=pool->pool,
-        .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount=4,
-    };
-
-    CVM_VK_CHECK(vkAllocateCommandBuffers(device->device,&allocate_info,pool->buffers));
+    pool->total_buffer_count=0;
+    pool->buffers      = NULL;
+    pool->signal_lists = NULL;
+    pool->wait_lists   = NULL;
 }
 
 void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_device * device)
 {
-    vkFreeCommandBuffers(device->device,pool->pool,pool->total_buffer_count,pool->buffers);
-    free(pool->buffers);
+    uint32_t i;
+    for(i = 0; i < pool->total_buffer_count; i++)
+    {
+        sol_vk_semaphore_submit_list_terminate(pool->signal_lists + i);
+        sol_vk_semaphore_submit_list_terminate(pool->wait_lists   + i);
+    }
+
+    if(pool->total_buffer_count)
+    {
+        vkFreeCommandBuffers(device->device,pool->pool,pool->total_buffer_count,pool->buffers);
+        free(pool->buffers);
+    }
 
     vkDestroyCommandPool(device->device,pool->pool,NULL);
 }
@@ -76,33 +75,50 @@ void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device *
 
 void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer)
 {
+    const uint32_t new_count = 4;
+    uint32_t i;
     if(pool->acquired_buffer_count==pool->total_buffer_count)
     {
-        pool->buffers=realloc(pool->buffers,sizeof(VkCommandBuffer)*(pool->total_buffer_count+4));
+        pool->buffers      = realloc(pool->buffers     ,sizeof(VkCommandBuffer)                     * (pool->total_buffer_count + new_count));
+        pool->signal_lists = realloc(pool->signal_lists,sizeof(struct sol_vk_semaphore_submit_list) * (pool->total_buffer_count + new_count));
+        pool->wait_lists   = realloc(pool->wait_lists  ,sizeof(struct sol_vk_semaphore_submit_list) * (pool->total_buffer_count + new_count));
 
         VkCommandBufferAllocateInfo allocate_info=
         {
-            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .pNext=NULL,
-            .commandPool=pool->pool,
-            .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount=4,
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = NULL,
+            .commandPool = pool->pool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = new_count,
         };
 
         CVM_VK_CHECK(vkAllocateCommandBuffers(device->device,&allocate_info,pool->buffers+pool->total_buffer_count));
-        pool->total_buffer_count+=4;
+
+        for(i = 0; i < new_count; i++)
+        {
+            sol_vk_semaphore_submit_list_initialise(pool->signal_lists + pool->total_buffer_count + i, 8);
+            sol_vk_semaphore_submit_list_initialise(pool->wait_lists   + pool->total_buffer_count + i, 8);
+        }
+
+        pool->total_buffer_count += 4;
     }
 
-    command_buffer->parent_pool=pool;
-    command_buffer->buffer=pool->buffers[pool->acquired_buffer_count++];
-    command_buffer->signal_count=0;
-    command_buffer->wait_count=0;
+    command_buffer->parent_pool = pool;
+    command_buffer->buffer      = pool->buffers[pool->acquired_buffer_count];
+    command_buffer->signal_list = pool->signal_lists[pool->acquired_buffer_count];
+    command_buffer->wait_list   = pool->wait_lists  [pool->acquired_buffer_count];
 
-    VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
+    /** make sure the semaphore lists are empty */
+    assert(sol_vk_semaphore_submit_list_count(&command_buffer->signal_list) == 0);
+    assert(sol_vk_semaphore_submit_list_count(&command_buffer->wait_list  ) == 0);
+
+    pool->acquired_buffer_count++;
+
+    VkCommandBufferBeginInfo command_buffer_begin_info = (VkCommandBufferBeginInfo)
     {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext=NULL,
-        .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext = NULL,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         .pInheritanceInfo=NULL
     };
 
@@ -121,17 +137,16 @@ struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
 
     CVM_VK_CHECK(vkEndCommandBuffer(command_buffer->buffer));
 
-    assert(command_buffer->signal_count<4);
     completion_moment = sol_vk_timeline_semaphore_generate_new_moment(&queue->timeline);
-    command_buffer->signal_info[command_buffer->signal_count++] = sol_vk_timeline_semaphore_moment_submit_info(&completion_moment, completion_signal_stages);
+    *sol_vk_semaphore_submit_list_append_ptr(&command_buffer->signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&completion_moment, completion_signal_stages);
 
-    VkSubmitInfo2 submit_info=
+    VkSubmitInfo2 submit_info =
     {
         .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .pNext=NULL,
         .flags=0,
-        .waitSemaphoreInfoCount=command_buffer->wait_count,
-        .pWaitSemaphoreInfos=command_buffer->wait_info,
+        .waitSemaphoreInfoCount = sol_vk_semaphore_submit_list_count(&command_buffer->wait_list),
+        .pWaitSemaphoreInfos    = sol_vk_semaphore_submit_list_data (&command_buffer->wait_list),
         .commandBufferInfoCount=1,
         .pCommandBufferInfos=(VkCommandBufferSubmitInfo[1])
         {
@@ -142,36 +157,21 @@ struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
                 .deviceMask=0
             }
         },
-        .signalSemaphoreInfoCount=command_buffer->signal_count,
-        .pSignalSemaphoreInfos=command_buffer->signal_info,
+        .signalSemaphoreInfoCount = sol_vk_semaphore_submit_list_count(&command_buffer->signal_list),
+        .pSignalSemaphoreInfos    = sol_vk_semaphore_submit_list_data (&command_buffer->signal_list),
     };
 
     CVM_VK_CHECK(vkQueueSubmit2(queue->queue, 1, &submit_info, VK_NULL_HANDLE));
 
+    sol_vk_semaphore_submit_list_reset(&command_buffer->signal_list);
+    sol_vk_semaphore_submit_list_reset(&command_buffer->wait_list);
+
+    pool->signal_lists[pool->submitted_buffer_count] = command_buffer->signal_list;
+    pool->wait_lists  [pool->submitted_buffer_count] = command_buffer->wait_list;
+
     pool->submitted_buffer_count++;
 
     return completion_moment;
-}
-
-
-void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const struct sol_vk_timeline_semaphore_moment * moment, VkPipelineStageFlags2 wait_stages)
-{
-    assert(command_buffer->wait_count<11);
-
-    command_buffer->wait_info[command_buffer->wait_count++]=sol_vk_timeline_semaphore_moment_submit_info(moment,wait_stages);
-}
-
-void cvm_vk_command_buffer_add_wait_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count)
-{
-    assert(command_buffer->wait_count + count <= 11);
-    memcpy(command_buffer->wait_info + command_buffer->wait_count, info, sizeof(VkSemaphoreSubmitInfo) * count);
-    command_buffer->wait_count += count;
-}
-void cvm_vk_command_buffer_add_signal_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count)
-{
-    assert(command_buffer->signal_count + count <= 4);
-    memcpy(command_buffer->signal_info + command_buffer->signal_count, info, sizeof(VkSemaphoreSubmitInfo) * count);
-    command_buffer->signal_count += count;
 }
 
 

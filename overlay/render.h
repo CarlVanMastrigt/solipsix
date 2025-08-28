@@ -107,12 +107,16 @@ struct sol_overlay_render_context
 };
 
 
+#warning ideally this would instead lock the atlases somehow to prevent resource destruction (nothing else can really get messed with host side as long as its order correctly device side)
+/** NOTE: needs to be synchonized extrenally, but should really only be alterable device side */
+
 /** batch is a bad name, need context, sub context stack/ranges for (potential) compositing passes
  * at that point is it maybe better to just handle the backing manually? */
 struct sol_overlay_render_batch
 {
-    #warning add stage tracking, allows it to be
-    struct sol_overlay_render_context* context;
+    #warning add stage tracking, to assert things are being called in correct order
+    struct sol_overlay_render_context* render_context;
+    #warning rather than tracking the context in this way, it's very likely better to reference resources used by it
 
     /** bounds/limit of the current point in the render, this is almost a stack allocated value as it can change at any point in the render and that must then be carried forward */
     s16_rect bounds;
@@ -129,6 +133,8 @@ struct sol_overlay_render_batch
 
     /** copy ops required to upload all glyph information */
     struct sol_vk_buf_img_copy_list copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    struct sol_overlay_atlas_usage_range atlas_use_ranges[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    
     struct sol_vk_timeline_semaphore_moment atlas_acquire_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     struct sol_vk_timeline_semaphore_moment atlas_release_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     /** offset applied to all copies */
@@ -149,20 +155,26 @@ void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch,
 void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch);
 
 
-/** step 1: traverse the widget tree, creating the commands to render each element and loading resources (or creating instructions to load resources) when a requirement is encountered */
-void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, VkExtent2D target_extent);
+/** step : traverse the widget tree, creating the commands to render each element and loading resources (or creating instructions to load resources) when a requirement is encountered */
+void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct sol_overlay_render_context* render_context, VkExtent2D target_extent);
 
-/** step 2: move all resources (e.g. new image atlas pixel data) and draw instructions to staging and write the descriptors for resources rendering will use */
+/** step : move all resources (e.g. new image atlas pixel data) and draw instructions to staging and write the descriptors for resources rendering will use */
 void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, const float* colour_array, VkDescriptorSet descriptor_set);
 
-/** step 3: perform all copy operations (if any) necessary to set up data (e.g. copy image pixels from staging to the image atlas) */
+/** step : add the resource(atlas) management semaphores that must be waited on to the list that will be waited on before work is executed (likely the command buffer wait list) */
+void sol_overlay_render_step_append_waits(struct sol_overlay_render_batch* batch, struct sol_vk_semaphore_submit_list* wait_list, VkPipelineStageFlags2 combined_stage_masks);
+
+/** step : perform all copy operations (if any) necessary to set up data (e.g. copy image pixels from staging to the image atlas) */
 void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
-/** step 4: write barriers to put required resources (e.g. image atlases) in correct state to e read from while drawing overlay elements to the render target*/
+/** step : write barriers to put required resources (e.g. image atlases) in correct state to e read from while drawing overlay elements to the render target */
 void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
-/** step 5: encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
+/** step : encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
 void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct sol_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
 
-/** step 6: when rendering is known to have completed (e.g. after the render pass in which the render was submitted) use a semaphore moment to synchronise/signal the completion of rendering */
+/** step : add the resource(atlas) management semaphores that must be signalled to the list that will be signalled when work is executed (likely the command buffer signal list) */
+void sol_overlay_render_step_append_signals(struct sol_overlay_render_batch* batch, struct sol_vk_semaphore_submit_list* signal_list, VkPipelineStageFlags2 combined_stage_masks);
+
+/** step : when rendering is known to have completed (e.g. after the render pass in which the render was submitted) use a semaphore moment to synchronise/signal the completion of rendering */
 void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, struct sol_vk_timeline_semaphore_moment completion_moment);
