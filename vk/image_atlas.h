@@ -75,7 +75,7 @@ struct sol_image_atlas_location
  * it is only safe to schedule mutation of the supervised images state between the acquire and release moments
  * NOTE: due to accesses to the supervised images internal state it's necessary to externally synchronise modifications of the supervised image
  * NOTE: upload list is the one provided to `sol_image_atlas_acquire_access` and should not be accessed externally */
-struct sol_overlay_atlas_access_range
+struct sol_overlay_atlas_access_scope
 {
     struct sol_vk_supervised_image* supervised_image;
 
@@ -89,43 +89,44 @@ struct sol_overlay_atlas_access_range
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-/** must wait on returned moment before doing anything with the atlas (reading or writing accessed entries)
- * `upload_buffer` and `upload_list` may be NULL, in which case no calls to obtain should be passed SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD
- * `upload buffer` will only be used within the range of the access and its contents must be staged and provided to `sol_overlay_atlas_usage_range_execute_copies` with the range returned on release
+#warning may wish to provide a staging buffer here and manage uploads with an entirely different mechanism -- like a system of signalled moments that connects to a linked(?) list of staging buffer allocations to be made available
+#warning ^ this could/would fully opacify ALL staging buffer usages across the whole application
+/** `upload_buffer` and `upload_list` may be NULL, in which case no calls to obtain should be passed SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD
+ * `upload buffer` will only be used within the range between the beginning and end of the scope setup and its contents must be staged and provided to `sol_overlay_atlas_access_scope_execute_copies` with the scope assigned on release
  * NOTE: it's necessary to provide a copy list (rather than have one internal to the atlas) because setting up operations that will be executed after access release is an intended use case
  * NOTE: its necessary to provide this such that an obtained entry can have guarantees that it's contents can be initialised (otherwise there is no way to guarantee that there is space to stage the upload) */
-void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list);
+void sol_image_atlas_access_scope_setup_begin(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list);
 
-/** the access range set as part of this function describes the scope of the callers (i.e. external) permissions and responsibilities
- * NOTE: this will fully initialise `access_range` which may be discarded after all its responsibilities are fulfilled
- * the only access after release permitted is via the supervised_image,
- * 		^ NOTE: this must be externally synchronised across multiple accesses
- * the acquire semaphore must be waited on before any accesses (read or write) to the atlas
- * the release remaphore must be signalled after any accesses (read or write) to the atlas */
-void sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_range* access_range);
+/** the `access_scope` set as part of this function describes the scope of the callers (i.e. external) permissions and responsibilities
+ * NOTE: this will fully initialise `access_scope` which may be discarded after all its responsibilities are fulfilled
+ * any accesses (entry read or write or supervised image state mutation) must be synchronised externally using the semaphore moments assigned in the `access_scope`
+ * the assigned acquire semaphore must be waited on before any accesses of atlas
+ * the assigned release remaphore must be signalled after any accesses of atlas
+ * NOTE: its important to consider ordering of submissions to queues (erlier queue submissions should not depend on later submissions) when submitting work that uses the provided moments
+ *      ^ the same goes for supervided image state tracking, as such its likely best to "single thread" gpu work */
+void sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_scope* access_scope);
 
-
-/** acquire a unique identifier for accessing/indexing entries in the atlas
-	`transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used */
+/** acquire a unique identifier for accessing/indexing entries in the atlas in the setup phase
+ * `transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used */
 uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient);
 
-/** same as above but shortcuts returning its present location, useful when other stored detals aren't required */
-enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
-
 /** if the entry didnt exist, create a slot for it, prefer this if entry will be created regardless (over calling find first)
-	this must be used with write if its contents will be modified in any way
-	if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised
-	NOTE: transient resources obtained will be made available immediately when access is released */
+ * this must be used with write if its contents will be modified in any way
+ * if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised
+ * NOTE: transient resources obtained will be made available immediately when access is released */
 enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, uint32_t flags, struct sol_image_atlas_location* entry_location, struct sol_buffer_allocation* upload_allocation);
+
+/** same as above but shortcuts returning its present location, useful when other stored detals aren't required (cannot be used when write is intended) */
+enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
 
 
 /** NOTE: this is mostly just a utility function with limited value (it could be implemented externally quite trivially)
- * if `upload_buffer` & `upload_list` were provided to `sol_image_atlas_acquire_access` then this MUST be called on a command buffer between the acquire and release semaphores returned in the usage range
+ * if a non-null `upload_buffer` & `upload_list` were provided to `sol_image_atlas_acquire_access` then this MUST be called on a command buffer between the acquire and release semaphores assigned at the end of scope setup
  * provided staging buffer at provided staging offset must contain the contents of the `upload_buffer`
  * provided to `sol_image_atlas_acquire_access` AFTER `sol_image_atlas_release_access` has been called
  * NOTE: an inmplementation may wish to share a single upload buffer across multiple atlases and other use cases, this must be externally synchronised
  * NOTE: the `upload_list` provided to `sol_image_atlas_acquire_access` will become available again after this has been called */
-void sol_overlay_atlas_access_range_execute_copies(struct sol_overlay_atlas_access_range* access_range, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset);
+void sol_overlay_atlas_access_scope_execute_copies(struct sol_overlay_atlas_access_scope* access_scope, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset);
 
 
 #warning if write access requested and there is a better slot to place the size of content desired (or a different size is requested) \
@@ -136,3 +137,5 @@ use that new spot (consider allowing image->image copy list to facilitate this t
 
 
 // bool sol_image_atlas_defragment(struct sol_image_atlas* atlas, const struct cvm_vk_device* device, )
+
+

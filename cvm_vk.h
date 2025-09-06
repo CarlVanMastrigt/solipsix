@@ -220,6 +220,7 @@ struct cvm_vk_device
 
     const VkPhysicalDeviceFeatures2 features;// enabled features
     bool feature_swapchain_maintainence;
+    bool feature_int_16_shader_types;
 
     const VkExtensionProperties* extensions;//enabled extensions
     uint32_t extension_count;

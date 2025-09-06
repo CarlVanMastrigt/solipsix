@@ -1263,7 +1263,7 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	free(atlas);
 }
 
-void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list)
+void sol_image_atlas_access_scope_setup_begin(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list)
 {
 	assert(!atlas->accessor_active);
 	atlas->accessor_active = true;
@@ -1271,6 +1271,7 @@ void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_bu
 	assert(atlas->upload_list == NULL);
 	assert(atlas->upload_buffer == NULL);
 
+	/** if upload_buffer and upload_copy_list must either both be provided, or neither should be */
 	assert((upload_buffer == NULL) == (upload_list == NULL));
 
 	atlas->upload_buffer = upload_buffer;
@@ -1280,7 +1281,7 @@ void sol_image_atlas_acquire_access(struct sol_image_atlas* atlas, struct sol_bu
 	sol_image_atlas_entry_add_to_queue_before(atlas, atlas->threshold_entry_index, atlas->header_entry_index);
 }
 
-void sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_range* access_range)
+void sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_scope* access_scope)
 {
 	struct sol_image_atlas_entry* threshold_entry;
 
@@ -1289,7 +1290,7 @@ void sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct sol_ov
 	struct sol_vk_timeline_semaphore_moment acquire_moment = atlas->current_moment;
     struct sol_vk_timeline_semaphore_moment release_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
 
-	*access_range = (struct sol_overlay_atlas_access_range)
+	*access_scope = (struct sol_overlay_atlas_access_scope)
 	{
 		.acquire_moment = atlas->current_moment,
 		.supervised_image = &atlas->image,
@@ -1318,8 +1319,10 @@ void sol_image_atlas_release_access(struct sol_image_atlas* atlas, struct sol_ov
 
 uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient)
 {
-	/** copied from sol random */
+	/** 64 bit lcg copied from sol random */
 	atlas->current_identifier = atlas->current_identifier * 0x5851F42D4C957F2Dlu + 0x7A4111AC0FFEE60Dlu;
+
+	/** NOTE: top N bits may be cut off to reduce cycle length to 2^(64-n), every point an any 2^m cycle will be visited in the bottom m bits for a lcg */
 
 	if(transient)
 	{
@@ -1393,17 +1396,22 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	bool size_mismatch, better_location;
 	struct sol_image_atlas_location location;
 
+	/** is invalid to request an entry with no pixels */
+	assert(size.x > 0 && size.y > 0);
+
 	/** must have started access with an upload buffer and provided an upload allocation in order to perform uploads on obtain (determined by flag) */
 	assert(atlas->upload_buffer || !(flags & SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD));
 	assert(!upload_allocation == !(flags & SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD));
+
+	*upload_allocation = SOL_BUFFER_ALLOCATION_NULL;
 
 	/** must have an accessor active to be able to use entries */
 	assert(atlas->accessor_active);
 	/** zero identifier is reserved */
 	assert(entry_identifier != 0);
 
-	x_size_class = sol_u32_exp_ge(size.x >> SOL_IA_MIN_TILE_SIZE_EXPONENT);
-	y_size_class = sol_u32_exp_ge(size.y >> SOL_IA_MIN_TILE_SIZE_EXPONENT);
+	x_size_class = SOL_MAX(sol_u32_exp_ge(size.x), SOL_IA_MIN_TILE_SIZE_EXPONENT) - SOL_IA_MIN_TILE_SIZE_EXPONENT;
+	y_size_class = SOL_MAX(sol_u32_exp_ge(size.y), SOL_IA_MIN_TILE_SIZE_EXPONENT) - SOL_IA_MIN_TILE_SIZE_EXPONENT;
 
 	map_find_result = sol_image_atlas_map_find(&atlas->itentifier_entry_map, entry_identifier, &entry_index_in_map);
 	size_mismatch = false;
@@ -1507,7 +1515,6 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 		while( ! sol_image_atlas_acquire_available_entry_of_size(atlas, x_size_class, y_size_class, &entry_index));
 	}
 
-
 	entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, entry_index);
 
 	assert(entry->is_available);
@@ -1584,12 +1591,26 @@ struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct 
 }
 
 
-void sol_overlay_atlas_access_range_execute_copies(struct sol_overlay_atlas_access_range* access_range, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset)
+void sol_overlay_atlas_access_scope_execute_copies(struct sol_overlay_atlas_access_scope* access_scope, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset)
 {
-	if(access_range->upload_list)
+	if(access_scope->upload_list)
 	{
-		sol_vk_supervised_image_execute_copies(access_range->supervised_image, access_range->upload_list, command_buffer, staging_buffer, staging_offset);
+		sol_vk_supervised_image_execute_copies(access_scope->supervised_image, access_scope->upload_list, command_buffer, staging_buffer, staging_offset);
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

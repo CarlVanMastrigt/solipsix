@@ -59,7 +59,7 @@ struct sol_gui_theme
     void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
     bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);/// box should be offset should be such that the origin is the selection point to be queried
     s16_rect (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
-    s16_vec2 (*box_size)          (struct sol_gui_theme* restrict theme, uint32_t flags, s16_vec2 contents_size);
+    s16_vec2 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
     // may need a function that subtracts borders for items that require clipping to be passed on, OR parent information can be passed down (bounds and flags that dictate borders)
 
     // box render with scroll information ?? (for localised scroll, can be extra)

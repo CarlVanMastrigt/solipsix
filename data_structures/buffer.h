@@ -53,6 +53,8 @@ struct sol_buffer_allocation
 	uint32_t offset;
 };
 
+#define SOL_BUFFER_ALLOCATION_NULL ((struct sol_buffer_allocation){.allocation = NULL, .size=0, .offset = 0})
+
 static inline void sol_buffer_initialise(struct sol_buffer* b, uint32_t space, uint32_t alignment)
 {
 	assert(space);
@@ -80,16 +82,12 @@ static inline struct sol_buffer_allocation sol_buffer_fetch_aligned_allocation(s
 {
 	/** make sure not to ask for more space than buffer has */
 	assert(size <= b->total_space);
+	assert((alignment & (alignment - 1)) == 0);
 	const uint32_t offset = (b->used_space + alignment - 1) & (- alignment);
 
 	if(offset + size > b->total_space)
 	{
-		return (struct sol_buffer_allocation)
-		{
-			.allocation = NULL,
-			.size = 0,
-			.offset = 0,
-		};
+		return SOL_BUFFER_ALLOCATION_NULL;
 	}
 	else
 	{

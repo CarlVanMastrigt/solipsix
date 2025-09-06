@@ -34,12 +34,13 @@ struct sol_overlay_render_element
 {
     int16_t pos_rect[4];/// start(x,y), end(x,y)
     uint16_t tex_coords[4];/// base_tex(x,y), mask_tex(x,y)
-    uint32_t other_data[4];// extra data - texture_id:2
+    uint16_t other_data[4];// extra data - texture_id:2
+    uint16_t idk[4];// extra data - texture_id:2
 };
 
 #define SOL_STACK_ENTRY_TYPE struct sol_overlay_render_element
-#define SOL_STACK_FUNCTION_PREFIX sol_overlay_render_element_stack
-#define SOL_STACK_STRUCT_NAME sol_overlay_render_element_stack
+#define SOL_STACK_FUNCTION_PREFIX sol_overlay_render_element_list
+#define SOL_STACK_STRUCT_NAME sol_overlay_render_element_list
 #include "data_structures/stack.h"
 
 enum sol_overlay_image_atlas_type
@@ -106,9 +107,6 @@ struct sol_overlay_rendering_resources
 };
 
 
-#warning ideally this would instead lock the atlases somehow to prevent resource destruction (nothing else can really get messed with host side as long as its order correctly device side)
-/** NOTE: needs to be synchonized extrenally, but should really only be alterable device side */
-
 /** batch is a bad name, need context, sub context stack/ranges for (potential) compositing passes
  * at that point is it maybe better to just handle the backing manually? */
 struct sol_overlay_render_batch
@@ -121,7 +119,7 @@ struct sol_overlay_render_batch
     s16_rect bounds;
 
     /** actual UI element instance data */
-    struct sol_overlay_render_element_stack elements;
+    struct sol_overlay_render_element_list elements;
 
     /** this and count should be in an array per composite range */
     VkDeviceSize element_offset;
@@ -130,9 +128,9 @@ struct sol_overlay_render_batch
     /** miscellaneous inline upload buffer */
     struct sol_buffer upload_buffer;
 
-    /** copy ops required to upload all glyph information */
+    /** copy/upload lists that will be provided to the image atlas for scope setup */
     struct sol_vk_buf_img_copy_list copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    struct sol_overlay_atlas_access_range atlas_access_ranges[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    struct sol_overlay_atlas_access_scope atlas_access_scopes[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     /** offset applied to all copies */
     VkDeviceSize upload_offset;
 

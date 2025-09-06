@@ -134,7 +134,7 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_inva
 
 
 
-#ifndef SOL_HASH_MAP_STRUCT_NO_DEFINE
+#ifndef SOL_HASH_MAP_DECLARATION_PRESENT
 struct SOL_HASH_MAP_STRUCT_NAME
 {
     struct sol_hash_map_descriptor descriptor;
@@ -152,7 +152,7 @@ struct SOL_HASH_MAP_STRUCT_NAME
     uint64_t entry_limit;
 };
 #else
-#undef SOL_HASH_MAP_STRUCT_NO_DEFINE
+#undef SOL_HASH_MAP_DECLARATION_PRESENT
 #endif
 
 

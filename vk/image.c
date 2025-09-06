@@ -165,7 +165,6 @@ struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* imag
 {
     struct sol_vk_format_block_properties block_properties;
     struct sol_buffer_allocation upload_allocation;
-    VkDeviceSize byte_offset;
     VkDeviceSize byte_count;
     uint32_t alignemt;
     VkDeviceSize w, h;
@@ -199,11 +198,14 @@ struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* imag
         alignemt *= 2;
     }
 
+    #warning HAX
+    alignemt = 16;
+
     upload_allocation = sol_buffer_fetch_aligned_allocation(upload_buffer, byte_count, alignemt);
 
     *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
     {
-        .bufferOffset = byte_offset,
+        .bufferOffset = (VkDeviceSize)upload_allocation.offset,
         /** 0 indicates tightly packed */
         .bufferRowLength = 0,
         .bufferImageHeight = 0,

@@ -52,7 +52,7 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	struct sol_overlay_render_element* render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
+	struct sol_overlay_render_element* render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
@@ -79,80 +79,15 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 	if(s16_rect_valid(rect))
 	{
-		uint32_t d0 = (0 << 30) | (colour << 24) ;
+		// uint32_t d0 = (0 << 30) | (colour << 24) ;
 		#warning should also check rect is positive at this point
 		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
 	        {0, 0, 0, 0},
-	        {d0, 0, 0, 0}
+	        {0, colour, 0, 0}
 	    };
 	}
-
-
-
-	struct sol_image_atlas* r8_atlas = batch->rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM];
-	struct sol_image_atlas* bc4_atlas = batch->rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4];
-	struct sol_vk_buf_img_copy_list* r8_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM;
-	struct sol_vk_buf_img_copy_list* bc4_copy_list = batch->copy_lists + SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4;
-	enum sol_image_atlas_result atlas_obtain_result;
-	struct sol_buffer_allocation upload_allocation;
-	u16_vec2 test_size = u16_vec2_set(12, 12);
-	struct sol_image_atlas_location test_loc;
-	uint8_t* r8_ptr;
-	uint64_t* bc_ptr;
-	VkDeviceSize copy_offset;
-	int x,y;
-
-	if(simple_theme_data->test_checkerboard_id_set == false)
-	{
-		simple_theme_data->test_checkerboard_id = sol_image_atlas_acquire_entry_identifier(r8_atlas, false);
-		simple_theme_data->test_checkerboard_id_set = true;
-	}
-
-	atlas_obtain_result = sol_image_atlas_entry_obtain(bc4_atlas, simple_theme_data->test_checkerboard_id, test_size, SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD, &test_loc, &upload_allocation);
-
-	/** note intentional fallthrough */
-	switch (atlas_obtain_result)
-	{
-	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
-		bc_ptr = upload_allocation.allocation;
-		for(x=0;x<9;x++)
-		{
-			uint64_t v = 0;
-			uint64_t o = 0;
-			v |= 0x40 << o; o += 8;
-			v |= 0x40 << o; o += 8;
-			for(y=0;y<16;y++)
-			{
-				v |= (uint64_t)(6+ ((y + 1 + (y>>2))&1)) << o;
-				o += 3;
-			}
-			bc_ptr[x] = v;
-		}
-
-		// for(x=0;x<12;x++)
-		// {
-		// 	for(y=0;y<12;y++)
-		// 	{
-		// 		buffer[y*12+x] = 255 * ((x ^ y ^ 1) & 1);
-		// 	}
-		// }
-
-	case SOL_IMAGE_ATLAS_SUCCESS_FOUND:
-		#warning need to standardise layout of data in render elements
-		uint32_t d0 = (1 << 30) | (SOL_OVERLAY_COLOUR_STANDARD_TEXT << 24) | (SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4 << 8) | (test_loc.array_layer);
-		render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
-		*render_data =(struct sol_overlay_render_element)
-	    {
-	        {rect.start.x+4, rect.start.y+4, rect.start.x+17, rect.start.y+17},
-	        {0, 0, test_loc.offset.x, test_loc.offset.y},
-	        {d0, 0, 0, 0}
-	    };
-	default:
-	}
-
-	// printf("render box: %d %d  %d %d\n",rect.start.x, rect.start.y, rect.end.x,rect.end.y);
 }
 
 static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location)
@@ -176,7 +111,14 @@ static s16_rect sol_gui_theme_simple_box_place_content(struct sol_gui_theme* the
 		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
 	}
 
-	rect = s16_rect_sub_border(rect, simple_theme_data->box_content_border);
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
+	{
+		rect = s16_rect_sub_border(rect, simple_theme_data->box_text_border);
+	}
+	else
+	{
+		rect = s16_rect_sub_border(rect, simple_theme_data->box_content_border);
+	}
 
 	return rect;
 }
@@ -184,9 +126,17 @@ static s16_rect sol_gui_theme_simple_box_place_content(struct sol_gui_theme* the
 static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	s16_vec2 size;
 
 	// min size is content with theme border
-	s16_vec2 size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->box_content_border, 2));
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
+	{
+		size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->box_text_border, 2));
+	}
+	else
+	{
+		size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->box_content_border, 2));
+	}
 
 	// box must be at least base_unit_size
 	size = s16_vec2_max(size, simple_theme_data->base_unit_size);
@@ -205,7 +155,7 @@ static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint3
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	struct sol_overlay_render_element* render_data = sol_overlay_render_element_stack_append_ptr(&batch->elements);
+	struct sol_overlay_render_element* render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
@@ -222,13 +172,13 @@ static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint3
 
 	if(s16_rect_valid(rect))
 	{
-		uint32_t d0 = (0 << 30) | (colour << 24) ;
+		// uint32_t d0 = (0 << 30) | (colour << 24) ;
 		#warning should also check rect is positive at this point
 		*render_data =(struct sol_overlay_render_element)
 	    {
 	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
 	        {0, 0, 0, 0},
-	        {d0, 0, 0, 0}
+	        {0, colour, 0, 0}
 	    };
 	}
 }
@@ -337,6 +287,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 	*theme = (struct sol_gui_theme)
 	{
 		.font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size),
+		// .font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size),
 		.other_data = simple_theme_data,
 
 		.box_render          = &sol_gui_theme_simple_box_render,

@@ -19,8 +19,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #version 450
 
-#extension GL_EXT_shader_explicit_arithmetic_types_int16 : enable
-
 /// array, [0] = alpha image, [1] = colour image
 layout(set=0,binding=0) uniform sampler2DArray images[3];
 // layout(set=0,binding=0) uniform sampler2D images[3];
@@ -32,10 +30,10 @@ layout(set=0,binding=1) uniform overlay_colours
 
 /** rect can be passed in as relative... */
 
-layout(location=0) flat in u16vec4 rect;/** note: u16 -- start_x, start_y, end_x, end_y */
-layout(location=1) flat in u16vec4 d1;
-layout(location=2) flat in u16vec4 d2;
-layout(location=3) flat in u16vec4 d3;
+layout(location=0) flat in uvec4 rect;/** note: u16 -- start_x, start_y, end_x, end_y */
+layout(location=1) flat in uvec4 d1;
+layout(location=2) flat in uvec4 d2;
+layout(location=3) flat in uvec4 d3;
 
 layout(location=0) out vec4 c;
 
@@ -45,11 +43,11 @@ layout(location=0) out vec4 c;
 
 void main()
 {
-    uint16_t render_type = d2.x & uint16_t(0x000Fu);
+    uint render_type = d2.x & (0x000Fu);
 
-    uint16_t array_layer = (d2.y >> 8u) & uint16_t(0x00FFu);
-    uint16_t colour_index = d2.y & uint16_t(0x00FFu);
-    i16vec3 atlas_coords = i16vec3(gl_FragCoord.xy - rect.xy + d1.zw, array_layer);
+    uint array_layer = (d2.y >> 8u) & (0x00FFu);
+    uint colour_index = d2.y & (0x00FFu);
+    ivec3 atlas_coords = ivec3(gl_FragCoord.xy - rect.xy + d1.zw, array_layer);
 
 
 

@@ -78,6 +78,7 @@ enum sol_gui_placement
 #define SOL_GUI_OBJECT_POSITION_FLAG_LAST_Y        0x00000800
 #define SOL_GUI_OBJECT_POSITION_FLAGS_ALL          0x00000F00
 // properties should be immutable after being set at widget creation
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT  0x00001000 /** the object contains text, which may affect theme sizing and styling */
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED      0x00002000 /** the object should have a border (size defined by the theme) applied to it */
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x00004000
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x00008000

@@ -19,18 +19,16 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #version 450
 
-#extension GL_EXT_shader_explicit_arithmetic_types_int16 : enable
-
-layout (location=0) in u16vec4 rect;/** note: u16 */
-layout (location=1) in u16vec4 data1;/** note: u16 */
-layout (location=2) in u16vec4 data2;
-layout (location=3) in u16vec4 data3;
+layout (location=0) in uvec4 rect;/** note: u16 */
+layout (location=1) in uvec4 data1;/** note: u16 */
+layout (location=2) in uvec4 data2;
+layout (location=3) in uvec4 data3;
 
 
-layout(location=0) flat out u16vec4 out_rect;/** note: u16 */
-layout(location=1) flat out u16vec4 d1;
-layout(location=2) flat out u16vec4 d2;
-layout(location=3) flat out u16vec4 d3;
+layout(location=0) flat out uvec4 out_rect;/** note: u16 */
+layout(location=1) flat out uvec4 d1;
+layout(location=2) flat out uvec4 d2;
+layout(location=3) flat out uvec4 d3;
 
 layout (push_constant) uniform screen_dimensions
 {

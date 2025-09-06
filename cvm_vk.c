@@ -248,6 +248,8 @@ static float cvm_vk_device_feature_validation(const VkPhysicalDeviceFeatures2* v
 {
     uint32_t i;
     const VkBaseInStructure* entry;
+    const VkPhysicalDeviceFeatures2 * features;
+    const VkPhysicalDeviceVulkan11Features * features_11;
     const VkPhysicalDeviceVulkan12Features * features_12;
     const VkPhysicalDeviceVulkan13Features * features_13;
     float weight = 1.0;
@@ -265,17 +267,27 @@ static float cvm_vk_device_feature_validation(const VkPhysicalDeviceFeatures2* v
     {
         switch(entry->sType)
         {
-            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
-                features_12 = (const VkPhysicalDeviceVulkan12Features*)entry;
-                if(features_12->timelineSemaphore==VK_FALSE) weight = 0.0;
-                break;
+        // case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
+        //     features = (const VkPhysicalDeviceFeatures2*)entry;
+        //     if(features->features.shaderInt16== VK_FALSE) weight = 0.0;
+        //     break;
 
-            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
-                features_13 = (const VkPhysicalDeviceVulkan13Features*)entry;
-                if(features_13->synchronization2==VK_FALSE) weight = 0.0;
-                break;
+        // case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
+        //     features_11 = (const VkPhysicalDeviceVulkan11Features*)entry;
+        //     if(features_11->storageInputOutput16==VK_FALSE) weight = 0.0;
+        //     break;
 
-            default: break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
+            features_12 = (const VkPhysicalDeviceVulkan12Features*)entry;
+            if(features_12->timelineSemaphore==VK_FALSE) weight = 0.0;
+            break;
+
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
+            features_13 = (const VkPhysicalDeviceVulkan13Features*)entry;
+            if(features_13->synchronization2==VK_FALSE) weight = 0.0;
+            break;
+
+        default:
         }
     }
 
@@ -314,24 +326,38 @@ static void cvm_vk_device_feature_requests(VkPhysicalDeviceFeatures2* request_li
 {
     uint32_t i;
     VkBaseOutStructure* entry;
+    VkPhysicalDeviceFeatures2* features;
+    VkPhysicalDeviceVulkan11Features* features_11;
     VkPhysicalDeviceVulkan12Features* features_12;
     VkPhysicalDeviceVulkan13Features* features_13;
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT* swapcahin_maintainence;
     VkBool32 swapcahin_maintainence_available = VK_FALSE;
+    VkBool32 shader_int_16 = VK_FALSE;
+    VkBool32 storage_io_16 = VK_FALSE;
     bool swapcahin_maintainence_extension_available = false;
 
     /// properties unused
     (void)device_properties;
     (void)memory_properties;
 
-    for(entry = valid_list->pNext; entry; entry = entry->pNext)
+    for(entry = (VkBaseOutStructure*)valid_list; entry; entry = entry->pNext)
     {
         switch(entry->sType)
         {
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
+                features = (VkPhysicalDeviceFeatures2*)entry;
+                shader_int_16 = features->features.shaderInt16;
+                break;
+
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
+                features_11 = (VkPhysicalDeviceVulkan11Features*)entry;
+                storage_io_16 = features_11->storageInputOutput16;
+                break;
+
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT:
                 swapcahin_maintainence = (VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT*)entry;
                 swapcahin_maintainence_available = swapcahin_maintainence->swapchainMaintenance1;
-                printf("====> %u\n", swapcahin_maintainence->swapchainMaintenance1);
+                printf("====> swapchain maintainence: %u\n", swapcahin_maintainence->swapchainMaintenance1);
                 break;
 
             default: break;
@@ -354,10 +380,20 @@ static void cvm_vk_device_feature_requests(VkPhysicalDeviceFeatures2* request_li
         }
     }
 
-    for(entry = request_list->pNext; entry; entry = entry->pNext)
+    for(entry = (VkBaseOutStructure*)request_list; entry; entry = entry->pNext)
     {
         switch(entry->sType)
         {
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
+                features = (VkPhysicalDeviceFeatures2*)entry;
+                features->features.shaderInt16 = shader_int_16;
+                break;
+
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
+                features_11 = (VkPhysicalDeviceVulkan11Features*)entry;
+                features_11->storageInputOutput16 = storage_io_16;
+                break;
+
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
                 features_12 = (VkPhysicalDeviceVulkan12Features*)entry;
                 features_12->timelineSemaphore = VK_TRUE;
@@ -543,14 +579,32 @@ static void cvm_vk_terminate_device_queue_family(cvm_vk_device * device,cvm_vk_d
 static void cvm_vk_device_process_features(cvm_vk_device * device)
 {
     uint32_t i;
-    VkBaseOutStructure* entry;
-    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT* swapcahin_maintainence;
-    device->feature_swapchain_maintainence = false;
+    const VkBaseOutStructure* entry;
+    const VkPhysicalDeviceFeatures2* features;
+    const VkPhysicalDeviceVulkan11Features* features_11;
+    const VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT* swapcahin_maintainence;
 
-    for(entry = device->features.pNext; entry; entry = entry->pNext)
+    VkBool32 storage_16_bit = VK_FALSE;
+    VkBool32 shader_int_16 = VK_FALSE;
+
+    device->feature_swapchain_maintainence = false;
+    device->feature_int_16_shader_types = false;
+
+
+    for(entry = (const VkBaseOutStructure*)&device->features; entry; entry = entry->pNext)
     {
         switch(entry->sType)
         {
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
+                features = (const VkPhysicalDeviceFeatures2*)entry;
+                shader_int_16 = features->features.shaderInt16;
+                break;
+
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
+                features_11 = (const VkPhysicalDeviceVulkan11Features*)entry;
+                storage_16_bit = features_11->storageInputOutput16;
+                break;
+
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT:
                 swapcahin_maintainence = (VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT*)entry;
                 device->feature_swapchain_maintainence = swapcahin_maintainence->swapchainMaintenance1;
@@ -558,6 +612,11 @@ static void cvm_vk_device_process_features(cvm_vk_device * device)
 
             default: break;
         }
+    }
+
+    if(storage_16_bit && shader_int_16)
+    {
+        device->feature_int_16_shader_types = true;
     }
 }
 

@@ -25,6 +25,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "overlay/enums.h"
 #include "gui/objects/button.h"
 
+#include "sol_font.h"
+
 #include <stdio.h>
 
 
@@ -116,8 +118,12 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect posi
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
+	s16_rect text_rect;
 
 	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+
+	text_rect = theme->box_place_content(theme, obj->flags, position);
+	sol_font_render_overlay_text_simple(text, theme->font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, text_rect, batch);
 }
 static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
@@ -156,7 +162,7 @@ struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* contex
 	void* text_buf = sol_gui_button_get_buffer(button);
 
 	sol_gui_button_construct(button, context, select_action, data);
-	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
+	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED | SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT;
 
 	button->base.structure_functions = &sol_gui_text_button_structure_functions;
 
@@ -190,6 +196,7 @@ static s16_vec2 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
 
+	#warning should have a good/better way to create square boxes for icons and similar... read font directly to get an "icon square" ??
 	s16_vec2 content_size = s16_vec2_set(0,0);
 
 	return theme->box_size(theme, obj->flags, content_size);
