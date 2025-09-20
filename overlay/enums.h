@@ -19,6 +19,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
+#warning gui vs overlay is confusing, both have
+
 enum sol_overlay_colour
 {
     SOL_OVERLAY_COLOUR_ERROR=0,
@@ -32,3 +34,5 @@ enum sol_overlay_colour
     SOL_OVERLAY_COLOUR_TEXT_SELECTION,
     SOL_OVERLAY_COLOUR_COUNT,
 };
+
+

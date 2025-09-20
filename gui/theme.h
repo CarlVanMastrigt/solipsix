@@ -37,7 +37,8 @@ enum sol_overlay_colour;
 
 struct sol_gui_theme
 {
-    struct sol_font* font;
+    struct sol_font* text_font;
+    struct sol_font* icon_font;
     #warning would like a way to handle multiple fonts, perhaps an array and index into them? enum? should probably do same as colours!
 
     void* other_data;/// theme specific data
@@ -85,8 +86,3 @@ struct sol_gui_theme
     // rectangle   (*get_sliderbar_offsets)(overlay_theme * theme,uint32_t status);///returns offsets from each respective side
 };
 
-static inline struct sol_font* sol_gui_theme_get_font(struct sol_gui_theme* theme)
-{
-    #warning  not sure about this, probably want more info, like font category and size
-    return theme->font;
-}

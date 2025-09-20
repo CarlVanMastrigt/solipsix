@@ -44,7 +44,7 @@ enum sol_gui_distribution
     SOL_GUI_SPACE_DISTRIBUTION_UNIFORM,
 };
 
-// used for things like text, specifically avoiding left/right because alignment may be rlative to horizontal OR vertical directions
+// used for things like text, specifically avoiding left/right because alignment may be relative to horizontal OR vertical directions
 enum sol_gui_alignment
 {
     SOL_GUI_ALIGNMENT_START,

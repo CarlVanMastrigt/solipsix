@@ -17,6 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -28,6 +29,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "sol_font.h"
 
 #include <stdio.h>
+
+
+
 
 
 bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
@@ -123,14 +127,12 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect posi
 	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 
 	text_rect = theme->box_place_content(theme, obj->flags, position);
-	sol_font_render_overlay_text_simple(text, theme->font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, text_rect, batch);
+	sol_font_render_text_simple(text, theme->text_font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, text_rect, batch);
 }
 static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
-	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
-	const char* text = sol_gui_button_get_buffer_const(button);
 
 	if(theme->box_select(theme, obj->flags, position, location))
 	{
@@ -145,7 +147,7 @@ static s16_vec2 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 	const char* text = sol_gui_button_get_buffer_const(button);
 	s16_vec2 content_min_size;
 
-	content_min_size = s16_vec2_set(0,0);
+	content_min_size = sol_font_size_text_simple(text, theme->text_font);
 
 	return theme->box_size(theme, obj->flags, content_min_size);
 }
@@ -182,13 +184,24 @@ static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect
 	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
+	s16_rect icon_rect;
 
 	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+
+
+	icon_rect = theme->box_place_content(theme, obj->flags, position);
+	sol_font_render_glyph_simple(text, theme->text_font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, icon_rect, batch);
 }
 static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
-	#warning box_select not taking position is... not ideal
-	return obj;
+	struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+
+	if(theme->box_select(theme, obj->flags, position, location))
+	{
+		return obj;
+	}
+	return NULL;
 }
 static s16_vec2 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 {

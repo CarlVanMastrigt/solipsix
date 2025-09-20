@@ -44,10 +44,10 @@ void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_o
 void sol_gui_container_destroy(struct sol_gui_object* obj);
 
 
-// moves a child (potentioaly) relative to a sibling
-// if placement is start/end sibling will be ignored (may be NULL)
-// if sibling is NULL before/after will move child relative to present sibling in the spot before/after itself (basically before becomes; move backwards and after; move forwards)
-// NOTE: placement is with respect to ALL objects in the container; not just active ones (could pass in ignore inactive but this raises too may questions IMO)
+/** moves a child (potentioaly) relative to a sibling
+ * if placement is start/end sibling will be ignored (may be NULL)
+ * if sibling is NULL before/after will move child relative to present sibling in the spot before/after itself (basically before becomes; move backwards and after; move forwards)
+ * NOTE: placement is with respect to ALL objects in the container; not just active ones (could pass in ignore inactive but this raises too may questions IMO) */
 void sol_gui_container_move_child(struct sol_gui_container* container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement);
 
 int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container);

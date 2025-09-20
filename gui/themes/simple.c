@@ -242,7 +242,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 	switch(size)
 	{
 		case 0: // small
-			font_size = 12;
+			font_size = 13;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
 				.base_unit_size       = s16_vec2_set(16, 16),// min size
@@ -255,10 +255,15 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			break;
 		default:
 		case 1: // normal
-			font_size = 16;
+			// font_size = 976;
+			// font_size = 1024;
+			// font_size = 13 * 64;
+			font_size = 832;
+			// font_size = 1024;
+			// font_size = 13 * 64 + 32;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = s16_vec2_set(20, 20),// min size
+				.base_unit_size       = s16_vec2_set(20, 20),// min size// test button A
 				.box_border           = s16_vec2_set(1, 1),
 				.box_content_border   = s16_vec2_set(2, 2),
 				.box_text_border      = s16_vec2_set(8, 2),
@@ -277,7 +282,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 				.panel_content_border = s16_vec2_set(6, 6),
 				.panel_border         = s16_vec2_set(2, 2),
 			};
-			break;
+			break;//
 	}
 
 	simple_theme_data->test_checkerboard_id_set = false;
@@ -286,8 +291,16 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 
 	*theme = (struct sol_gui_theme)
 	{
-		.font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size),
-		// .font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size),
+		#warning font should take subpixel rendering as a parameter (usually seems like its bad...)
+		// .text_font = sol_font_create(font_library, "resources/verdana.ttf", font_size, true),
+		.text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", font_size, true),
+		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", font_size, false),file:///usr/share/fonts/noto/NotoSansImperialAramaic-Regular.ttf
+		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf", font_size, false),
+		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, true),
+		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, false),
+		// .text_font = sol_font_create(font_library, "resources/NotoColorEmoji-Regular.ttf", font_size),
+		// .text_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false),
+		.icon_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false),
 		.other_data = simple_theme_data,
 
 		.box_render          = &sol_gui_theme_simple_box_render,
@@ -300,12 +313,16 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.panel_place_content = &sol_gui_theme_simple_panel_place_content,
 		.panel_size          = &sol_gui_theme_simple_panel_size,
 	};
+
+	assert(theme->text_font);
+	assert(theme->icon_font);
 }
 
 void sol_gui_theme_simple_terminate(struct sol_gui_theme* theme)
 {
 	free(theme->other_data);
-	sol_font_destroy(theme->font);
+	sol_font_destroy(theme->text_font);
+	sol_font_destroy(theme->icon_font);
 }
 
 struct sol_gui_theme* sol_gui_theme_simple_create(struct sol_font_library* font_library, int size)
