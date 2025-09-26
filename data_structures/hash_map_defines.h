@@ -20,6 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 /** all includes put here instead of implement file to take advantage of pragma once */
+#include <limits.h>
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdbool.h>
