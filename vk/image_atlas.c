@@ -201,7 +201,6 @@ static inline uint64_t sol_image_atlas_entry_identifier_get(const uint32_t* entr
 #define SOL_HASH_MAP_CONTEXT_TYPE struct sol_image_atlas*
 #define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E, CTX) sol_image_atlas_identifier_entry_compare_equal(K, E, CTX)
 #define SOL_HASH_MAP_KEY_HASH(K, CTX) K
-#define SOL_HASH_MAP_ENTRY_HASH(E, CTX) sol_image_atlas_entry_identifier_get(E, CTX)
 #define SOL_HASH_MAP_KEY_FROM_ENTRY(E, CTX) sol_image_atlas_entry_identifier_get(E, CTX)
 #include "data_structures/hash_map_implement.h"
 

@@ -59,14 +59,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_HASH_MAP_KEY_HASH(K) (K)
 #endif
 
-#ifndef SOL_HASH_MAP_ENTRY_HASH
-#error must define SOL_HASH_MAP_ENTRY_HASH(const ENTRY_TYPE*)` returning a uint64_t
-#define SOL_HASH_MAP_ENTRY_HASH(E) (*E)
-#endif
-
 /** optional tweak to hash map properties */
 #ifndef SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS
-#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS 8
+#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS 7
 #endif
 
 
@@ -74,64 +69,25 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(K,E) SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E, map->context)
 #define SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT(E) SOL_HASH_MAP_KEY_FROM_ENTRY(E, map->context)
 #define SOL_HASH_MAP_KEY_HASH_CONTEXT(K) SOL_HASH_MAP_KEY_HASH(K, map->context)
-#define SOL_HASH_MAP_ENTRY_HASH_CONTEXT(E) SOL_HASH_MAP_ENTRY_HASH(E, map->context)
 #else
 #define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(K,E) SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K, E)
 #define SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT(E) SOL_HASH_MAP_KEY_FROM_ENTRY(E)
 #define SOL_HASH_MAP_KEY_HASH_CONTEXT(K) SOL_HASH_MAP_KEY_HASH(K)
-#define SOL_HASH_MAP_ENTRY_HASH_CONTEXT(E) SOL_HASH_MAP_ENTRY_HASH(E)
 #endif
 
-#define SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_SHIFT (16 - SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS)
-#define SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS (SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_SHIFT-1)
-// ^ bottom fractional bit will be repurposed (SOL_HASH_MAP_IDENTIFIER_EXIST_BIT)
+/** the offset is the inverse of the displacement capacity, stored in the top bits */
+#define SOL_HASH_MAP_IDENTIFIER_OFFSET_SHIFT ((uint16_t)(16 - SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS))
+#define SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT ((uint16_t)SOL_HASH_MAP_IDENTIFIER_OFFSET_SHIFT)
+#define SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT ((uint16_t)(1 << SOL_HASH_MAP_IDENTIFIER_OFFSET_SHIFT))
+#define SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK ((uint16_t)(SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT - 1))
 
-// if this bit is zero when subtracing the identifier of the key we're searching for <k>
-// from the existing (set) identifier we're comparing to <c>
-// [i.e. ((c-k) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0 ]
-// then <k> is greater than or equal to <c>
-// note: this only holds if the maximum offset (below) of the hash map is maintained/respected
+#define SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY ((uint16_t)(-SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT))
+/** ^ identifier must be DISTINCTLY SMALLER than this to move backwards, is all bits set in offset part of identifier
+ * this is also the starting value of the offset part of the identifier (cannot move backwards)
+ * as it is moved forward the number of potential moves remaining decreases, meaning we can set */
 
-
-/** maximum offset must use 1 bit less than the largest index identifier
-    if offset from actual location is equal to this (or greater than) then the necessary condition imposed on identifiers has been violated */
-#define SOL_HASH_MAP_INVALID_OFFSET (1 << (SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS - 1))
-#define SOL_HASH_MAP_IDENTIFIER_INDEX_MASK ((1 << SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS) - 1)
-
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_exists_and_ordered_before_key)(uint16_t key_identifier, uint16_t compare_identifier)
-{
-    return compare_identifier && ((compare_identifier-key_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT);
-}
-
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_not_ordered_after_key)(uint16_t key_identifier, uint16_t compare_identifier)
-{
-    return ((key_identifier-compare_identifier) & SOL_HASH_MAP_DELTA_TEST_BIT) == 0;
-}
-
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_exists_and_can_move_backwards__i)(uint64_t current_index, uint_fast16_t identifier)
-{
-    return identifier && (current_index & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK) != (identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_SHIFT);
-}
-
-/** can the identifier be moved to this index without invalidating the maps offset condition?
-    (an offset will become invalid due to map saturation)
-    this check only works if entries are moved one index/place at a time
-    so is basically used to check whether an entry can be moved forward one place */
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_invalid_at_new_index__i)(uint64_t new_index, uint_fast16_t identifier)
-{
-    new_index = (new_index - SOL_HASH_MAP_INVALID_OFFSET) & SOL_HASH_MAP_IDENTIFIER_INDEX_MASK;
-    identifier = identifier >> SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_SHIFT;
-    return new_index == identifier;
-}
-
-
-
-
-
-
-
-
-
+#define SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT
+/** ^ identifier must be this big or larget to be valid */
 
 
 #ifndef SOL_HASH_MAP_DECLARATION_PRESENT
@@ -156,14 +112,14 @@ struct SOL_HASH_MAP_STRUCT_NAME
 #endif
 
 
+/** need to early define insert as resize uses it */
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, const SOL_HASH_MAP_ENTRY_TYPE* entry);
 
-static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(struct SOL_HASH_MAP_STRUCT_NAME* map)
+static void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(struct SOL_HASH_MAP_STRUCT_NAME* map)
 {
-    uint64_t entry_hash, index, old_index, prev_index, entry_index;
-    uint16_t identifier;
-    const SOL_HASH_MAP_ENTRY_TYPE* entry_ptr;
-
     const uint64_t old_entry_space = (uint64_t)1 << map->entry_space_exponent;
+    uint64_t index;
+    enum sol_map_result insert_result;
 
     map->entry_space_exponent++;
 
@@ -185,40 +141,16 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(stru
         map->entry_limit = ((uint64_t)map->descriptor.resize_fill_factor << (map->entry_space_exponent-8));
     }
 
-    const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
-    const uint64_t index_mask = entry_space - 1;
+    map->entry_count = 0;
 
-    for(old_index = 0; old_index < old_entry_space; old_index++)
+    for(index = 0; index < old_entry_space; index++)
     {
-        identifier = old_identifiers[old_index];
-        if(identifier)
+        /** every location in the old map has a valid location so its unnecessary to account for failure to add here (guaranteed to succeed)*/
+        if(old_identifiers[index])
         {
-            entry_ptr = old_entries + old_index;
-            entry_hash = SOL_HASH_MAP_ENTRY_HASH_CONTEXT(entry_ptr);
+            insert_result = SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(map, old_entries + index);
 
-            entry_index = (entry_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
-            index = entry_index;
-
-            while(new_identifiers[index])
-            {
-                index = (index==index_mask) ? 0 : index+1;
-            }
-
-            while(index != entry_index)
-            {
-                prev_index = (index==0) ? index_mask : index-1;
-                /** at this point prev must exist, only need to check ordering */
-                if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_not_ordered_after_key)(identifier, new_identifiers[prev_index]))
-                {
-                    break;
-                }
-                new_entries    [index] = new_entries    [prev_index];
-                new_identifiers[index] = new_identifiers[prev_index];
-                index = prev_index;
-            }
-
-            new_entries    [index] = *entry_ptr;
-            new_identifiers[index] = identifier;
+            assert(insert_result == SOL_MAP_SUCCESS_INSERTED);
         }
     }
 
@@ -226,29 +158,30 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(stru
     free(old_entries);
 }
 
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, uint16_t identifier, uint64_t index, uint64_t* index_result)
+static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(struct SOL_HASH_MAP_STRUCT_NAME* restrict map, SOL_HASH_MAP_KEY_TYPE key, uint16_t* restrict identifier, uint64_t* restrict index)
 {
     uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     uint64_t index_mask = entry_space - 1;
     uint16_t* identifiers = map->identifiers;
     SOL_HASH_MAP_ENTRY_TYPE* entries = map->entries;
 
-    while(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_exists_and_ordered_before_key)(identifier, identifiers[index]))
+    while( identifiers[*index] && identifiers[*index] < *identifier)
     {
-        index = (index==index_mask) ? 0 : index+1;
+        *identifier -= SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
+        *index = (*index == index_mask) ? 0 : *index + 1;
     }
 
-    while(identifier == identifiers[index])
+    while(*identifier == identifiers[*index])
     {
-        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(key, (entries + index)))
+        if(SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT(key, (entries + *index)))
         {
-            *index_result = index;
             return true;/** precise key/entry found */
         }
-        index = (index==index_mask) ? 0 : index+1;
+        *identifier -= SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
+        *index = (*index == index_mask) ? 0 : *index + 1;
+        assert(*identifier >= SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY);
     }
 
-    *index_result = index;
     return false;/** insertion required at index */
 }
 
@@ -263,14 +196,16 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_evict_index__i)
     entry_space = (uint64_t)1 << map->entry_space_exponent;
     index_mask = entry_space - 1;
 
+    /** move all following entries backwards until an empty slot or an entry with the maximum displacement capacity is encountered*/
     while(true)
     {
-        next_index = (index==index_mask) ? 0 : index+1;
+        next_index = (index==index_mask) ? 0 : index + 1;
         identifier = identifiers[next_index];
-        if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_exists_and_can_move_backwards__i)(next_index, identifier))
+        if(identifier && identifier < SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY)
         {
+            assert((uint16_t)(identifier + SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT) > identifier);
             entries    [index] = entries[next_index];
-            identifiers[index] = identifier;
+            identifiers[index] = identifier + SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
             index = next_index;
         }
         else break;
@@ -288,7 +223,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, struct sol_hash_map_descriptor descriptor)
 #endif
 {
-    assert(descriptor.entry_space_exponent_limit <= 32-SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS);
+    assert(descriptor.entry_space_exponent_limit <= 32 - SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT);
     /** beyond this is probably unreasonable, used to catch this accidentally being treated as raw COUNT rather than power of 2 */
 
     assert(descriptor.entry_space_exponent_initial >= 8);
@@ -362,10 +297,10 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     const uint64_t entry_space = (uint64_t)1 << map->entry_space_exponent;
     const uint64_t index_mask = entry_space - 1;
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
-    const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
-    uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
+    uint16_t key_identifier = (key_hash & SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK) | SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY;
+    uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT) & index_mask;
 
-    if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(map, key, key_identifier, index, &index ))
+    if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(map, key, &key_identifier, &index ))
     {
         *entry_ptr = map->entries + index;
         return SOL_MAP_SUCCESS_FOUND;
@@ -378,10 +313,9 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
-    const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
 
     uint64_t entry_space, index_mask, key_index, move_index, next_move_index, prev_move_index;
-    uint16_t move_identifier;
+    uint16_t move_identifier, key_identifier, next_identifier, prev_identifier;
 
     SOL_HASH_MAP_ENTRY_TYPE* entries;
     uint16_t* identifiers;
@@ -401,24 +335,40 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 
     obtain_for_map_size:
     {
+        entries = map->entries;
+        identifiers = map->identifiers;
+
         entry_space = (uint64_t)1 << map->entry_space_exponent;
         index_mask = entry_space - 1;
 
-        key_index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
+        key_identifier = (key_hash & SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK) | SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY;
+        key_index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT) & index_mask;
 
-        if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(map, key, key_identifier, key_index, &key_index))
+        if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(map, key, &key_identifier, &key_index))
         {
             *entry_ptr = map->entries + key_index;
             return SOL_MAP_SUCCESS_FOUND;
         }
 
         move_identifier = key_identifier;
-        next_move_index = key_index;
+        move_index      = key_index;
         /** ^ note: initially checking that the entry being added is being added at a valid location */
-        do
+        while(true)
         {
-            if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_identifier_invalid_at_new_index__i)(next_move_index, move_identifier))
+            if(move_identifier < SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY)
             {
+                while(move_index != key_index)
+                {
+                    /** move backwards: pick up identifier and replace with move identifier */
+                    assert(move_identifier < SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY);
+
+                    move_index = (move_index == 0) ? index_mask : move_index-1;
+
+                    prev_identifier = identifiers[move_index];
+                    identifiers[move_index] = move_identifier + SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
+                    move_identifier = prev_identifier;
+                }
+
                 if(map->entry_space_exponent == map->descriptor.entry_space_exponent_limit)
                 {
                     *entry_ptr = NULL;
@@ -430,27 +380,30 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
                     goto obtain_for_map_size;
                 }
             }
-            move_index = next_move_index;
-            move_identifier = map->identifiers[move_index];
-            next_move_index = (move_index==index_mask) ? 0 : move_index+1;
-        }
-        while(move_identifier);
-    }
 
-    entries = map->entries;
-    identifiers = map->identifiers;
+            /** move forwards */
+            next_identifier = identifiers[move_index];
+            identifiers[move_index] = move_identifier;
+
+            if(next_identifier == 0)
+            {
+                break;
+            }
+
+            move_identifier = next_identifier - SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
+            move_index = (move_index == index_mask) ? 0 : move_index + 1;
+        }
+    }
 
     /** shift everything forward one into the discovered empty slot */
     while(move_index != key_index)
     {
         prev_move_index = (move_index==0) ? index_mask : move_index-1;
-        entries    [move_index] = entries    [prev_move_index];
-        identifiers[move_index] = identifiers[prev_move_index];
+        entries[move_index] = entries[prev_move_index];
         move_index = prev_move_index;
     }
 
     *entry_ptr = entries + key_index;
-    identifiers[key_index] = key_identifier;
     map->entry_count++;
 
     return SOL_MAP_SUCCESS_INSERTED;
@@ -479,10 +432,10 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     const uint64_t index_mask = entry_space - 1;
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
 
-    const uint16_t key_identifier = (key_hash << 1) | SOL_HASH_MAP_IDENTIFIER_EXIST_BIT;
-    uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_HASH_FRACTIONAL_BITS) & index_mask;
+    uint16_t key_identifier = (key_hash & SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK) | SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY;
+    uint64_t index = (key_hash >> SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT) & index_mask;
 
-    if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(map, key, key_identifier, index, &index ))
+    if(SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(map, key, &key_identifier, &index ))
     {
         if(entry)
         {
@@ -511,14 +464,21 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 #undef SOL_HASH_MAP_FUNCTION_KEYWORDS
 #undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL
 #undef SOL_HASH_MAP_KEY_HASH
-#undef SOL_HASH_MAP_ENTRY_HASH
 #undef SOL_HASH_MAP_KEY_FROM_ENTRY
+#undef SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS
+
+#undef SOL_HASH_MAP_IDENTIFIER_OFFSET_SHIFT
+#undef SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT
+#undef SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT
+#undef SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK
+#undef SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY
+#undef SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY
 
 #undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL_CONTEXT
 #undef SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT
 #undef SOL_HASH_MAP_KEY_HASH_CONTEXT
-#undef SOL_HASH_MAP_ENTRY_HASH_CONTEXT
 
 #ifdef SOL_HASH_MAP_CONTEXT_TYPE
 #undef SOL_HASH_MAP_CONTEXT_TYPE
 #endif
+

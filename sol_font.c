@@ -158,7 +158,6 @@ static inline uint64_t sol_font_glyph_hash(uint32_t key)
 #define SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL(K,E) ((K) == (E->key))
 #define SOL_HASH_MAP_KEY_FROM_ENTRY(E) (E->key)
 #define SOL_HASH_MAP_KEY_HASH(K) (sol_font_glyph_hash(K))
-#define SOL_HASH_MAP_ENTRY_HASH(E) (sol_font_glyph_hash(E->key))
 #include "data_structures/hash_map_implement.h"
 
 
@@ -742,6 +741,7 @@ void sol_font_render_text_simple(const char* text, struct sol_font* font, enum s
 }
 
 
+#warning rewrite to extract harfbuzz
 s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
 {
 	hb_buffer_t* buffer;
@@ -778,17 +778,91 @@ s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
 }
 
 
+static inline void sol_font_render_centred_glyph(struct sol_font* font, uint16_t glyph_codepoint, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+{
+	struct sol_font_glyph_map_entry* glyph_map_entry;
+	struct sol_image_atlas_location glyph_atlas_location;
+	struct sol_overlay_render_element* render_data;
+	uint16_t offset_x, offset_y;
 
-void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+	if(sol_font_obtain_glyph_map_entry(font, glyph_codepoint, 0, render_batch, &glyph_map_entry))
+	{
+		if(sol_font_obtain_glyph_atlas_location(font, glyph_map_entry, render_batch, &glyph_atlas_location))
+		{
+			assert(glyph_map_entry->atlas_type == SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM);
+
+			#warning clean this shit up (give it a general implementation!??) needs to clamp these values to the rect also!
+			render_data = sol_overlay_render_element_list_append_ptr(&render_batch->elements);
+			assert((uint16_t)colour < 256);
+			uint16_t array_layer_and_colour = colour | (glyph_atlas_location.array_layer << 8);
+			uint16_t render_type = glyph_map_entry->atlas_type + 1;
+
+
+			offset_x = (position.start.x + position.end.x - glyph_map_entry->size_x) >> 1;
+			offset_y = (position.start.y + position.end.y - glyph_map_entry->size_y) >> 1;
+
+			*render_data =(struct sol_overlay_render_element)
+		    {
+		        {offset_x, offset_y, offset_x + glyph_map_entry->size_x, offset_y + glyph_map_entry->size_y},
+		        {0, 0, glyph_atlas_location.offset.x, glyph_atlas_location.offset.y},
+		        {render_type, array_layer_and_colour, 0, colour}
+		    };
+		}
+	}}
+
+
+static inline void sol_font_render_glyph_simple_kb(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+{
+	int32_t cursor_x, cursor_y, x_base, y_base;
+	kbts_decode decode;
+	size_t len, remaining_len;
+	uint32_t i, glyph_count;
+	kbts_glyph glyph;
+	kbts_cursor cursor;
+
+	len = strlen(utf8_glyph);
+	remaining_len = len;
+	glyph_count = 0;
+
+	while(remaining_len)
+	{
+		decode = kbts_DecodeUtf8(utf8_glyph, remaining_len);
+		utf8_glyph += decode.SourceCharactersConsumed;
+		remaining_len -= decode.SourceCharactersConsumed;
+		if(decode.Valid)
+		{
+			if(glyph_count == font->kb.glyph_space)
+			{
+				font->kb.glyph_space *= 2;
+				font->kb.glyphs = realloc(font->kb.glyphs, sizeof(kbts_glyph) * font->kb.glyph_space);
+			}
+			font->kb.glyphs[glyph_count++] = kbts_CodepointToGlyph(&font->kb.font, decode.Codepoint);
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	while(kbts_Shape(font->kb.state, &font->kb.config, font->kb.direction, font->kb.direction, font->kb.glyphs, &glyph_count, font->kb.glyph_space))
+	{
+		font->kb.glyph_space *= 2;
+		font->kb.glyphs = realloc(font->kb.glyphs, sizeof(kbts_glyph) * font->kb.glyph_space);
+	}
+
+	/** text passed into this function should only produce a single glyph */
+	assert(glyph_count == 1);
+
+	sol_font_render_centred_glyph(font, font->kb.glyphs[0].Id, colour, position, render_batch);
+}
+
+void sol_font_render_glyph_simple_hb(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
 {
 	#warning rewrite to extract harfbuzz
 
 	hb_buffer_t* buffer;
 	hb_glyph_info_t* glyph_info;
 	unsigned int i, glyph_count;
-	struct sol_font_glyph_map_entry* glyph_map_entry;
-	struct sol_image_atlas_location glyph_atlas_location;
-	struct sol_overlay_render_element* render_data;
 	uint16_t offset_x, offset_y;
 
 	buffer = sol_font_get_hb_buffer(font->parent_library);
@@ -806,33 +880,13 @@ void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font,
 	glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
 	assert(glyph_count == 1);
 
+	sol_font_render_centred_glyph(font, glyph_info->codepoint, colour, position, render_batch);
+}
 
-	if(sol_font_obtain_glyph_map_entry(font, glyph_info->codepoint, 0, render_batch, &glyph_map_entry))
-	{
-		if(sol_font_obtain_glyph_atlas_location(font, glyph_map_entry, render_batch, &glyph_atlas_location))
-		{
-			assert(glyph_map_entry->atlas_type == SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM);
-
-
-			#warning clean this shit up (give it a general implementation!??) needs to clamp these values to the rect also!
-			render_data = sol_overlay_render_element_list_append_ptr(&render_batch->elements);
-			assert((uint16_t)colour < 256);
-			uint16_t array_layer_and_colour = colour | (glyph_atlas_location.array_layer << 8);
-			uint16_t render_type = glyph_map_entry->atlas_type + 1;
-
-
-
-			offset_x = (position.start.x + position.end.x - glyph_map_entry->size_x) >> 1;
-			offset_y = (position.start.y + position.end.y - glyph_map_entry->size_y) >> 1;
-
-			*render_data =(struct sol_overlay_render_element)
-		    {
-		        {offset_x, offset_y, offset_x + glyph_map_entry->size_x, offset_y + glyph_map_entry->size_y},
-		        {0, 0, glyph_atlas_location.offset.x, glyph_atlas_location.offset.y},
-		        {render_type, array_layer_and_colour, 0, colour}
-		    };
-		}
-	}
+void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+{
+	// sol_font_render_glyph_simple_hb(utf8_glyph, font, colour, position, render_batch);
+	sol_font_render_glyph_simple_kb(utf8_glyph, font, colour, position, render_batch);
 }
 
 s16_vec2 sol_font_size_glyph_simple(const char* utf8_glyph, struct sol_font* font)
