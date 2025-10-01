@@ -227,10 +227,10 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_initialise)(struct SOL_HASH_MAP_STRUCT_NAME* map, struct sol_hash_map_descriptor descriptor)
 #endif
 {
-    assert(sizeof(SOL_HASH_MAP_IDENTIFIER_TYPE) * CHAR_BIT <= SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS);
+    assert(sizeof(SOL_HASH_MAP_IDENTIFIER_TYPE) * CHAR_BIT >= SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS);
     /** need to make sure this gets configured correctly */
 
-    assert(descriptor.entry_space_exponent_limit <= 32 - SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_BIT_COUNT);
+    assert(descriptor.entry_space_exponent_limit < 32);
     /** beyond this is probably unreasonable, used to catch this accidentally being treated as raw COUNT rather than power of 2 */
 
     assert(descriptor.entry_space_exponent_initial >= 8);
@@ -321,7 +321,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
 
-    uint64_t entry_space, index_mask, key_index, move_index, next_move_index, prev_move_index;
+    uint64_t entry_space, index_mask, key_index, move_index, prev_move_index;
     SOL_HASH_MAP_IDENTIFIER_TYPE move_identifier, key_identifier, next_identifier, prev_identifier;
 
     SOL_HASH_MAP_ENTRY_TYPE* entries;
@@ -359,7 +359,8 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
 
         move_identifier = key_identifier;
         move_index      = key_index;
-        /** ^ note: initially checking that the entry being added is being added at a valid location */
+        /** ^ note: initially checking that the entry being added is being added at a valid location
+         * this flow attempts to continually move the move identifier into the move_index location as long as its identifier is larger */
         while(true)
         {
             if(move_identifier < SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY)
@@ -472,6 +473,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 #undef SOL_HASH_MAP_KEY_ENTRY_CMP_EQUAL
 #undef SOL_HASH_MAP_KEY_HASH
 #undef SOL_HASH_MAP_KEY_FROM_ENTRY
+#undef SOL_HASH_MAP_IDENTIFIER_TYPE
 #undef SOL_HASH_MAP_IDENTIFIER_HASH_INDEX_BITS
 
 #undef SOL_HASH_MAP_IDENTIFIER_OFFSET_SHIFT
