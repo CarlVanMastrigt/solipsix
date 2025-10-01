@@ -172,7 +172,7 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(stru
     while( identifiers[*index] && identifiers[*index] < *identifier)
     {
         *identifier -= SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
-        *index = (*index == index_mask) ? 0 : *index + 1;
+        *index = index_mask & (*index + 1);
     }
 
     while(*identifier == identifiers[*index])
@@ -182,7 +182,7 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(stru
             return true;/** precise key/entry found */
         }
         *identifier -= SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
-        *index = (*index == index_mask) ? 0 : *index + 1;
+        *index = index_mask & (*index + 1);
         assert(*identifier >= SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY);
     }
 
@@ -203,7 +203,7 @@ static inline void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_evict_index__i)
     /** move all following entries backwards until an empty slot or an entry with the maximum displacement capacity is encountered*/
     while(true)
     {
-        next_index = (index==index_mask) ? 0 : index + 1;
+        next_index = index_mask & (index + 1);
         identifier = identifiers[next_index];
         if(identifier && identifier < SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY)
         {
@@ -370,7 +370,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
                     /** move backwards: pick up identifier and replace with move identifier */
                     assert(move_identifier < SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY);
 
-                    move_index = (move_index == 0) ? index_mask : move_index-1;
+                    move_index = index_mask & (move_index - 1);
 
                     prev_identifier = identifiers[move_index];
                     identifiers[move_index] = move_identifier + SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
@@ -399,14 +399,14 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
             }
 
             move_identifier = next_identifier - SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
-            move_index = (move_index == index_mask) ? 0 : move_index + 1;
+            move_index = index_mask & (move_index + 1);
         }
     }
 
     /** shift everything forward one into the discovered empty slot */
     while(move_index != key_index)
     {
-        prev_move_index = (move_index==0) ? index_mask : move_index-1;
+        prev_move_index = index_mask & (move_index - 1);
         entries[move_index] = entries[prev_move_index];
         move_index = prev_move_index;
     }
