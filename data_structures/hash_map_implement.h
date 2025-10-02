@@ -179,9 +179,9 @@ static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(stru
         {
             return true;/** precise key/entry found */
         }
+        assert(*identifier >= SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY);
         *identifier -= SOL_HASH_MAP_IDENTIFIER_OFFSET_UNIT;
         *index = map->index_mask & (*index + 1);
-        assert(*identifier >= SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY);
     }
 
     return false;/** insertion required at index */
