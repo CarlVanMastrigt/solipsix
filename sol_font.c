@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
+#include "tests/test_utils.h"
 
 
 #include <assert.h>
@@ -33,20 +33,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#define KB_TEXT_SHAPE_IMPLEMENTATION
-#define KB_TEXT_SHAPE_STATIC
-// #define KB_TEXT_SHAPE_NO_CRT
-#include "kb/kb_text_shape.h"
-
-
-#include <harfbuzz/hb.h>
-#include <harfbuzz/hb-ft.h>
-
+#include "sol_utils.h"
 
 
 #include "data_structures/available_indices_stack.h"
 
 #include "overlay/render.h"
+#include "overlay/enums.h"
 
 
 
@@ -64,6 +57,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // #include "sol_font_internals.h"
 
 
+#define KB_TEXT_SHAPE_IMPLEMENTATION
+#define KB_TEXT_SHAPE_STATIC
+// #define KB_TEXT_SHAPE_NO_CRT
+#include "kb/kb_text_shape.h"
+
+
+#include <harfbuzz/hb.h>
+#include <harfbuzz/hb-ft.h>
+
 
 
 
@@ -73,7 +75,6 @@ struct sol_font_library
 	// add pointer to image atlas here?
 	uint32_t vended_font_count;// identifier passed into hash map
 	struct sol_available_indices_stack available_font_indices;
-	hb_segment_properties_t default_properties;
 	#warning really not happy with the management of above
 
 	mtx_t mutex;
@@ -179,7 +180,12 @@ struct sol_font
     ft;
 
 
-	hb_font_t* font;
+    struct
+    {
+		hb_font_t* font;
+		hb_segment_properties_t default_properties;
+	}
+	hb;
 
 
 	struct
@@ -221,14 +227,10 @@ struct sol_font
 
 
 
-struct sol_font_library* sol_font_library_create(const char* default_script_id, const char* default_language_id, const char* default_direction_id)
+struct sol_font_library* sol_font_library_create(void)
 {
 	int freetype_error;
 	struct sol_font_library* font_library;
-
-	hb_language_t language;
-	hb_script_t script;
-	hb_direction_t direction;
 
 	font_library = malloc(sizeof(struct sol_font_library));
 	freetype_error = FT_Init_FreeType(&font_library->freetype_library);
@@ -239,23 +241,6 @@ struct sol_font_library* sol_font_library_create(const char* default_script_id, 
     font_library->buffers = NULL;
     font_library->buffer_count = 0;
     font_library->buffer_space = 0;
-
-
-	language = default_language_id ? hb_language_from_string(default_language_id, -1) : HB_LANGUAGE_INVALID;
-	language = language == HB_LANGUAGE_INVALID ? hb_language_from_string("en", -1) : language;
-
-	script = default_script_id ? hb_script_from_string(default_script_id, -1) : HB_SCRIPT_INVALID;
-	script = script == HB_SCRIPT_INVALID ? HB_SCRIPT_LATIN : script;
-
-	direction = default_direction_id ? hb_direction_from_string(default_direction_id, -1) : HB_DIRECTION_INVALID;
-	direction = direction == HB_DIRECTION_INVALID ? HB_DIRECTION_LTR : direction;
-
-	font_library->default_properties = (hb_segment_properties_t)
-	{
-		.language = language,
-		.script = script,
-		.direction = direction,
-	};
 
     return font_library;
 }
@@ -283,20 +268,20 @@ void sol_font_library_destroy(struct sol_font_library* font_library)
 
 
 
-
-struct sol_font* sol_font_create(struct sol_font_library* font_library, const char* ttf_filename, int pixel_size, bool subpixel_offset_render)
+#warning if language not provided perhaps implement guessing in "simple"?
+struct sol_font* sol_font_create(struct sol_font_library* font_library, const char* ttf_filename, int pixel_size, bool subpixel_offset_render, const char* default_script_id, const char* default_language_id, const char* default_direction_id)
 {
 	struct sol_font* font = malloc(sizeof(struct sol_font));
-	int error;
+	int error, i;
 	int16_t ascender, descender;
+
+
 
 	assert(ttf_filename);
 
-
-	font->font = NULL;
-
+	font->hb.font = NULL;
+	font->kb.state = NULL;
 	font->subpixel_offset_render = subpixel_offset_render;
-
 	font->parent_library = font_library;
 
 
@@ -318,27 +303,71 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 	font->ft.x_scale = font->ft.face->size->metrics.x_scale;
 	font->ft.y_scale = font->ft.face->size->metrics.y_scale;
 
-
-	font->kb.font = kbts_FontFromFile(ttf_filename);
-
-	assert(kbts_FontIsValid(&font->kb.font));
-
-	font->kb.state = kbts_CreateShapeState(&font->kb.font);
-	font->kb.config = kbts_ShapeConfig(&font->kb.font, KBTS_SCRIPT_LATIN, KBTS_LANGUAGE_ENGLISH);
-	font->kb.direction = KBTS_DIRECTION_LTR;
-	// font->kb.config = kbts_ShapeConfig(&font->kb.font, KBTS_SCRIPT_ARABIC, KBTS_LANGUAGE_ARABIC);
-	// font->kb.direction = KBTS_DIRECTION_RTL;
-
-	font->kb.glyph_space = 16;
-	font->kb.glyphs = malloc(sizeof(kbts_glyph) * font->kb.glyph_space);
-
-
-	font->font = hb_ft_font_create_referenced(font->ft.face);
-	if(font->font == NULL)
+	kb_setup:
 	{
-		sol_font_destroy(font);
-		return NULL;
+		char language_tag[4] = {' ',' ',' ',' '};
+		char script_tag[4] = {' ',' ',' ',' '};
+		kbts_script script;
+		kbts_language language;
+		kbts_direction direction;
+
+		for(i = 0; default_script_id   && default_script_id  [i] && i < 4; i++) script_tag  [i] = tolower(default_script_id  [i]);
+		for(i = 0; default_language_id && default_language_id[i] && i < 4; i++) language_tag[i] = toupper(default_language_id[i]);
+
+
+		font->kb.font = kbts_FontFromFile(ttf_filename);
+
+		assert(kbts_FontIsValid(&font->kb.font));
+
+		font->kb.state = kbts_CreateShapeState(&font->kb.font);
+		if(font->kb.state == NULL)
+		{
+			sol_font_destroy(font);
+			return NULL;
+		}
+
+		font->kb.glyph_space = 16;
+		font->kb.glyphs = malloc(sizeof(kbts_glyph) * font->kb.glyph_space);
+
+		script = kbts_ScriptTagToScript(KBTS_FOURCC(script_tag[0],script_tag[1],script_tag[2],script_tag[3]));
+		language = KBTS_FOURCC(language_tag[0],language_tag[1],language_tag[2],language_tag[3]);
+		direction = (default_direction_id && sol_strcasecmp(default_direction_id, "rtl") == 0) ? KBTS_DIRECTION_RTL : KBTS_DIRECTION_LTR;
+
+		font->kb.config = kbts_ShapeConfig(&font->kb.font, script, language);
+		font->kb.direction = direction;
 	}
+
+	hb_setup:
+	{
+		hb_language_t language;
+		hb_script_t script;
+		hb_direction_t direction;
+
+		font->hb.font = hb_ft_font_create_referenced(font->ft.face);
+		if(font->hb.font == NULL)
+		{
+			sol_font_destroy(font);
+			return NULL;
+		}
+
+		language = default_language_id ? hb_language_from_string(default_language_id, -1) : HB_LANGUAGE_INVALID;
+		language = language == HB_LANGUAGE_INVALID ? hb_language_from_string("eng", -1) : language;
+
+		script = default_script_id ? hb_script_from_string(default_script_id, -1) : HB_SCRIPT_INVALID;
+		script = script == HB_SCRIPT_INVALID ? HB_SCRIPT_LATIN : script;
+
+		direction = default_direction_id ? hb_direction_from_string(default_direction_id, -1) : HB_DIRECTION_INVALID;
+		direction = direction == HB_DIRECTION_INVALID ? HB_DIRECTION_LTR : direction;
+
+		font->hb.default_properties = (hb_segment_properties_t)
+		{
+			.language = language,
+			.script = script,
+			.direction = direction,
+		};
+	}
+
+
 
 #warning assumes horizontal text
 	ascender = font->ft.face->size->metrics.ascender;
@@ -375,9 +404,9 @@ void sol_font_destroy(struct sol_font* font)
 
 	FT_Done_Face(font->ft.face);
 
-	if(font->font)
+	if(font->hb.font)
 	{
-		hb_font_destroy(font->font);
+		hb_font_destroy(font->hb.font);
 	}
 
 	free(font->kb.glyphs);
@@ -502,7 +531,7 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 		/** get glyph pixels if not present in image atlas */
 
 		glyph_index = glyph_map_entry->key & 0xFFFF;
-		#warning this decoding of subpixel position in key should be different for horizontal vs vertical text, orthogonal direction only needs a single bit of offset (usless shaping is expected to actually move the y cursor)
+		#warning this decoding of subpixel position in key should be different for horizontal vs vertical text
 		subpixel_offset = (glyph_map_entry->key >> 16) & 0x3F;
 		ft_result = FT_Load_Glyph(font->ft.face, glyph_index, 0);
 
@@ -583,8 +612,6 @@ static inline void sol_font_render_overlay_glyph(uint32_t glyph_codepoint, int32
 	#warning attempting to load SVG/bitmap when these don't permit subpixel offset will result in unnecessary image atlas waste -- subpixel offset can be used for SVG but rendering SVG format font is not supported by freetype
 	#warning need a bitfield for glyphs types (max 4k memory per font to store it though) to indicate outline vs SVG ??
 
-
-
 	/** obtain the glyph render data (glyph_map_entry) */
 
 	/** have a standardised / uniform subpixel offset in y, which this should be expected to match */
@@ -619,13 +646,13 @@ static inline void sol_font_render_overlay_glyph(uint32_t glyph_codepoint, int32
 	}
 }
 
-static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, struct sol_overlay_render_batch* render_batch)
 {
 	hb_buffer_t* buffer;
 	hb_glyph_info_t* glyph_info;
 	hb_glyph_position_t* glyph_positions;
 	unsigned int i, glyph_count;
-	int32_t cursor_x, cursor_y;
+	int32_t cursor_x, cursor_y, accumulated_subpixel_advance;
 
 
 	buffer = sol_font_get_hb_buffer(font->parent_library);
@@ -634,17 +661,25 @@ static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct
 	hb_buffer_clear_contents(buffer);
 
 	/** assume simple text uses default properties, this must be set every time buffer is recycled */
-	hb_buffer_set_segment_properties(buffer, &font->parent_library->default_properties);
+	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
 
 	hb_buffer_add_utf8(buffer, text, -1, 0, -1);
 
-	hb_shape(font->font, buffer, NULL, 0);
+	hb_shape(font->hb.font, buffer, NULL, 0);
 
 	glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
 	glyph_positions = hb_buffer_get_glyph_positions(buffer, &i);
 
 	/** glyph count should match between positioning and rendering */
 	assert(i == glyph_count);
+
+	accumulated_subpixel_advance = 0;
+	for(i = 0; i < glyph_count; i++)
+	{
+		accumulated_subpixel_advance += glyph_positions[i].x_advance;
+	}
+
+	#warning calculate length here, including number (and position?) of breaks -- should be very quick
 
 	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
 	cursor_x =  (int32_t)(position.start.x) << 6;
@@ -653,7 +688,6 @@ static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct
 
 	for(i = 0; i < glyph_count; i++)
 	{
-
 		sol_font_render_overlay_glyph(glyph_info[i].codepoint,
 			cursor_x + glyph_positions[i].x_offset,
 			cursor_y + glyph_positions[i].y_offset,
@@ -665,12 +699,8 @@ static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct
 }
 
 
-static inline void sol_font_render_text_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+static inline void sol_font_render_text_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, struct sol_overlay_render_batch* render_batch)
 {
-	// hb_buffer_t* buffer;
-	// hb_glyph_info_t* glyph_info;
-	// hb_glyph_position_t* glyph_positions;
-	// unsigned int i, glyph_count;
 	int32_t cursor_x, cursor_y, x_base, y_base;
 	kbts_decode decode;
 	size_t len, remaining_len;
@@ -681,8 +711,6 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 	len = strlen(text);
 	remaining_len = len;
 	glyph_count = 0;
-
-	// puts(text);
 
 	while(remaining_len)
 	{
@@ -736,38 +764,34 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 
 void sol_font_render_text_simple(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
 {
-	// sol_font_render_text_simple_harfbuzz(text, font, colour, position, render_batch);
-	sol_font_render_text_simple_kb(text, font, colour, position, render_batch);
+	/** get these from theme ? */
+	enum sol_overlay_alignment alignment = SOL_OVERLAY_ALIGNMENT_START;
+	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
+	// sol_font_render_text_simple_harfbuzz(text, font, colour, position, alignment, orientation, render_batch);
+	sol_font_render_text_simple_kb(text, font, colour, position, alignment, orientation, render_batch);
 }
 
 
-#warning rewrite to extract harfbuzz
-s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
+s16_vec2 sol_font_size_text_simple_hb(const char* text, struct sol_font* font)
 {
 	hb_buffer_t* buffer;
 	unsigned int i, glyph_count;
 	int32_t accumulated_subpixel_advance, advance;
 	hb_glyph_position_t* glyph_positions;
 
-
-	// puts(text);
-
 	buffer = sol_font_get_hb_buffer(font->parent_library);
 
 	hb_buffer_clear_contents(buffer);
 
 	/** assume simple text uses default properties, this must be set every time buffer is recycled */
-	hb_buffer_set_segment_properties(buffer, &font->parent_library->default_properties);
+	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
 
 	hb_buffer_add_utf8(buffer, text, -1, 0, -1);
 
-	hb_shape(font->font, buffer, NULL, 0);
+	hb_shape(font->hb.font, buffer, NULL, 0);
 
 	glyph_positions = hb_buffer_get_glyph_positions(buffer, &glyph_count);
-	//font->normalised_orthogonal_size
 	accumulated_subpixel_advance = 0;
-
-	#warning switch based on font direction
 	for(i = 0; i < glyph_count; i++)
 	{
 		accumulated_subpixel_advance += glyph_positions[i].x_advance;
@@ -775,6 +799,11 @@ s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
 
 	advance = accumulated_subpixel_advance >> 6;
 	return s16_vec2_set(advance, font->normalised_orthogonal_size);
+}
+
+s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
+{
+	return sol_font_size_text_simple_hb(text, font);
 }
 
 
@@ -871,11 +900,11 @@ void sol_font_render_glyph_simple_hb(const char* utf8_glyph, struct sol_font* fo
 	hb_buffer_clear_contents(buffer);
 
 	/** assume simple text uses default properties, this must be set every time buffer is recycled */
-	hb_buffer_set_segment_properties(buffer, &font->parent_library->default_properties);
+	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
 
 	hb_buffer_add_utf8(buffer, utf8_glyph, -1, 0, -1);
 
-	hb_shape(font->font, buffer, NULL, 0);
+	hb_shape(font->hb.font, buffer, NULL, 0);
 
 	glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
 	assert(glyph_count == 1);

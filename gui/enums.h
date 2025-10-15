@@ -22,12 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 /** these are the enumerators used to describe various things to do with the GUI
  * incompatible options are enumerators (list of choices) compatible options are defines (bit-flags)*/
 
-// layout of anything GUI related, e.g. contents of a box, text orientation, scrollable bar, the dynamic part of a grid (hopefully these are self explanitory)
-enum sol_gui_layout
-{
-    SOL_GUI_LAYOUT_HORIZONTAL,
-    SOL_GUI_LAYOUT_VERTICAL,
-};
+
 
 // how space in a container will be shared/distributed
 enum sol_gui_distribution
@@ -43,15 +38,6 @@ enum sol_gui_distribution
     // distribute remaining space evenly amongst all objects and ensure all contained objects are (as close to as possible) the same size
     SOL_GUI_SPACE_DISTRIBUTION_UNIFORM,
 };
-
-// used for things like text, specifically avoiding left/right because alignment may be relative to horizontal OR vertical directions
-enum sol_gui_alignment
-{
-    SOL_GUI_ALIGNMENT_START,
-    SOL_GUI_ALIGNMENT_END,
-    SOL_GUI_ALIGNMENT_CENTRE,
-};
-// also difficuly because we could need horizontal AND vertical alignment
 
 enum sol_gui_placement
 {

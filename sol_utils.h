@@ -21,11 +21,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #pragma once
 
+/** would be good to have more general way to know the availibility of this */
 #ifndef _GNU_SOURCE
-static inline char* sol_strdup(const char * in)
+static inline char* sol_strdup(const char* in)
 {
     if(!in) return NULL;
     size_t len=(strlen(in)+1)*sizeof(char);
@@ -42,6 +44,18 @@ static inline void sol_sincosf(float angle, float* sin, float* cos)
 #define sol_sincosf(a,s,c) sincosf(a,s,c)
 #define sol_strdup(s) strdup(s)
 #endif
+
+static inline int sol_strcasecmp(const char* lhs, const char* rhs)
+{
+    int delta;
+    /** if they dont terminate at the same time the null termination of rhs will induce a `delta`, ergo only lhs needs to be checked for null termination */
+    while((delta = (tolower(*lhs) - tolower(*rhs))) == 0 && *lhs)
+    {
+        lhs++;
+        rhs++;
+    }
+    return delta;
+}
 
 
 #define SOL_U32_INVALID 0xFFFFFFFF

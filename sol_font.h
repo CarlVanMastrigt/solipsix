@@ -32,10 +32,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_font_library;
 struct sol_font;
 
-struct sol_font_library* sol_font_library_create(const char* default_script_id, const char* default_language_id, const char* default_direction_id);
+struct sol_font_library* sol_font_library_create(void);
 void sol_font_library_destroy(struct sol_font_library* font_library);
 
-struct sol_font* sol_font_create(struct sol_font_library* font_library, const char* ttf_filename, int pixel_size, bool subpixel_offset_render);
+struct sol_font* sol_font_create(struct sol_font_library* font_library, const char* ttf_filename, int pixel_size, bool subpixel_offset_render, const char* default_script_id, const char* default_language_id, const char* default_direction_id);
 void sol_font_destroy(struct sol_font* font);
 
 

@@ -35,4 +35,20 @@ enum sol_overlay_colour
     SOL_OVERLAY_COLOUR_COUNT,
 };
 
+// layout of anything overlay/GUI related, e.g. contents of a box, text orientation, scrollable bar, the dynamic part of a grid (hopefully these are self explanitory)
+enum sol_overlay_orientation
+{
+    SOL_OVERLAY_ORIENTATION_HORIZONTAL,
+    SOL_OVERLAY_ORIENTATION_VERTICAL,
+};
+
+// used for things like text, specifically avoiding left/right because alignment may be relative to horizontal OR vertical directions
+// also difficuly because we could need horizontal AND vertical alignment
+enum sol_overlay_alignment
+{
+    SOL_OVERLAY_ALIGNMENT_START,
+    SOL_OVERLAY_ALIGNMENT_END,
+    SOL_OVERLAY_ALIGNMENT_CENTRE,
+    SOL_OVERLAY_ALIGNMENT_JUSTIFIED,
+};
 

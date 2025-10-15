@@ -349,6 +349,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
         {
             if(move_identifier < SOL_HASH_MAP_IDENTIFIER_MINIMUM_DISPLACEMENT_CAPACITY)
             {
+                /** fail case; unwind identifier changes and either return failure or resize the hash map */
                 while(move_index != key_index)
                 {
                     /** move backwards: pick up identifier and replace with move identifier */

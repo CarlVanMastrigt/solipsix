@@ -532,15 +532,15 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.destroy       = &sol_gui_container_destroy,
 };
 
-void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution)
+void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)
 {
 	struct sol_gui_container* container = &sequence->base;
 	struct sol_gui_object* base = &container->base;
 	sol_gui_container_construct(container, context);
 
-	switch(layout)
+	switch(orientation)
 	{
-	case SOL_GUI_LAYOUT_HORIZONTAL:
+	case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
 		switch(distribution)
 		{
 		case SOL_GUI_SPACE_DISTRIBUTION_START:
@@ -560,7 +560,7 @@ void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gu
 			break;
 		}
 		break;
-	case SOL_GUI_LAYOUT_VERTICAL:
+	case SOL_OVERLAY_ORIENTATION_VERTICAL:
 		switch(distribution)
 		{
 		case SOL_GUI_SPACE_DISTRIBUTION_START:
@@ -583,18 +583,18 @@ void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gu
 	}
 }
 
-struct sol_gui_sequence* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution)
+struct sol_gui_sequence* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)
 {
 	struct sol_gui_sequence* sequence = malloc(sizeof(struct sol_gui_sequence));
 
-	sol_gui_sequence_construct(sequence, context, layout, distribution);
+	sol_gui_sequence_construct(sequence, context, orientation, distribution);
 
 	return sequence;
 }
 
-struct sol_gui_object* sol_gui_sequence_object_create(struct sol_gui_context* context, enum sol_gui_layout layout, enum sol_gui_distribution distribution)
+struct sol_gui_object* sol_gui_sequence_object_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)
 {
-	return sol_gui_sequence_as_object( sol_gui_sequence_create(context, layout, distribution) );
+	return sol_gui_sequence_as_object( sol_gui_sequence_create(context, orientation, distribution) );
 }
 
 struct sol_gui_object* sol_gui_sequence_as_object(struct sol_gui_sequence* sequence)
