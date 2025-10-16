@@ -258,8 +258,8 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			// font_size = 976;
 			// font_size = 1024;
 			// font_size = 13 * 64;
-			font_size = 864;
-			// font_size = 1024;
+			// font_size = 864;
+			font_size = 1024;
 			// font_size = 13 * 64 + 32;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
@@ -296,11 +296,11 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		// .text_font = sol_font_create(font_library, "resources/verdana.ttf", font_size, true, "Latn", "eng", "ltr"),
 		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", font_size, true, "latn", "eng", "ltr"),
 		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", font_size, false, "latn", "eng", "ltr"),//file:///usr/share/fonts/noto/NotoSansImperialAramaic-Regular.ttf
-		.text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf", font_size, false, "arab", "ARA", "rtl"),
+		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf", font_size, false, "arab", "ARA", "rtl"),
 		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, true, "Latn", "eng", "ltr"),
 		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, false, "Latn", "eng", "ltr"),
 		// .text_font = sol_font_create(font_library, "resources/NotoColorEmoji-Regular.ttf", font_size, "Latn", "eng", "ltr"),
-		// .text_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
+		.text_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
 		.icon_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
 		.other_data = simple_theme_data,
 

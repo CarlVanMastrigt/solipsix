@@ -259,10 +259,6 @@ struct sol_image_atlas
 
 	#warning using an accessor mask (instead of single accessor), while maintaining single threaded requirement, might be good for coordinating different sources of writes
 	bool accessor_active;
-
-	/** unowned, provided by accessor */
-	struct sol_vk_buf_img_copy_list* upload_list;
-	struct sol_buffer* upload_buffer;
 };
 
 static inline bool sol_image_atlas_identifier_entry_compare_equal(uint64_t key, uint32_t* entry_index, struct sol_image_atlas* atlas)
@@ -1170,9 +1166,6 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 		atlas->availability_masks[x_size_class] |= 1 << y_size_class;
 	}
 
-	atlas->upload_list = NULL;
-	atlas->upload_buffer = NULL;
-
 	return atlas;
 }
 
@@ -1186,9 +1179,6 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 
 	/** must release current access before destroying */
 	assert(!atlas->accessor_active);
-
-	assert(atlas->upload_buffer == NULL);
-	assert(atlas->upload_list == NULL);
 
 	/** wait on and then release most recent access */
 	if(atlas->current_moment.semaphore != VK_NULL_HANDLE)
@@ -1262,45 +1252,23 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	free(atlas);
 }
 
-void sol_image_atlas_access_scope_setup_begin(struct sol_image_atlas* atlas, struct sol_buffer* upload_buffer, struct sol_vk_buf_img_copy_list* upload_list)
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_begin(struct sol_image_atlas* atlas)
 {
 	assert(!atlas->accessor_active);
 	atlas->accessor_active = true;
 
-	assert(atlas->upload_list == NULL);
-	assert(atlas->upload_buffer == NULL);
-
-	/** if upload_buffer and upload_copy_list must either both be provided, or neither should be */
-	assert((upload_buffer == NULL) == (upload_list == NULL));
-
-	atlas->upload_buffer = upload_buffer;
-	atlas->upload_list = upload_list;
-
 	/** place the threshold to the front of the queue */
 	sol_image_atlas_entry_add_to_queue_before(atlas, atlas->threshold_entry_index, atlas->header_entry_index);
+
+	return atlas->current_moment;
 }
 
-void sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas, struct sol_overlay_atlas_access_scope* access_scope)
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas)
 {
 	struct sol_image_atlas_entry* threshold_entry;
 
 	assert(atlas->accessor_active);
-
-	struct sol_vk_timeline_semaphore_moment acquire_moment = atlas->current_moment;
-    struct sol_vk_timeline_semaphore_moment release_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
-
-	*access_scope = (struct sol_overlay_atlas_access_scope)
-	{
-		.acquire_moment = atlas->current_moment,
-		.supervised_image = &atlas->image,
-		.upload_list = atlas->upload_list,
-		.release_moment = release_moment,
-	};
-
 	atlas->accessor_active = false;
-	atlas->upload_buffer = NULL;
-	atlas->upload_list = NULL;
-	atlas->current_moment = release_moment;
 
 	/** NOTE: it is very important that nothing in this loop will alter the backing of the entry array
 	 * doing so would invalidate the threshold entry pointer */
@@ -1312,6 +1280,10 @@ void sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas, struc
 
 	/** remove the threshold from the queue */
 	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
+
+	atlas->current_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
+
+	return atlas->current_moment;
 }
 
 
@@ -1377,7 +1349,7 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 	}
 }
 
-enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, uint32_t flags, struct sol_image_atlas_location* entry_location, struct sol_buffer_allocation* upload_allocation)
+enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, uint32_t flags, struct sol_image_atlas_location* entry_location)
 {
 	/** NOTE acquiring space (when required) will change the hash map
 	 * as such the pointer returned for obtain will no longer be valid and is not worth keeping around
@@ -1393,16 +1365,9 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	uint32_t* entry_index_in_map;
 	uint32_t entry_index, x_size_class, y_size_class, top_available_entry_index;
 	bool size_mismatch, better_location;
-	struct sol_image_atlas_location location;
 
 	/** is invalid to request an entry with no pixels */
 	assert(size.x > 0 && size.y > 0);
-
-	/** must have started access with an upload buffer and provided an upload allocation in order to perform uploads on obtain (determined by flag) */
-	assert(atlas->upload_buffer || !(flags & SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD));
-	assert(!upload_allocation == !(flags & SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD));
-
-	*upload_allocation = SOL_BUFFER_ALLOCATION_NULL;
 
 	/** must have an accessor active to be able to use entries */
 	assert(atlas->accessor_active);
@@ -1472,9 +1437,12 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 			{
 				sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, atlas->header_entry_index);
 			}
-			entry_location->array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
-			entry_location->offset.x = sol_ia_p_loc_get_x(entry->packed_location);
-			entry_location->offset.y = sol_ia_p_loc_get_y(entry->packed_location);
+			*entry_location = (struct sol_image_atlas_location)
+			{
+				.array_layer = sol_ia_p_loc_get_layer(entry->packed_location),
+				.offset.x = sol_ia_p_loc_get_x(entry->packed_location),
+				.offset.y = sol_ia_p_loc_get_y(entry->packed_location),
+			};
 			return SOL_IMAGE_ATLAS_SUCCESS_FOUND;
 		}
 	}
@@ -1519,32 +1487,6 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	assert(entry->is_available);
 	assert(entry->identifier == 0);
 
-	location.array_layer = sol_ia_p_loc_get_layer(entry->packed_location);
-	location.offset.x = sol_ia_p_loc_get_x(entry->packed_location);
-	location.offset.y = sol_ia_p_loc_get_y(entry->packed_location);
-
-	/** if uploading, make sure thats possible */
-	if(flags & SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD)
-	{
-		assert(atlas->upload_buffer);
-		assert(atlas->upload_list);
-
-		*upload_allocation = sol_vk_image_prepare_copy_simple(&atlas->image.image, atlas->upload_list, atlas->upload_buffer, location.offset, size, location.array_layer);
-
-		if(upload_allocation->allocation == NULL)
-		{
-			/** no space left in upload buffer, treat as fail-full */
-			if(map_find_result == SOL_MAP_SUCCESS_FOUND)
-			{
-				map_remove_result = sol_image_atlas_map_remove(&atlas->itentifier_entry_map, entry_identifier, NULL);
-				assert(map_remove_result == SOL_MAP_SUCCESS_REMOVED);
-			}
-			sol_image_atlas_entry_make_available(atlas, entry_index);
-			return SOL_IMAGE_ATLAS_FAIL_UPLOAD_FULL;
-		}
-	}
-
-
 	/** if the map has been altered then the pointer to the old entry will have become invalid (indicated by being set to null)
 	 * as such the entrty in the map must be obtained again */
 	if(entry_index_in_map == NULL)
@@ -1579,8 +1521,19 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 		sol_image_atlas_entry_add_to_queue_before(atlas, entry_index, atlas->header_entry_index);
 	}
 
-	*entry_location = location;
+	*entry_location = (struct sol_image_atlas_location)
+	{
+		.array_layer = sol_ia_p_loc_get_layer(entry->packed_location),
+		.offset.x = sol_ia_p_loc_get_x(entry->packed_location),
+		.offset.y = sol_ia_p_loc_get_y(entry->packed_location),
+	};
+
 	return SOL_IMAGE_ATLAS_SUCCESS_INSERTED;
+}
+
+void sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier)
+{
+	assert(false);// NYI
 }
 
 
@@ -1588,18 +1541,6 @@ struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct 
 {
 	return &atlas->image;
 }
-
-
-void sol_overlay_atlas_access_scope_execute_copies(struct sol_overlay_atlas_access_scope* access_scope, VkCommandBuffer command_buffer, VkBuffer staging_buffer, VkDeviceSize staging_offset)
-{
-	if(access_scope->upload_list)
-	{
-		sol_vk_supervised_image_execute_copies(access_scope->supervised_image, access_scope->upload_list, command_buffer, staging_buffer, staging_offset);
-	}
-}
-
-
-
 
 
 

@@ -203,16 +203,19 @@ struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* imag
 
     upload_allocation = sol_buffer_fetch_aligned_allocation(upload_buffer, byte_count, alignemt);
 
-    *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
+    if(upload_allocation.allocation)
     {
-        .bufferOffset = (VkDeviceSize)upload_allocation.offset,
-        /** 0 indicates tightly packed */
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = subresource,
-        .imageOffset = offset,
-        .imageExtent = extent,
-    };
+        *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
+        {
+            .bufferOffset = (VkDeviceSize)upload_allocation.offset,
+            /** 0 indicates tightly packed */
+            .bufferRowLength = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource = subresource,
+            .imageOffset = offset,
+            .imageExtent = extent,
+        };
+    }
 
     return upload_allocation;
 }

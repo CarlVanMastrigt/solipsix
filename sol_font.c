@@ -523,12 +523,27 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 	glyph_size = u16_vec2_set(glyph_map_entry->size_x, glyph_map_entry->size_y);
 	image_atlas = render_batch->rendering_resources->atlases[glyph_map_entry->atlas_type];
 
-	obtain_result = sol_image_atlas_entry_obtain(image_atlas, glyph_map_entry->id_in_atlas, glyph_size, SOL_IMAGE_ATLAS_OBTAIN_FLAG_UPLOAD, glyph_atlas_location_result, &pixel_upload_allocation);
+	obtain_result = sol_image_atlas_entry_obtain(image_atlas, glyph_map_entry->id_in_atlas, glyph_size, 0, glyph_atlas_location_result);
 
 	switch (obtain_result)
 	{
 	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
 		/** get glyph pixels if not present in image atlas */
+
+		pixel_upload_allocation = sol_vk_image_prepare_copy_simple(&sol_image_atlas_acquire_supervised_image(image_atlas)->image,
+			render_batch->atlas_copy_lists + glyph_map_entry->atlas_type,
+			&render_batch->upload_buffer,
+			glyph_atlas_location_result->offset,
+			glyph_size,
+			glyph_atlas_location_result->array_layer);
+
+		if(pixel_upload_allocation.allocation == NULL)
+		{
+			/** no space left in upload buffer, treat as fail-full */
+			sol_image_atlas_entry_release(image_atlas, glyph_map_entry->id_in_atlas);
+			return false;
+		}
+
 
 		glyph_index = glyph_map_entry->key & 0xFFFF;
 		#warning this decoding of subpixel position in key should be different for horizontal vs vertical text

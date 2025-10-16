@@ -129,10 +129,14 @@ struct sol_overlay_render_batch
     struct sol_buffer upload_buffer;
 
     /** copy/upload lists that will be provided to the image atlas for scope setup */
-    struct sol_vk_buf_img_copy_list copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    struct sol_overlay_atlas_access_scope atlas_access_scopes[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    struct sol_vk_buf_img_copy_list atlas_copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     /** offset applied to all copies */
     VkDeviceSize upload_offset;
+
+    struct sol_vk_timeline_semaphore_moment atlas_acquire_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    struct sol_vk_timeline_semaphore_moment atlas_release_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+
+    struct sol_vk_supervised_image* atlas_supervised_images[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
 
     /** this is just a data container for when the staging allocayion is made */
     struct sol_vk_staging_buffer_allocation staging_buffer_allocation;

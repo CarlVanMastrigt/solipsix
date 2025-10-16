@@ -395,7 +395,7 @@ void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch,
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        sol_vk_buf_img_copy_list_initialise(batch->copy_lists + i, 64);
+        sol_vk_buf_img_copy_list_initialise(batch->atlas_copy_lists + i, 64);
     }
 }
 
@@ -405,7 +405,7 @@ void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch)
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        sol_vk_buf_img_copy_list_terminate(batch->copy_lists + i);
+        sol_vk_buf_img_copy_list_terminate(batch->atlas_copy_lists + i);
     }
 
     sol_buffer_terminate(&batch->upload_buffer);
@@ -429,8 +429,9 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        assert(sol_vk_buf_img_copy_list_count(batch->copy_lists + i) == 0);
-        sol_image_atlas_access_scope_setup_begin(render_context->atlases[i], &batch->upload_buffer, batch->copy_lists + i);
+        assert(sol_vk_buf_img_copy_list_count(batch->atlas_copy_lists + i) == 0);
+        batch->atlas_acquire_moments[i] = sol_image_atlas_access_scope_setup_begin(render_context->atlases[i]);
+        batch->atlas_supervised_images[i] = sol_image_atlas_acquire_supervised_image(render_context->atlases[i]);
     }
     assert(sol_buffer_used_space(&batch->upload_buffer) == 0);
     assert(sol_overlay_render_element_list_count(&batch->elements) == 0);
@@ -446,7 +447,7 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        sol_image_atlas_access_scope_setup_end(render_context->atlases[i], batch->atlas_access_scopes + i);
+        batch->atlas_release_moments[i] = sol_image_atlas_access_scope_setup_end(render_context->atlases[i]);
     }
 }
 
@@ -461,12 +462,12 @@ void sol_overlay_render_step_append_waits(struct sol_overlay_render_batch* batch
     {
         stage_mask = combined_stage_masks;
 
-        if(sol_vk_buf_img_copy_list_count(batch->copy_lists+i))
+        if(sol_vk_buf_img_copy_list_count(batch->atlas_copy_lists + i))
         {
             stage_mask |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
         }
 
-        *sol_vk_semaphore_submit_list_append_ptr(wait_list) = sol_vk_timeline_semaphore_moment_submit_info(&batch->atlas_access_scopes[i].acquire_moment, stage_mask);
+        *sol_vk_semaphore_submit_list_append_ptr(wait_list) = sol_vk_timeline_semaphore_moment_submit_info(batch->atlas_acquire_moments + i, stage_mask);
     }
 }
 
@@ -513,7 +514,9 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     // this is super strange to put here... could/should go closer to writes
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_supervised_image = batch->atlas_access_scopes[i].supervised_image;
+        #warning move supervised image out of image atlas ???
+        // atlas_supervised_image = batch->atlas_access_scopes[i].supervised_image;
+        atlas_supervised_image = batch->atlas_supervised_images[i];
         atlas_descriptor_image_info[i] = (VkDescriptorImageInfo)
         {
             .sampler = device->defaults.fetch_sampler,
@@ -567,7 +570,8 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
 
 void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer)
 {
-    // struct sol_vk_supervised_image* atlas_supervised_image;
+    struct sol_vk_supervised_image* atlas_supervised_image;
+    struct sol_vk_buf_img_copy_list* atlas_copy_list;
     VkBuffer     staging_buffer;
     VkDeviceSize staging_offset;
     uint32_t i;
@@ -577,7 +581,10 @@ void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch
 
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        sol_overlay_atlas_access_scope_execute_copies(batch->atlas_access_scopes + i, command_buffer, staging_buffer, staging_offset);
+        //sol_overlay_atlas_access_scope_execute_copies(batch->atlas_access_scopes + i, command_buffer, staging_buffer, staging_offset);
+        atlas_copy_list = batch->atlas_copy_lists + i;
+        atlas_supervised_image = batch->atlas_supervised_images[i];
+        sol_vk_supervised_image_execute_copies(atlas_supervised_image, atlas_copy_list, command_buffer, staging_buffer, staging_offset);
     }
 }
 
@@ -588,7 +595,7 @@ void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch*
 
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_supervised_image = batch->atlas_access_scopes[i].supervised_image;
+        atlas_supervised_image = batch->atlas_supervised_images[i];
         sol_vk_supervised_image_barrier(atlas_supervised_image, command_buffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
     }
 }
@@ -632,7 +639,7 @@ void sol_overlay_render_step_append_signals(struct sol_overlay_render_batch* bat
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        *sol_vk_semaphore_submit_list_append_ptr(signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&batch->atlas_access_scopes[i].release_moment, combined_stage_masks);
+        *sol_vk_semaphore_submit_list_append_ptr(signal_list) = sol_vk_timeline_semaphore_moment_submit_info(batch->atlas_release_moments + i, combined_stage_masks);
     }
 }
 
@@ -644,7 +651,7 @@ void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, 
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        sol_vk_buf_img_copy_list_reset(batch->copy_lists + i);
+        sol_vk_buf_img_copy_list_reset(batch->atlas_copy_lists + i);
     }
 
     sol_buffer_reset(&batch->upload_buffer);
