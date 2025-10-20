@@ -1531,21 +1531,28 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	return SOL_IMAGE_ATLAS_SUCCESS_INSERTED;
 }
 
-void sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier)
+bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier)
 {
 	assert(false);// NYI
-}
+	enum sol_map_result map_find_result;
+	uint32_t* entry_index_in_map;
 
+	map_find_result = sol_image_atlas_map_find(&atlas->itentifier_entry_map, entry_identifier, &entry_index_in_map);
+
+	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+	{
+		sol_image_atlas_entry_make_available(atlas, *entry_index_in_map);
+
+		return true;
+	}
+
+	return false;
+}
 
 struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas)
 {
 	return &atlas->image;
 }
-
-
-
-
-
 
 
 

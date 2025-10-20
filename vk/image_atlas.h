@@ -97,8 +97,9 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
 
 
-/** if insertion happens but external systems fail to initialise an entry this should be called to release it */
-void sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier);
+/** if insertion happens but external systems fail to initialise an entry this should be called to release it
+ * this must not be called on in use resources */
+bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier);
 
 #warning if write access requested and there is a better slot to place the size of content desired (or a different size is requested) \
 use that new spot (consider allowing image->image copy list to facilitate this type of behaviour)

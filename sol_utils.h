@@ -95,4 +95,4 @@ static inline uint32_t sol_u32_bit_count(uint32_t v){ return              __buil
 #define SOL_CONCATENATE_MACRO(A,B) A##B
 #define SOL_CONCATENATE(A,B) SOL_CONCATENATE_MACRO(A,B)
 
-#define SOL_SWAP(A,B) { typeof(A) swap_tmp = A; A = B; B = swap_tmp; }
+#define SOL_SWAP(A,B) { typeof(A) sol_swap_tmp__i = A; A = B; B = sol_swap_tmp__i; }
