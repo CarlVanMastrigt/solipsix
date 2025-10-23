@@ -78,12 +78,14 @@ struct cvm_overlay_transient_resources
     VkDescriptorSet descriptor_set;
 
     struct sol_vk_timeline_semaphore_moment last_use_moment;
+
+    bool active;
 };
 
-#define SOL_QUEUE_ENTRY_TYPE struct cvm_overlay_transient_resources*
-#define SOL_QUEUE_FUNCTION_PREFIX cvm_overlay_transient_resources_queue
-#define SOL_QUEUE_STRUCT_NAME cvm_overlay_transient_resources_queue
-#include "data_structures/queue.h"
+#define SOL_LIMITED_QUEUE_ENTRY_TYPE struct cvm_overlay_transient_resources
+#define SOL_LIMITED_QUEUE_FUNCTION_PREFIX cvm_overlay_transient_resources_queue
+#define SOL_LIMITED_QUEUE_STRUCT_NAME cvm_overlay_transient_resources_queue
+#include "data_structures/limited_queue.h"
 
 /// fixed sized queue of these?
 /// queue init at runtime? (custom size)
@@ -96,9 +98,6 @@ struct cvm_overlay_renderer
     struct sol_overlay_rendering_resources* overlay_render_context;
     struct sol_vk_staging_buffer* staging_buffer;
 
-    uint32_t transient_count;
-    uint32_t transient_count_initialised;
-    struct cvm_overlay_transient_resources* transient_resources_backing;
     struct cvm_overlay_transient_resources_queue transient_resources_queue;
 
     struct sol_overlay_render_batch render_batch;
@@ -336,7 +335,7 @@ static inline void cvm_overlay_target_resources_prune(struct cvm_overlay_rendere
 }
 
 #warning "target_resources" needs a better name
-static inline struct cvm_overlay_target_resources* cvm_overlay_target_resources_acquire(struct cvm_overlay_renderer * renderer, const cvm_vk_device * device, const struct cvm_overlay_target * target)
+static inline struct cvm_overlay_target_resources* cvm_overlay_target_resources_acquire(struct cvm_overlay_renderer * renderer, struct cvm_vk_device* device, const struct cvm_overlay_target* target)
 {
     bool existing_resources;
     struct cvm_overlay_target_resources* target_resources;
@@ -415,10 +414,12 @@ static inline void cvm_overlay_transient_resources_initialise(struct cvm_overlay
 
     cvm_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
     transient_resources->descriptor_set = sol_overlay_render_descriptor_set_acquire(&renderer->persistent_rendering_resources);
+    transient_resources->active = false;
 }
 
 static inline void cvm_overlay_transient_resources_terminate(struct cvm_overlay_transient_resources* transient_resources, struct cvm_vk_device* device, struct cvm_overlay_renderer* renderer)
 {
+    assert(!transient_resources->active);
     sol_vk_timeline_semaphore_moment_wait(&transient_resources->last_use_moment, device);
     cvm_vk_command_pool_terminate(&transient_resources->command_pool, device);
     sol_overlay_render_descriptor_set_release(&renderer->persistent_rendering_resources, transient_resources->descriptor_set);
@@ -428,34 +429,29 @@ static inline void cvm_overlay_transient_resources_terminate(struct cvm_overlay_
 static inline struct cvm_overlay_transient_resources* cvm_overlay_transient_resources_acquire(struct cvm_overlay_renderer* renderer, struct cvm_vk_device* device)
 {
     struct cvm_overlay_transient_resources* transient_resources;
-    bool dequeued;
-
-    if(renderer->transient_count_initialised < renderer->transient_count)
+    if(cvm_overlay_transient_resources_queue_requeue_ptr(&renderer->transient_resources_queue, &transient_resources, NULL))
     {
-        transient_resources = renderer->transient_resources_backing + renderer->transient_count_initialised;
-
-        cvm_overlay_transient_resources_initialise(transient_resources, device, renderer);
-
-        renderer->transient_count_initialised++;
-    }
-    else
-    {
-        dequeued = cvm_overlay_transient_resources_queue_dequeue(&renderer->transient_resources_queue, &transient_resources);
-        assert(dequeued);
-
+        assert(!transient_resources->active);
         sol_vk_timeline_semaphore_moment_wait(&transient_resources->last_use_moment, device);
 
         /// reset resources
         cvm_vk_command_pool_reset(&transient_resources->command_pool, device);
     }
+    else
+    {
+        cvm_overlay_transient_resources_initialise(transient_resources, device, renderer);
+    }
+    transient_resources->active = true;
 
     return transient_resources;
 }
 
-static inline void cvm_overlay_transient_resources_release(struct cvm_overlay_renderer* renderer, struct cvm_overlay_transient_resources* transient_resources, struct sol_vk_timeline_semaphore_moment completion_moment)
+static inline void cvm_overlay_transient_resources_release(struct cvm_overlay_transient_resources* transient_resources, struct sol_vk_timeline_semaphore_moment completion_moment)
 {
+    assert(transient_resources->active);
+    assert(completion_moment.semaphore != VK_NULL_HANDLE);
     transient_resources->last_use_moment = completion_moment;
-    cvm_overlay_transient_resources_queue_enqueue(&renderer->transient_resources_queue, transient_resources, NULL);
+    transient_resources->active = false;
 }
 
 
@@ -474,10 +470,7 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* d
     /** 256k shunt buffer */
     sol_overlay_render_batch_initialise(&renderer->render_batch, device, 1<<18);
 
-    renderer->transient_count = active_render_count;
-    renderer->transient_count_initialised = 0;
-    renderer->transient_resources_backing = malloc(sizeof(struct cvm_overlay_transient_resources) * active_render_count);
-    cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue, 16);
+    cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue, active_render_count);
 
     renderer->overlay_render_context = overlay_render_context;
     renderer->staging_buffer = staging_buffer;
@@ -492,12 +485,11 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, struct 
     struct cvm_overlay_target_resources * target_resources;
     struct cvm_overlay_transient_resources* transient_resources;
 
-    while( cvm_overlay_transient_resources_queue_dequeue(&renderer->transient_resources_queue, &transient_resources))
+    while( cvm_overlay_transient_resources_queue_dequeue_ptr(&renderer->transient_resources_queue, &transient_resources))
     {
         cvm_overlay_transient_resources_terminate(transient_resources, device, renderer);
     }
     cvm_overlay_transient_resources_queue_terminate(&renderer->transient_resources_queue);
-    free(renderer->transient_resources_backing);
 
 
     while(cvm_overlay_target_resources_queue_dequeue_ptr(&renderer->target_resources, &target_resources))
@@ -606,7 +598,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     cvm_overlay_target_resources_release(target_resources, completion_moment);
     cvm_overlay_frame_resources_release(frame_resources, completion_moment);
-    cvm_overlay_transient_resources_release(renderer, transient_resources, completion_moment);
+    cvm_overlay_transient_resources_release(transient_resources, completion_moment);
 
     return completion_moment;
 }

@@ -36,7 +36,7 @@ typedef struct cvm_vk_command_pool
 
     VkCommandPool pool;
 
-    VkCommandBuffer * buffers;/// this almost certainly wants to be a list/stack and init as necessary
+    VkCommandBuffer* buffers;/// this almost certainly wants to be a list/stack and init as necessary
     #warning REALLY need to handle this better... use the fixed pool to manage command buffers instead and vend pointers??
     struct sol_vk_semaphore_submit_list* signal_lists;
     struct sol_vk_semaphore_submit_list* wait_lists;
@@ -50,7 +50,7 @@ cvm_vk_command_pool;
 typedef struct cvm_vk_command_buffer
 {
     /** nothing in this is owned */
-    const cvm_vk_command_pool * parent_pool;
+    const cvm_vk_command_pool* parent_pool;
     VkCommandBuffer buffer;
 
     struct sol_vk_semaphore_submit_list signal_list;
@@ -64,7 +64,7 @@ void cvm_vk_command_pool_reset(cvm_vk_command_pool* pool, const struct cvm_vk_de
 
 void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer);
 /** note: submit is also "release" */
-struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages);
+struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages);
 
 
 

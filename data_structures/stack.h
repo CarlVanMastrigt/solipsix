@@ -32,14 +32,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_STACK_ENTRY_TYPE int
 #endif
 
-#ifndef SOL_STACK_FUNCTION_PREFIX
-#error must define SOL_STACK_FUNCTION_PREFIX
-#define SOL_STACK_FUNCTION_PREFIX placeholder_stack
-#endif
-
 #ifndef SOL_STACK_STRUCT_NAME
 #error must define SOL_STACK_STRUCT_NAME
 #define SOL_STACK_STRUCT_NAME placeholder_stack
+#endif
+
+#ifndef SOL_STACK_FUNCTION_PREFIX
+#define SOL_STACK_FUNCTION_PREFIX SOL_STACK_STRUCT_NAME
 #endif
 
 #ifndef SOL_STACK_DEFAULT_STARTING_SIZE
@@ -110,21 +109,34 @@ static inline uint32_t SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove_many)(s
     return count;
 }
 
-static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_ptr)(struct SOL_STACK_STRUCT_NAME* s)
+static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_many_ptr)(struct SOL_STACK_STRUCT_NAME* s, uint32_t count)
 {
-    if(s->count == s->space)
+    SOL_STACK_ENTRY_TYPE* result;
+    
+    if(s->count + count > s->space)
     {
-        if(s->space == 0)
+        do
         {
-            s->space = SOL_STACK_DEFAULT_STARTING_SIZE;
+            if(s->space == 0)
+            {
+                s->space = SOL_STACK_DEFAULT_STARTING_SIZE;
+            }
+            else
+            {
+                s->space *= 2;
+            }
         }
-        else
-        {
-            s->space *= 2;
-        }
+        while(s->count + count >= s->space);
         s->data = realloc(s->data, sizeof(SOL_STACK_ENTRY_TYPE) * s->space);
     }
-    return s->data + s->count++;
+    result = s->data + s->count;
+    s->count += count;
+    return result;
+}
+
+static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_ptr)(struct SOL_STACK_STRUCT_NAME* s)
+{
+    return SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_many_ptr)(s, 1);
 }
 
 static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE value)

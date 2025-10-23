@@ -124,38 +124,14 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
     return vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, pipeline_layout);
 }
 
-static VkResult sol_overlay_descriptor_sets_allocate(VkDescriptorSet* sets, uint32_t set_count, struct cvm_vk_device * device, VkDescriptorPool pool, VkDescriptorSetLayout set_layout)
-{
-    uint32_t i;
-    VkDescriptorSetLayout layouts[32];
-
-    for(i = 0; i < set_count; i++)
-    {
-        sets[i] = VK_NULL_HANDLE;
-        layouts[i] = set_layout;
-    }
-
-    VkDescriptorSetAllocateInfo allocate_info=
-    {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .pNext = NULL,
-        .descriptorPool = pool,
-        .descriptorSetCount = set_count,
-        .pSetLayouts = layouts,
-    };
-
-    return vkAllocateDescriptorSets(device->device, &allocate_info, sets);
-}
 
 
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count)
 {
-    VkResult result = VK_SUCCESS;
-    assert(active_render_count <= 32);
+    VkResult result;
+    VkDescriptorSet* descriptor_set_ptr;
+    uint32_t i;
 
-    persistent_resources->descriptor_sets = malloc(sizeof(VkDescriptorSet) * active_render_count);
-    persistent_resources->total_set_count = active_render_count;
-    persistent_resources->available_set_count = active_render_count;
 
     result = sol_overlay_descriptor_pool_create(&persistent_resources->descriptor_pool, device, active_render_count);
     assert(result == VK_SUCCESS);
@@ -166,8 +142,24 @@ VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_r
     result = sol_overlay_pipeline_layout_create(&persistent_resources->pipeline_layout, device, persistent_resources->descriptor_set_layout);
     assert(result == VK_SUCCESS);
 
-    result = sol_overlay_descriptor_sets_allocate(persistent_resources->descriptor_sets, active_render_count, device, persistent_resources->descriptor_pool, persistent_resources->descriptor_set_layout);
-    assert(result == VK_SUCCESS);
+    sol_vk_limited_descriptor_set_stack_initialise(&persistent_resources->descriptor_sets, active_render_count);
+    for(i = 0; i < active_render_count; i++)
+    {
+        VkDescriptorSetAllocateInfo allocate_info=
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .pNext = NULL,
+            .descriptorPool = persistent_resources->descriptor_pool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &persistent_resources->descriptor_set_layout,
+        };
+
+        descriptor_set_ptr = sol_vk_limited_descriptor_set_stack_append_ptr(&persistent_resources->descriptor_sets);
+        result = vkAllocateDescriptorSets(device->device, &allocate_info, descriptor_set_ptr);
+
+        assert(result == VK_SUCCESS);
+    }
+
 
     if(device->feature_int_16_shader_types)
     {
@@ -187,9 +179,6 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
 {
     VkResult result;
 
-    /** should release all descriptor sets */
-    assert(persistent_resources->available_set_count == persistent_resources->total_set_count);
-
     cvm_vk_destroy_shader_stage_info(&persistent_resources->vertex_pipeline_stage  , device);
     cvm_vk_destroy_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device);
 
@@ -197,24 +186,25 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
 
     /*result = vkFreeDescriptorSets(device->device, persistent_resources->descriptor_pool, persistent_resources->total_set_count, persistent_resources->descriptor_sets);
     assert(result == VK_SUCCESS);*/
+    sol_vk_limited_descriptor_set_stack_terminate(&persistent_resources->descriptor_sets);
 
     vkDestroyDescriptorPool(device->device, persistent_resources->descriptor_pool, device->host_allocator);
     vkDestroyDescriptorSetLayout(device->device, persistent_resources->descriptor_set_layout, device->host_allocator);
-
-    free(persistent_resources->descriptor_sets);
 }
 
 
 VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources)
 {
-    assert(persistent_resources->available_set_count > 0);
-    return persistent_resources->descriptor_sets[--persistent_resources->available_set_count];
+    VkDescriptorSet descriptor_set;
+    bool success;
+    success = sol_vk_limited_descriptor_set_stack_remove(&persistent_resources->descriptor_sets, &descriptor_set);
+    assert(success);
+    return descriptor_set;
 }
 
 void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set)
 {
-    assert(persistent_resources->available_set_count < persistent_resources->total_set_count);
-    persistent_resources->descriptor_sets[persistent_resources->available_set_count++] = set;
+    sol_vk_limited_descriptor_set_stack_append(&persistent_resources->descriptor_sets, set);
 }
 
 

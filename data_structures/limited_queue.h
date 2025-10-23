@@ -134,10 +134,11 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_dequeue_pt
     *entry_ptr = q->data + q->front;
     q->count--;
     q->front++;
-    if(q->front > q->space)
+    if(q->front == q->space)
     {
-        q->front -= q->space;
+        q->front = 0;
     }
+    assert(q->front < q->space);
     return true;
 }
 
@@ -151,10 +152,11 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_dequeue)(s
     *value = q->data[q->front];
     q->count--;
     q->front++;
-    if(q->front >= q->space)
+    if(q->front == q->space)
     {
-        q->front -= q->space;
+        q->front = 0;
     }
+    assert(q->front < q->space);
     return true;
 }
 
@@ -167,7 +169,6 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_requeue_pt
     assert(entry_ptr);
     if(SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(q, entry_ptr, index_ptr))
     {
-        *entry_ptr = NULL;
         return false;
     }
     else
@@ -178,10 +179,11 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_requeue_pt
         }
         *entry_ptr = q->data + q->front;
         q->front++;
-        if(q->front >= q->space)
+        if(q->front == q->space)
         {
-            q->front -= q->space;
+            q->front = 0;
         }
+        assert(q->front < q->space);
         return true;
     }
 }
@@ -193,10 +195,11 @@ static inline void SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_prune_fron
     assert(q->count > 0);
     q->count--;
     q->front++;
-    if(q->front >= q->space)
+    if(q->front == q->space)
     {
-        q->front -= q->space;
+        q->front = 0;
     }
+    assert(q->front < q->space);
 }
 
 static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_access_front)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q, SOL_LIMITED_QUEUE_ENTRY_TYPE** entry_ptr)
@@ -227,6 +230,12 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_access_bac
     }
     *entry_ptr = q->data + index;
     return true;
+}
+
+static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_full)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q)
+{
+    /** this only works for limited queue */
+    return q->count == q->space;
 }
 
 

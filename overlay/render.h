@@ -58,10 +58,7 @@ struct sol_overlay_render_persistent_resources
 {
     /** pool sized to fit the descriptor set layout that will be used, for as many sets as will be used */
     VkDescriptorPool descriptor_pool;
-
-    VkDescriptorSet* descriptor_sets;
-    uint32_t total_set_count;
-    uint32_t available_set_count;
+    struct sol_vk_limited_descriptor_set_stack descriptor_sets;
 
     /** for creating the render pipeline */
     VkPipelineLayout pipeline_layout;

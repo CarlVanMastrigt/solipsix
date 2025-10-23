@@ -45,30 +45,32 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_MAX_QUEUE_FAMILY_COUNT 64
 
 
+#warning add fixed_size/limited stack ??
+#define SOL_STACK_ENTRY_TYPE VkDescriptorSet
+#define SOL_STACK_STRUCT_NAME sol_vk_descriptor_set_stack
+#include "data_structures/stack.h"
 
+#define SOL_LIMITED_STACK_ENTRY_TYPE VkDescriptorSet
+#define SOL_LIMITED_STACK_STRUCT_NAME sol_vk_limited_descriptor_set_stack
+#include "data_structures/limited_stack.h"
 
 #define SOL_STACK_ENTRY_TYPE VkBufferMemoryBarrier2
-#define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_barrier_stack
 #define SOL_STACK_STRUCT_NAME cvm_vk_buffer_barrier_stack
 #include "data_structures/stack.h"
 
 #define SOL_STACK_ENTRY_TYPE VkBufferCopy
-#define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_copy_stack
 #define SOL_STACK_STRUCT_NAME cvm_vk_buffer_copy_stack
 #include "data_structures/stack.h"
 
 #define SOL_STACK_ENTRY_TYPE VkBufferImageCopy
-#define SOL_STACK_FUNCTION_PREFIX cvm_vk_buffer_image_copy_stack
 #define SOL_STACK_STRUCT_NAME cvm_vk_buffer_image_copy_stack
 #include "data_structures/stack.h"
 
 #define SOL_STACK_ENTRY_TYPE VkSemaphore
-#define SOL_STACK_FUNCTION_PREFIX sol_vk_semaphore_stack
 #define SOL_STACK_STRUCT_NAME sol_vk_semaphore_stack
 #include "data_structures/stack.h"
 
 #define SOL_STACK_ENTRY_TYPE VkSemaphoreSubmitInfo
-#define SOL_STACK_FUNCTION_PREFIX sol_vk_semaphore_submit_list
 #define SOL_STACK_STRUCT_NAME sol_vk_semaphore_submit_list
 #include "data_structures/stack.h"
 
