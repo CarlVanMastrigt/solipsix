@@ -71,25 +71,17 @@ struct sol_overlay_render_persistent_resources
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count);
 void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device);
 
-VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources);
-void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set);
+// VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device);
+// void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set);
 
 /** the pipeline is the only resource that needs to change when the window changes (may want to change this for compositing purposes!) */
 #warning consider make resolution dynamic state for the purposes of compositing! - removes need for this AND allows compositing with different resolutions
 /** maybe a hybrid approach is warranted, if dynamic pipelines cannot be guaranteed... or a solution that takes advantage of a potential compositing image atlas... */
-struct sol_overlay_pipeline
-{
-    #warning remove this and make rendering dynamic, seriously
-    VkPipeline pipeline;
-    VkExtent2D extent;
-};
 
 
-/** render pass and subpass are intentionally not managed here */
-VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
-void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device);
 
-
+VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device* device, struct sol_overlay_render_persistent_resources* persistent_resources);
+VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
 
 #warning rename to sol_overlay_rendering_resources
 struct sol_overlay_rendering_resources
@@ -168,7 +160,7 @@ void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch
 void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
 /** step : encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
-void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct sol_overlay_pipeline* pipeline, VkCommandBuffer command_buffer);
+void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, VkPipeline pipeline, VkCommandBuffer command_buffer);
 
 /** step : add the resource(atlas) management semaphores that must be signalled to the list that will be signalled when work is executed (likely the command buffer signal list) */
 void sol_overlay_render_step_append_signals(struct sol_overlay_render_batch* batch, struct sol_vk_semaphore_submit_list* signal_list, VkPipelineStageFlags2 combined_stage_masks);

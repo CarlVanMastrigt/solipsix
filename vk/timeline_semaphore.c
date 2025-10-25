@@ -96,6 +96,7 @@ static inline bool sol_vk_timeline_semaphore_moment_wait_multiple_timed(const st
     /** split moments into semaphore and value arrays */
     for(i = 0; i < moment_count; i++)
     {
+        assert(moments[i].semaphore != VK_NULL_HANDLE);
         semaphores[i] = moments[i].semaphore;
         values[i]     = moments[i].value;
     }
@@ -119,6 +120,7 @@ static inline bool sol_vk_timeline_semaphore_moment_wait_multiple_timed(const st
         }
     }
     while(result == VK_TIMEOUT && repeatedly_wait);
+    
     assert(result == VK_SUCCESS || result == VK_TIMEOUT);
     return result == VK_SUCCESS;
 }

@@ -104,7 +104,7 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
     }
 
     command_buffer->parent_pool = pool;
-    command_buffer->buffer      = pool->buffers[pool->acquired_buffer_count];
+    command_buffer->buffer      = pool->buffers     [pool->acquired_buffer_count];
     command_buffer->signal_list = pool->signal_lists[pool->acquired_buffer_count];
     command_buffer->wait_list   = pool->wait_lists  [pool->acquired_buffer_count];
 
@@ -125,7 +125,7 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
     CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer->buffer, &command_buffer_begin_info));
 }
 
-struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages)
+struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages)
 {
     struct sol_vk_timeline_semaphore_moment completion_moment;
     const cvm_vk_device_queue_family * queue_family;
@@ -168,6 +168,7 @@ struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
 
     pool->signal_lists[pool->submitted_buffer_count] = command_buffer->signal_list;
     pool->wait_lists  [pool->submitted_buffer_count] = command_buffer->wait_list;
+    pool->buffers     [pool->submitted_buffer_count] = command_buffer->buffer;
 
     pool->submitted_buffer_count++;
 

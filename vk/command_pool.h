@@ -28,7 +28,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #warning move this somewhere more appropriate
 
 
-
+/** single threaded data structure! */
 typedef struct cvm_vk_command_pool
 {
     uint32_t device_queue_family_index;
@@ -63,7 +63,8 @@ void cvm_vk_command_pool_terminate(cvm_vk_command_pool* pool, const struct cvm_v
 void cvm_vk_command_pool_reset(cvm_vk_command_pool* pool, const struct cvm_vk_device* device);
 
 void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer);
-/** note: submit is also "release" */
+/** note: submit is also "release" - perhaps a better name then acquire is in order; perpare? */
+/** this must be synchronised with device/ the queue, submission must be well ordered */
 struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages);
 
 

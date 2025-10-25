@@ -129,8 +129,6 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count)
 {
     VkResult result;
-    VkDescriptorSet* descriptor_set_ptr;
-    uint32_t i;
 
 
     result = sol_overlay_descriptor_pool_create(&persistent_resources->descriptor_pool, device, active_render_count);
@@ -143,22 +141,6 @@ VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_r
     assert(result == VK_SUCCESS);
 
     sol_vk_limited_descriptor_set_stack_initialise(&persistent_resources->descriptor_sets, active_render_count);
-    for(i = 0; i < active_render_count; i++)
-    {
-        VkDescriptorSetAllocateInfo allocate_info=
-        {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext = NULL,
-            .descriptorPool = persistent_resources->descriptor_pool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &persistent_resources->descriptor_set_layout,
-        };
-
-        descriptor_set_ptr = sol_vk_limited_descriptor_set_stack_append_ptr(&persistent_resources->descriptor_sets);
-        result = vkAllocateDescriptorSets(device->device, &allocate_info, descriptor_set_ptr);
-
-        assert(result == VK_SUCCESS);
-    }
 
 
     if(device->feature_int_16_shader_types)
@@ -192,24 +174,32 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
     vkDestroyDescriptorSetLayout(device->device, persistent_resources->descriptor_set_layout, device->host_allocator);
 }
 
-
-VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources)
+VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device* device, struct sol_overlay_render_persistent_resources* persistent_resources)
 {
+    VkResult result;
     VkDescriptorSet descriptor_set;
-    bool success;
-    success = sol_vk_limited_descriptor_set_stack_remove(&persistent_resources->descriptor_sets, &descriptor_set);
-    assert(success);
+
+    VkDescriptorSetAllocateInfo allocate_info=
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = NULL,
+        .descriptorPool = persistent_resources->descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &persistent_resources->descriptor_set_layout,
+    };
+    
+    result = vkAllocateDescriptorSets(device->device, &allocate_info, &descriptor_set);
+
+    assert(result == VK_SUCCESS);
+
     return descriptor_set;
 }
 
-void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set)
+VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
 {
-    sol_vk_limited_descriptor_set_stack_append(&persistent_resources->descriptor_sets, set);
-}
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkResult result;
 
-
-VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
-{
     VkGraphicsPipelineCreateInfo create_info =
     {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -359,16 +349,28 @@ VkResult sol_overlay_render_pipeline_initialise(struct sol_overlay_pipeline* pip
         .basePipelineIndex = -1
     };
 
-    pipeline->extent = extent;
-    pipeline->pipeline = VK_NULL_HANDLE;
+    result = vkCreateGraphicsPipelines(device->device, device->pipeline_cache.cache, 1, &create_info, device->host_allocator, &pipeline);
+    assert(result == VK_SUCCESS);
 
-    return vkCreateGraphicsPipelines(device->device, device->pipeline_cache.cache, 1, &create_info, device->host_allocator, &pipeline->pipeline);
+    return pipeline;
 }
 
-void sol_overlay_render_pipeline_terminate(struct sol_overlay_pipeline* pipeline, struct cvm_vk_device* device)
-{
-    vkDestroyPipeline(device->device, pipeline->pipeline, device->host_allocator);
-}
+
+
+// VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device)
+// {
+//     VkDescriptorSet descriptor_set;
+//     if(!sol_vk_limited_descriptor_set_stack_remove(&persistent_resources->descriptor_sets, &descriptor_set))
+//     {
+//         descriptor_set = sol_overlay_render_descriptor_set_allocate(device, persistent_resources);
+//     }
+//     return descriptor_set;
+// }
+
+// void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set)
+// {
+//     sol_vk_limited_descriptor_set_stack_append(&persistent_resources->descriptor_sets, set);
+// }
 
 
 
@@ -595,18 +597,10 @@ pipeline_layout: completely static, singular
 pipeline: changes with target, singular
 descriptor set (from batch): must come from managed per-frame resources, dynamic and numerous
 */
-void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, struct sol_overlay_pipeline* pipeline, VkCommandBuffer command_buffer)
+void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, VkPipeline pipeline, VkCommandBuffer command_buffer)
 {
     const uint32_t element_count = sol_overlay_render_element_list_count(&batch->elements);
     VkBuffer draw_buffer = batch->staging_buffer_allocation.acquired_buffer;
-
-    if(pipeline->extent.width != batch->target_extent.width || pipeline->extent.height != batch->target_extent.height)
-    {
-        fprintf(stderr, "overlay pipeline must be built with the same extent as the batch");
-    }
-    /// replace pipeline with a struct and manage it "internally" ??
-    ///    ^ no, it actually needs to be the size of the screen, b/c these should actually match!
-    ///         ^ if they do match, then why are the rendering glitches more prevalent now? -- is there a bug in my base implementation?
 
     float push_constants[2]={2.0/(float)batch->target_extent.width, 2.0/(float)batch->target_extent.height};
     vkCmdPushConstants(command_buffer, persistent_resources->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2, push_constants);
@@ -614,7 +608,7 @@ void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batc
     /** set index (firstSet) is defined in pipeline creation (index in array) */
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, persistent_resources->pipeline_layout, 0, 1, &batch->descriptor_set, 0, NULL);
 
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindVertexBuffers(command_buffer, 0, 1, &draw_buffer, &batch->element_offset);
     vkCmdDraw(command_buffer, 4, element_count, 0, 0);
 

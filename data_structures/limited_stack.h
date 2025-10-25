@@ -41,6 +41,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_LIMITED_STACK_FUNCTION_PREFIX SOL_LIMITED_STACK_STRUCT_NAME
 #endif
 
+
 struct SOL_LIMITED_STACK_STRUCT_NAME
 {
     SOL_LIMITED_STACK_ENTRY_TYPE* data;

@@ -31,18 +31,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_LIMITED_QUEUE_ENTRY_TYPE int
 #endif
 
-#ifndef SOL_LIMITED_QUEUE_FUNCTION_PREFIX
-#error must define SOL_LIMITED_QUEUE_FUNCTION_PREFIX
-#define SOL_LIMITED_QUEUE_FUNCTION_PREFIX placeholder_limited_queue
-#endif
-
 #ifndef SOL_LIMITED_QUEUE_STRUCT_NAME
 #error must define SOL_LIMITED_QUEUE_STRUCT_NAME
 #define SOL_LIMITED_QUEUE_STRUCT_NAME placeholder_limited_queue
 #endif
 
-/** rigid queue has a fixed size set at initialization (it is possible to change this, but doing so would invalidate held indices so is not supported at this time)
-    useful for simple queues */
+#ifndef SOL_LIMITED_QUEUE_FUNCTION_PREFIX
+#define SOL_LIMITED_QUEUE_FUNCTION_PREFIX SOL_LIMITED_QUEUE_STRUCT_NAME
+#endif
+
 
 struct SOL_LIMITED_QUEUE_STRUCT_NAME
 {
@@ -51,7 +48,6 @@ struct SOL_LIMITED_QUEUE_STRUCT_NAME
     uint32_t count;
     uint32_t front;
 };
-
 
 static inline void SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_initialise)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q, uint32_t size)
 {
@@ -109,14 +105,10 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_enqueue_pt
 
 static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_enqueue)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q, SOL_LIMITED_QUEUE_ENTRY_TYPE value, uint32_t* index_ptr)
 {
-    uint32_t index;
-    if(SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_enqueue_index)(q, &index))
+    SOL_LIMITED_QUEUE_ENTRY_TYPE* entry_ptr;
+    if(SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(q, &entry_ptr, index_ptr))
     {
-        if(index_ptr)
-        {
-            *index_ptr = index;
-        }
-        q->data[index] = value;
+        *entry_ptr = value;
         return true;
     }
     return false;
@@ -142,28 +134,22 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_dequeue_pt
     return true;
 }
 
-static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_dequeue)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q, SOL_LIMITED_QUEUE_ENTRY_TYPE* value)
+static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_dequeue)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q, SOL_LIMITED_QUEUE_ENTRY_TYPE* value_ptr)
 {
-    assert(value);
-    if(q->count == 0)
+    SOL_LIMITED_QUEUE_ENTRY_TYPE* entry_ptr;
+    assert(value_ptr);
+    if(SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_dequeue_ptr)(q, &entry_ptr))
     {
-        return false;
+        *value_ptr = *entry_ptr;
+        return true;
     }
-    *value = q->data[q->front];
-    q->count--;
-    q->front++;
-    if(q->front == q->space)
-    {
-        q->front = 0;
-    }
-    assert(q->front < q->space);
-    return true;
+    return false;
 }
 
-/** if there is space left just enqueue and return
-    otherwise; take the front of the queue and move it to the back
+/** if there is space left just enqueue and return false
+    otherwise; take the front of the queue and move it to the back and return true
     pointer is both the old front and new back of the queue, the index is the new back
-    returns wheter the pointer was requeued, false if just enqueued */
+    again: returns wheter the pointer was requeued, false if just enqueued */
 static inline bool SOL_CONCATENATE(SOL_LIMITED_QUEUE_FUNCTION_PREFIX,_requeue_ptr)(struct SOL_LIMITED_QUEUE_STRUCT_NAME* q, SOL_LIMITED_QUEUE_ENTRY_TYPE** entry_ptr, uint32_t* index_ptr)
 {
     assert(entry_ptr);
