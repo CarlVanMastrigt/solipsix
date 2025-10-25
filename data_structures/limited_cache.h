@@ -130,9 +130,10 @@ static inline SOL_LIMITED_CACHE_ENTRY_TYPE* SOL_CONCATENATE(SOL_LIMITED_CACHE_FU
 static inline void SOL_CONCATENATE(SOL_LIMITED_CACHE_FUNCTION_PREFIX,_remove)(struct SOL_LIMITED_CACHE_STRUCT_NAME* cache, SOL_LIMITED_CACHE_ENTRY_TYPE* entry)
 {
     assert(cache->count > 0);
-	assert(entry > cache->entries);
+	assert(entry >= cache->entries);
 	assert(entry < (SOL_LIMITED_CACHE_ENTRY_TYPE*)cache->links);
 	/** ^ note: links is end of entries buffer **/
+
     uint16_t index;
     struct sol_cache_link_u16* link;
 
