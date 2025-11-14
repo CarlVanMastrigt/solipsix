@@ -18,7 +18,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "solipsix.h"
-#include <SDL2/SDL_timer.h>
+// #include <SDL2/SDL_timer.h>
 #include <assert.h>
 #include <stdio.h>
 
@@ -664,7 +664,7 @@ bool handle_widget_overlay_movement(widget * root_widget,int x_in,int y_in)
 
     #warning remove SDL calls from this
     #warning is "button left" really sensible for this? should check how enterboxes work..
-    if((active_widget)&&(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT)))
+    if((active_widget)&&(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)))
     {
         active_widget->base.behaviour_functions->m_move(context->theme, active_widget, x_in, y_in);
 

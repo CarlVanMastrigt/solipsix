@@ -121,12 +121,14 @@ VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_
         major_version=(api_version>>22)&0x7F;
         minor_version=(api_version>>12)&0x3FF;
         patch_version=api_version&0xFFF;
+
         printf("Vulkan API version: %u.%u.%u - %u\n", major_version, minor_version, patch_version, variant);
 
         #warning make minimum required version part of setup
-        if((major_version<=1 && minor_version<3) || variant)
+        if((major_version < 1 || (major_version == 1 && minor_version<3)) || variant)
         {
             #warning print message tp stderr
+            fprintf(stderr, "ERROR: INSUFFOCIENT VULKAN API VERSION\n");
             result = VK_ERROR_INCOMPATIBLE_DRIVER;
         }
     }
@@ -175,8 +177,8 @@ VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_
 VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const cvm_vk_instance_setup* setup)
 {
     cvm_vk_instance_setup internal_setup;
-    SDL_Window * window;
-    unsigned int num_extensions_required_by_SDL;
+    uint32_t extension_count_SDL, i;
+    char const* const* extension_names_SDL;
 //    const char * validation = "VK_LAYER_KHRONOS_validation";
     VkResult result = VK_SUCCESS;
 
@@ -188,28 +190,18 @@ VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, co
 
     result = VK_RESULT_MAX_ENUM;/// default result of error
 
-    window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0, SDL_WINDOW_VULKAN|SDL_WINDOW_HIDDEN);
+    // extensions = SDL_Vulkan_GetInstanceExtensions(&num_extensions_SDL);
+    extension_names_SDL = SDL_Vulkan_GetInstanceExtensions(&extension_count_SDL);
 
-    #warning check for instances being available
-
-    if(window)
+    for(i=0; i<extension_count_SDL; i++)
     {
-        if(SDL_Vulkan_GetInstanceExtensions(window,&num_extensions_required_by_SDL,NULL))
-        {
-            internal_setup.extension_count = setup->extension_count + num_extensions_required_by_SDL;
-            internal_setup.extension_names = malloc(sizeof(const char*) * internal_setup.extension_count);
-            memcpy(internal_setup.extension_names, setup->extension_names, sizeof(const char*) * setup->extension_count);
-
-            if(SDL_Vulkan_GetInstanceExtensions(window, &num_extensions_required_by_SDL, internal_setup.extension_names + setup->extension_count))
-            {
-                result = cvm_vk_instance_initialise(instance, &internal_setup);
-            }
-
-            free(internal_setup.extension_names);
-        }
-
-        SDL_DestroyWindow(window);
+        printf("EXT(%u): %s\n", i, extension_names_SDL[i]);
     }
+
+
+
+    result = cvm_vk_instance_initialise(instance, &internal_setup);
+    printf("ERR: %d\n", result);
 
     return result;
 }
@@ -221,10 +213,10 @@ void cvm_vk_instance_terminate(struct cvm_vk_instance* instance)
 
 VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance* instance, SDL_Window * window)
 {
-    SDL_bool created_surface;
+    bool created_surface;
     VkSurfaceKHR surface;
 
-    created_surface = SDL_Vulkan_CreateSurface(window, instance->instance, &surface);
+    created_surface = SDL_Vulkan_CreateSurface(window, instance->instance, instance->host_allocator, &surface);
 
     return created_surface ? surface : VK_NULL_HANDLE;
 }
@@ -514,7 +506,6 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
 
     uint32_t i,device_count;
     VkPhysicalDevice * physical_devices;
-    SDL_bool created_surface;
     float score,best_score;
     VkPhysicalDevice best_device;
 

@@ -24,7 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
  * can change this to handle it manually in the future, and/or move SDL support to a separate file (ideally with a different licence)
 */
 
-#include <SDL2/SDL_events.h>
+#include <SDL3/SDL_events.h>
 
 
 

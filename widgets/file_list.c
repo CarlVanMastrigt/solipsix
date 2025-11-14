@@ -542,13 +542,13 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
     switch(keycode)
     {
     case SDLK_KP_8:/// keypad/numpad up
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_UP:
         if(w->file_list.selected_entry_index>0)file_list_widget_set_selected_entry(w,w->file_list.selected_entry_index-1,true);
         break;
 
     case SDLK_KP_9:/// keypad/numpad page up
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_PAGEUP:
         w->file_list.offset-=((w->file_list.visible_height-1)/(w->file_list.entry_height*2) + 1)*w->file_list.entry_height;///shift half screen rounded up in visible entry units
         if(w->file_list.offset<0)w->file_list.offset=0;
@@ -556,19 +556,19 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         break;
 
     case SDLK_KP_7:/// keypad/numpad home
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_HOME:
         file_list_widget_set_selected_entry(w,0,true);
         break;
 
     case SDLK_KP_2:/// keypad/numpad down
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_DOWN:
         if(w->file_list.selected_entry_index < (int32_t)w->file_list.valid_entry_count-1) file_list_widget_set_selected_entry(w,w->file_list.selected_entry_index+1,true);
         break;
 
     case SDLK_KP_3:/// keypad/numpad page down
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_PAGEDOWN:
         w->file_list.offset+=((w->file_list.visible_height-1)/(w->file_list.entry_height*2) + 1)*w->file_list.entry_height;///shift half screen rounded up in visible entry units
         if(w->file_list.offset<0)w->file_list.offset=0;
@@ -576,7 +576,7 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         break;
 
     case SDLK_KP_1:/// keypad/numpad end
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_END:
         file_list_widget_set_selected_entry(w,w->file_list.valid_entry_count-1,true);
         break;

@@ -45,12 +45,12 @@ bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struc
 
 	switch(input->sdl_event.type)
 	{
-	case SDL_MOUSEBUTTONDOWN:
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		//button->select_action(button->data);
 		sol_gui_context_change_focused_object(context, obj);
 		return true;
 
-	case SDL_MOUSEBUTTONUP:
+	case SDL_EVENT_MOUSE_BUTTON_UP:
 		sol_gui_context_change_focused_object(context, NULL);
 		mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
 		if(obj == sol_gui_context_hit_scan(context, mouse_location))

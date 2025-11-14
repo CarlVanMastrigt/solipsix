@@ -119,7 +119,7 @@ static void enterbox_widget_left_click(overlay_theme * theme, widget * w, int x,
     #warning handle double click (select all)
     #warning find another way to communicate to start accepting text input
 
-    if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
+    // if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
 
     if(*w->enterbox.composition_text)return;
 
@@ -177,15 +177,15 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
 
     switch(keycode)
     {
-    case SDLK_c:
-        if(mod&KMOD_CTRL)
+    case SDLK_C:
+        if(mod&SDL_KMOD_CTRL)
         {
             enterbox_copy_selection_to_clipboard(w);
         }
         break;
 
-    case SDLK_x:
-        if(mod&KMOD_CTRL)
+    case SDLK_X:
+        if(mod&SDL_KMOD_CTRL)
         {
             enterbox_copy_selection_to_clipboard(w);
             enterbox_delete_selection(theme,w,s_begin,s_end);
@@ -193,8 +193,8 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         }
         break;
 
-    case SDLK_v:
-        if(mod&KMOD_CTRL)
+    case SDLK_V:
+        if(mod&SDL_KMOD_CTRL)
         {
             if(SDL_HasClipboardText())
             {
@@ -203,8 +203,8 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         }
         break;
 
-    case SDLK_a:
-        if(mod&KMOD_CTRL)
+    case SDLK_A:
+        if(mod&SDL_KMOD_CTRL)
         {
             w->enterbox.selection_begin=w->enterbox.text;
             w->enterbox.selection_end=w->enterbox.text+strlen(w->enterbox.text);
@@ -212,9 +212,9 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_BACKSPACE:
-        if(mod&KMOD_CTRL)
+        if(mod&SDL_KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT)s=w->textbox.text;
+            if(mod&SDL_KMOD_SHIFT)s=w->textbox.text;
             else s=cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
 
             if(w->enterbox.selection_begin > w->enterbox.selection_end) w->enterbox.selection_begin-=w->enterbox.selection_end-s;
@@ -233,9 +233,9 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_DELETE:
-        if(mod&KMOD_CTRL)
+        if(mod&SDL_KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT)s=w->enterbox.text+strlen(w->enterbox.text);
+            if(mod&SDL_KMOD_SHIFT)s=w->enterbox.text+strlen(w->enterbox.text);
             else s=cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
 
             if(w->enterbox.selection_begin > w->enterbox.selection_end)
@@ -255,27 +255,27 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_KP_4:/// keypad/numpad left
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_LEFT:
-        if(mod&KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
+        if(mod&SDL_KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
         {
-            if(mod&KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
+            if(mod&SDL_KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
             else w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
         }
-        else if(mod&KMOD_SHIFT)w->enterbox.selection_end = cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,w->enterbox.selection_end);
+        else if(mod&SDL_KMOD_SHIFT)w->enterbox.selection_end = cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,w->enterbox.selection_end);
         else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,s_begin);
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         break;
 
     case SDLK_KP_6:/// keypad/numpad right
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_RIGHT:
-        if(mod&KMOD_CTRL)
+        if(mod&SDL_KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
+            if(mod&SDL_KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
             else w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
         }
-        else if(mod&KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(w->enterbox.selection_end);
+        else if(mod&SDL_KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(w->enterbox.selection_end);
         else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(s_end);
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_end;
         break;
@@ -283,22 +283,22 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     case SDLK_KP_7:/// keypad/numpad home
     case SDLK_KP_8:/// keypad/numpad up
     case SDLK_KP_9:/// keypad/numpad page up
-         if(mod&KMOD_NUM)break;
+         if(mod&SDL_KMOD_NUM)break;
     case SDLK_UP:
     case SDLK_PAGEUP:
     case SDLK_HOME:
-        if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text;
+        if(mod&SDL_KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text;
         else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text;
         break;
 
     case SDLK_KP_1:/// keypad/numpad end
     case SDLK_KP_2:/// keypad/numpad down
     case SDLK_KP_3:/// keypad/numpad page down
-         if(mod&KMOD_NUM)break;
+         if(mod&SDL_KMOD_NUM)break;
     case SDLK_DOWN:
     case SDLK_PAGEDOWN:
     case SDLK_END:
-        if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
+        if(mod&SDL_KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
         else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
         break;
 
@@ -367,7 +367,7 @@ static bool enterbox_widget_text_edit(overlay_theme * theme,widget * w,char * te
 
 static void enterbox_widget_click_away(overlay_theme * theme,widget * w)
 {
-    if(SDL_IsTextInputActive())SDL_StopTextInput();
+    // if(SDL_IsTextInputActive())SDL_StopTextInput();
 
     if((w->enterbox.activation_func)&&(w->enterbox.activate_upon_deselect))
     {

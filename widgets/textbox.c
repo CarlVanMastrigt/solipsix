@@ -94,15 +94,15 @@ static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode
     widget* root_widget;
     switch(keycode)
     {
-    case SDLK_c:
-        if(mod&KMOD_CTRL)
+    case SDLK_C:
+        if(mod&SDL_KMOD_CTRL)
         {
             textbox_copy_selection_to_clipboard(w);
         }
         break;
 
-    case SDLK_a:
-        if(mod&KMOD_CTRL)
+    case SDLK_A:
+        if(mod&SDL_KMOD_CTRL)
         {
             w->textbox.selection_begin=w->textbox.text;
             w->textbox.selection_end=w->textbox.text+strlen(w->textbox.text);

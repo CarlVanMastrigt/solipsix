@@ -17,11 +17,12 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <stdlib.h>
 #include <stdio.h>
 #warning remove above
 #include <assert.h>
 
-#include <SDL2/SDL_timer.h>
+#include <SDL3/SDL_timer.h>
 
 #include "sol_input.h"
 
@@ -344,7 +345,7 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 		// this may warrant review though
 	}
 
-	if(sdl_type == SDL_MOUSEMOTION)
+	if(sdl_type == SDL_EVENT_MOUSE_MOTION)
 	{
 		// could also be touch screen hover or similar
 		mouse_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);

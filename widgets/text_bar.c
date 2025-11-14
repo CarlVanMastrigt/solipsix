@@ -149,22 +149,22 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
 
     switch(keycode)
     {
-    case SDLK_c:
-        if(mod&KMOD_CTRL)
+    case SDLK_C:
+        if(mod&SDL_KMOD_CTRL)
         {
             text_bar_copy_selection_to_clipboard(w);
         }
         break;
 
-    case SDLK_x:
-        if(mod&KMOD_CTRL)
+    case SDLK_X:
+        if(mod&SDL_KMOD_CTRL)
         {
             text_bar_copy_selection_to_clipboard(w);///considering text is immutable just copy
         }
         break;
 
-    case SDLK_a:
-        if(mod&KMOD_CTRL)
+    case SDLK_A:
+        if(mod&SDL_KMOD_CTRL)
         {
             w->text_bar.selection_begin=w->text_bar.text;
             w->text_bar.selection_end=w->text_bar.text+strlen(w->text_bar.text);
@@ -172,27 +172,27 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_KP_4:/// keypad/numpad left
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_LEFT:
-        if(mod&KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
+        if(mod&SDL_KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
         {
-            if(mod&KMOD_SHIFT) w->text_bar.selection_end = cvm_overlay_utf8_get_previous_word(w->text_bar.text,w->text_bar.selection_end);
+            if(mod&SDL_KMOD_SHIFT) w->text_bar.selection_end = cvm_overlay_utf8_get_previous_word(w->text_bar.text,w->text_bar.selection_end);
             else w->text_bar.selection_begin = w->text_bar.selection_end = cvm_overlay_utf8_get_previous_word(w->text_bar.text,w->text_bar.selection_end);
         }
-        else if(mod&KMOD_SHIFT)w->text_bar.selection_end = cvm_overlay_utf8_get_previous_glyph(w->text_bar.text,w->text_bar.selection_end);
+        else if(mod&SDL_KMOD_SHIFT)w->text_bar.selection_end = cvm_overlay_utf8_get_previous_glyph(w->text_bar.text,w->text_bar.selection_end);
         else if(s_begin==s_end) w->text_bar.selection_begin = w->text_bar.selection_end = cvm_overlay_utf8_get_previous_glyph(w->text_bar.text,s_begin);
         else w->text_bar.selection_begin = w->text_bar.selection_end = s_begin;
         break;
 
     case SDLK_KP_6:/// keypad/numpad right
-        if(mod&KMOD_NUM)break;
+        if(mod&SDL_KMOD_NUM)break;
     case SDLK_RIGHT:
-        if(mod&KMOD_CTRL)
+        if(mod&SDL_KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT) w->text_bar.selection_end = cvm_overlay_utf8_get_next_word(w->text_bar.selection_end);
+            if(mod&SDL_KMOD_SHIFT) w->text_bar.selection_end = cvm_overlay_utf8_get_next_word(w->text_bar.selection_end);
             else w->text_bar.selection_begin = w->text_bar.selection_end = cvm_overlay_utf8_get_next_word(w->text_bar.selection_end);
         }
-        else if(mod&KMOD_SHIFT) w->text_bar.selection_end = cvm_overlay_utf8_get_next_glyph(w->text_bar.selection_end);
+        else if(mod&SDL_KMOD_SHIFT) w->text_bar.selection_end = cvm_overlay_utf8_get_next_glyph(w->text_bar.selection_end);
         else if(s_begin==s_end) w->text_bar.selection_begin = w->text_bar.selection_end = cvm_overlay_utf8_get_next_glyph(s_end);
         else w->text_bar.selection_begin = w->text_bar.selection_end = s_end;
         break;
@@ -200,22 +200,22 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     case SDLK_KP_7:/// keypad/numpad home
     case SDLK_KP_8:/// keypad/numpad up
     case SDLK_KP_9:/// keypad/numpad page up
-         if(mod&KMOD_NUM)break;
+         if(mod&SDL_KMOD_NUM)break;
     case SDLK_UP:
     case SDLK_PAGEUP:
     case SDLK_HOME:
-        if(mod&KMOD_SHIFT) w->text_bar.selection_end = w->text_bar.text;
+        if(mod&SDL_KMOD_SHIFT) w->text_bar.selection_end = w->text_bar.text;
         else w->text_bar.selection_begin = w->text_bar.selection_end = w->text_bar.text;
         break;
 
     case SDLK_KP_1:/// keypad/numpad end
     case SDLK_KP_2:/// keypad/numpad down
     case SDLK_KP_3:/// keypad/numpad page down
-         if(mod&KMOD_NUM)break;
+         if(mod&SDL_KMOD_NUM)break;
     case SDLK_DOWN:
     case SDLK_PAGEDOWN:
     case SDLK_END:
-        if(mod&KMOD_SHIFT) w->text_bar.selection_end = w->text_bar.text+strlen(w->text_bar.text);
+        if(mod&SDL_KMOD_SHIFT) w->text_bar.selection_end = w->text_bar.text+strlen(w->text_bar.text);
         else w->text_bar.selection_begin = w->text_bar.selection_end = w->text_bar.text+strlen(w->text_bar.text);
         break;
 
