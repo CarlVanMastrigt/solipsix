@@ -94,7 +94,8 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
     sol_vk_device_object_pool_semaphore_release(device, presentable_image->present_semaphore);
 }
 
-static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device, const cvm_vk_surface_swapchain * swapchain, VkSwapchainKHR old_swapchain)
+#warning if current extent is not 0xFFFFFFFF then use that and ignore desired extent here and in swapchin recreation
+static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance* instance, const cvm_vk_device* device, const cvm_vk_surface_swapchain* swapchain, VkExtent2D desired_extent, VkSwapchainKHR old_swapchain)
 {
     uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,width,height;
     VkBool32 surface_supported;
@@ -177,10 +178,30 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     /// check surface capabilities and create a the new swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physical_device, swapchain->setup_info.surface, &instance->surface_capabilities));
 
+    // printf(">> surface size: %u %u\n", instance->surface_capabilities.currentExtent.width, instance->surface_capabilities.currentExtent.height);
+
     if((instance->surface_capabilities.supportedUsageFlags & swapchain->setup_info.usage_flags) != swapchain->setup_info.usage_flags) return -1;///intened usage not supported
     if((instance->surface_capabilities.maxImageCount != 0) && (instance->surface_capabilities.maxImageCount < swapchain->setup_info.min_image_count)) return -1;///cannot suppirt minimum image count
     if((instance->surface_capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) == 0)return -1;///compositing not supported
     /// would like to support different compositing, need to extend to allow this
+
+    #warning this should also handle weird zero extent and similar behaviour
+    if(instance->surface_capabilities.currentExtent.width == 0xFFFFFFFF)
+    {
+        assert(instance->surface_capabilities.currentExtent.height == 0xFFFFFFFF);// should match
+        /** set extent using desired here */
+        instance->surface_capabilities.currentExtent = desired_extent;
+    } else {
+        assert(instance->surface_capabilities.currentExtent.width  >= desired_extent.width );
+        assert(instance->surface_capabilities.currentExtent.height >= desired_extent.height);
+    }
+
+    assert(instance->surface_capabilities.currentExtent.width  >= instance->surface_capabilities.minImageExtent.width );
+    assert(instance->surface_capabilities.currentExtent.height >= instance->surface_capabilities.minImageExtent.height);
+    assert(instance->surface_capabilities.currentExtent.width  <= instance->surface_capabilities.maxImageExtent.width );
+    assert(instance->surface_capabilities.currentExtent.height <= instance->surface_capabilities.maxImageExtent.height);
+
+    instance->extent = instance->surface_capabilities.currentExtent;
 
     VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
     {
@@ -375,7 +396,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
 }
 
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, const struct cvm_vk_device * device)
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, VkExtent2D expected_extent)
 {
     bool existing_instance;
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -391,11 +412,16 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
         existing_instance = cvm_vk_swapchain_instance_queue_access_back(&swapchain->swapchain_queue, &instance);
 
         /// create new instance if necessary
-        if(!existing_instance || instance==NULL || instance->out_of_date)
+        if(!existing_instance || instance==NULL || instance->out_of_date || expected_extent.width != instance->extent.width || expected_extent.height != instance->extent.height)
         {
+            // puts("create swapchain");
+            // printf("%d %d %d %d %d\n",!existing_instance, instance==NULL, !instance||instance->out_of_date, !instance||expected_extent.width != instance->extent.width, !instance||expected_extent.height != instance->extent.height);
+            // static int xx=0;
+            // if(existing_instance)printf("%u : %u -- %u : %u\n",expected_extent.width, instance->extent.width, expected_extent.height, instance->extent.height);
+            // if(xx++ >3)exit(5);
             cvm_vk_swapchain_instance_queue_enqueue_ptr(&swapchain->swapchain_queue, &new_instance, NULL);
 
-            cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, instance ? instance->swapchain : VK_NULL_HANDLE);
+            cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, expected_extent, existing_instance ? instance->swapchain : VK_NULL_HANDLE);
             instance = new_instance;
         }
 

@@ -40,6 +40,8 @@ typedef struct cvm_vk_swapchain_setup
 {
     VkSurfaceKHR surface;
 
+    VkExtent2D intended_extent;
+
     uint32_t min_image_count;///0=use system minimum
     VkImageUsageFlagBits usage_flags;
 //    VkCompositeAlphaFlagsKHR compositing_mode;
@@ -82,6 +84,7 @@ cvm_vk_swapchain_presentable_image;
 struct cvm_vk_swapchain_instance
 {
     /// its assumed these can change as the surface changes, probably not the case but whatever
+    VkExtent2D extent;
     VkSurfaceFormatKHR surface_format;
     VkPresentModeKHR present_mode;
 
@@ -129,7 +132,7 @@ cvm_vk_surface_swapchain;
 void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup);
 void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device);
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device);
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, VkExtent2D expected_extent);
 
 void cvm_vk_surface_swapchain_present_image(const cvm_vk_device* device, cvm_vk_swapchain_presentable_image* presentable_image, cvm_vk_device_queue* present_queue);
 

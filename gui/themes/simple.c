@@ -300,8 +300,8 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, true, "Latn", "eng", "ltr"),
 		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, false, "Latn", "eng", "ltr"),
 		// .text_font = sol_font_create(font_library, "resources/NotoColorEmoji-Regular.ttf", font_size, "Latn", "eng", "ltr"),
-		.text_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
-		.icon_font = sol_font_create(font_library, "resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
+		.text_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
+		.icon_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
 		.other_data = simple_theme_data,
 
 		.box_render          = &sol_gui_theme_simple_box_render,

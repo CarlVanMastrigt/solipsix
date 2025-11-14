@@ -198,11 +198,10 @@ VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, co
         printf("EXT(%u): %s\n", i, extension_names_SDL[i]);
     }
 
-
+    internal_setup.extension_count = extension_count_SDL;
+    internal_setup.extension_names = extension_names_SDL;
 
     result = cvm_vk_instance_initialise(instance, &internal_setup);
-    printf("ERR: %d\n", result);
-
     return result;
 }
 
@@ -217,6 +216,11 @@ VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance*
     VkSurfaceKHR surface;
 
     created_surface = SDL_Vulkan_CreateSurface(window, instance->instance, instance->host_allocator, &surface);
+
+    if(!created_surface)
+    {
+        fprintf(stderr, "ERROR CREAKING VKSURFACE: %s\n", SDL_GetError());
+    }
 
     return created_surface ? surface : VK_NULL_HANDLE;
 }
