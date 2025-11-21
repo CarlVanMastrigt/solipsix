@@ -258,6 +258,7 @@ struct cvm_vk_device
 #include "vk/command_pool.h"
 #include "vk/swapchain.h"
 
+#warning remove const from below
 static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acquire(const cvm_vk_device * device)
 {
     return atomic_fetch_add_explicit(device->resource_identifier_monotonic, 1, memory_order_relaxed);

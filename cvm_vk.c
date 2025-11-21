@@ -857,6 +857,7 @@ static void cvm_vk_destroy_transfer_chain(void)
 
 VkSemaphoreSubmitInfo cvm_vk_binary_semaphore_submit_info(VkSemaphore semaphore,VkPipelineStageFlags2 stages)
 {
+    #warning move this to sol_vk_util header
     return (VkSemaphoreSubmitInfo)
     {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,

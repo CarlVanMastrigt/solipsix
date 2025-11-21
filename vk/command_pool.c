@@ -70,13 +70,11 @@ void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device *
 
 
 
-
-
-
 void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer)
 {
     const uint32_t new_count = 4;
     uint32_t i;
+
     if(pool->acquired_buffer_count==pool->total_buffer_count)
     {
         pool->buffers      = realloc(pool->buffers     ,sizeof(VkCommandBuffer)                     * (pool->total_buffer_count + new_count));
@@ -100,7 +98,7 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
             sol_vk_semaphore_submit_list_initialise(pool->wait_lists   + pool->total_buffer_count + i, 8);
         }
 
-        pool->total_buffer_count += 4;
+        pool->total_buffer_count += new_count;
     }
 
     command_buffer->parent_pool = pool;

@@ -95,7 +95,8 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
 }
 
 #warning if current extent is not 0xFFFFFFFF then use that and ignore desired extent here and in swapchin recreation
-static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance* instance, const cvm_vk_device* device, const cvm_vk_surface_swapchain* swapchain, VkExtent2D desired_extent, VkSwapchainKHR old_swapchain)
+#warning handle 0x0 resolution when minimized (app level? i.e. don't render allow non-rendering)
+static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance* instance, const cvm_vk_device* device, const cvm_vk_surface_swapchain* swapchain, VkExtent2D extent, VkSwapchainKHR old_swapchain)
 {
     uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,width,height;
     VkBool32 surface_supported;
@@ -189,19 +190,17 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     if(instance->surface_capabilities.currentExtent.width == 0xFFFFFFFF)
     {
         assert(instance->surface_capabilities.currentExtent.height == 0xFFFFFFFF);// should match
-        /** set extent using desired here */
-        instance->surface_capabilities.currentExtent = desired_extent;
     } else {
-        assert(instance->surface_capabilities.currentExtent.width  >= desired_extent.width );
-        assert(instance->surface_capabilities.currentExtent.height >= desired_extent.height);
+        assert(instance->surface_capabilities.currentExtent.width  == extent.width );
+        assert(instance->surface_capabilities.currentExtent.height == extent.height);
     }
 
-    assert(instance->surface_capabilities.currentExtent.width  >= instance->surface_capabilities.minImageExtent.width );
-    assert(instance->surface_capabilities.currentExtent.height >= instance->surface_capabilities.minImageExtent.height);
-    assert(instance->surface_capabilities.currentExtent.width  <= instance->surface_capabilities.maxImageExtent.width );
-    assert(instance->surface_capabilities.currentExtent.height <= instance->surface_capabilities.maxImageExtent.height);
+    assert(extent.width  >= instance->surface_capabilities.minImageExtent.width );
+    assert(extent.height >= instance->surface_capabilities.minImageExtent.height);
+    assert(extent.width  <= instance->surface_capabilities.maxImageExtent.width );
+    assert(extent.height <= instance->surface_capabilities.maxImageExtent.height);
 
-    instance->extent = instance->surface_capabilities.currentExtent;
+    instance->extent = extent;
 
     VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
     {
@@ -212,7 +211,7 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
         .minImageCount=CVM_MAX(instance->surface_capabilities.minImageCount, swapchain->setup_info.min_image_count),
         .imageFormat=instance->surface_format.format,
         .imageColorSpace=instance->surface_format.colorSpace,
-        .imageExtent=instance->surface_capabilities.currentExtent,
+        .imageExtent=instance->extent,
         .imageArrayLayers=1,
         .imageUsage=swapchain->setup_info.usage_flags,
         .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,///means QFOT is necessary, thus following should not be prescribed
@@ -396,7 +395,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
 }
 
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, VkExtent2D expected_extent)
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, VkExtent2D extent)
 {
     bool existing_instance;
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -411,8 +410,9 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
     {
         existing_instance = cvm_vk_swapchain_instance_queue_access_back(&swapchain->swapchain_queue, &instance);
 
+        #warning on wayland (if rescale can be set) could probably get away with resizing in similar fashion to current framebuffer approach; where sizes within some range larger than needed are treated as acceptable
         /// create new instance if necessary
-        if(!existing_instance || instance==NULL || instance->out_of_date || expected_extent.width != instance->extent.width || expected_extent.height != instance->extent.height)
+        if(!existing_instance || instance==NULL || instance->out_of_date || extent.width != instance->extent.width || extent.height != instance->extent.height)
         {
             // puts("create swapchain");
             // printf("%d %d %d %d %d\n",!existing_instance, instance==NULL, !instance||instance->out_of_date, !instance||expected_extent.width != instance->extent.width, !instance||expected_extent.height != instance->extent.height);
@@ -421,7 +421,7 @@ cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentabl
             // if(xx++ >3)exit(5);
             cvm_vk_swapchain_instance_queue_enqueue_ptr(&swapchain->swapchain_queue, &new_instance, NULL);
 
-            cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, expected_extent, existing_instance ? instance->swapchain : VK_NULL_HANDLE);
+            cvm_vk_swapchain_instance_initialise(new_instance, device, swapchain, extent, existing_instance ? instance->swapchain : VK_NULL_HANDLE);
             instance = new_instance;
         }
 
