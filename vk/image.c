@@ -99,13 +99,22 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
 
     if(result == VK_SUCCESS)
     {
-        #warning unless dedicated allocation is required; can probably use an existing memory allocation with some offset (same w/ binding)
-        #warning VkMemoryDedicatedAllocateInfo in next!
+        #warning unless dedicated allocation is required; can probably use an existing memory allocation with some offset (same w/ binding) -- possibly using a buddy allocator on device?
+        const bool use_dedicated_allocation = dedicated_requirements.prefersDedicatedAllocation || dedicated_requirements.requiresDedicatedAllocation;
+
+        const VkMemoryDedicatedAllocateInfo dedicated_allocate_info =
+        {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+            .pNext = NULL,
+            .buffer = VK_NULL_HANDLE,
+            .image  = (use_dedicated_allocation) ? image->image : VK_NULL_HANDLE,
+        };
+
         const VkMemoryAllocateInfo memory_allocate_info =
         {
-            .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext=NULL,
-            .allocationSize = memory_requirements.memoryRequirements.size,
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = &dedicated_allocate_info,
+            .allocationSize  = memory_requirements.memoryRequirements.size,
             .memoryTypeIndex = memory_type_index
         };
 
@@ -197,9 +206,6 @@ struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* imag
     {
         alignemt *= 2;
     }
-
-    #warning HAX
-    alignemt = 16;
 
     upload_allocation = sol_buffer_fetch_aligned_allocation(upload_buffer, byte_count, alignemt);
 

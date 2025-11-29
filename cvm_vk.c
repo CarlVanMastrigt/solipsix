@@ -1523,6 +1523,7 @@ void sol_vk_default_view_for_image(VkImageViewCreateInfo* view_create_info, cons
     };
 }
 
+#warning look at removing this; or at least not using it as much, 
 VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
     #warning REMOVE THIS FUNCTION
@@ -1539,12 +1540,7 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
         .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
         .pNext = &dedicated_requirements,
     };
-    VkImageMemoryRequirementsInfo2 image_requirements_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
-        .pNext = NULL,
-        // .image = image
-    };
+    
     uint32_t i,memory_type_index,supported_type_bits;
     VkResult result = VK_SUCCESS;
 
@@ -1554,7 +1550,13 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
     supported_type_bits = 0xFFFFFFFF;
     for(i=0;i<image_count;i++)
     {
-        image_requirements_info.image = images[i];
+        VkImageMemoryRequirementsInfo2 image_requirements_info =
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+            .pNext = NULL,
+            .image = images[i],
+        };
+
         vkGetImageMemoryRequirements2(cvm_vk_.device, &image_requirements_info, &memory_requirements);
         printf("==== %d : %d @ %lu\n", dedicated_requirements.prefersDedicatedAllocation, dedicated_requirements.requiresDedicatedAllocation,  memory_requirements.memoryRequirements.size);
         #warning probably want to consider dedicated allocations as above, possibly worthwhile to allocate images singularly, or use a memory stack to handle images!
@@ -1568,7 +1570,7 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
 
     if(!supported_type_bits)
     {
-        //fprintf(stderr,"CVM VK ERROR - images have no singular supported memory types, consider splitting backing memory\n");
+        fprintf(stderr,"SOL VK ERROR - images have no singular supported memory types, consider splitting backing memory\n");
         result = VK_RESULT_MAX_ENUM;
     }
 
