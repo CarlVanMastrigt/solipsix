@@ -65,6 +65,7 @@ static inline int sol_strcasecmp(const char* lhs, const char* rhs)
 #define SOL_MIN(A,B) (((A)<(B))?(A):(B))
 #define SOL_CLAMP(X,MIN,MAX) ((X)>(MAX)?(MAX):(((X)<(MIN))?(MIN):(X)))
 
+/** assumes alignment is power of 2 **/
 static inline uint64_t sol_u64_align(uint64_t size, uint64_t alignment){ return (size+alignment-1) & ~(alignment-1); }
 static inline uint32_t sol_u32_align(uint32_t size, uint32_t alignment){ return (size+alignment-1) & ~(alignment-1); }
 

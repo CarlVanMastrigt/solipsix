@@ -844,17 +844,17 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas* atlas,cvm_vk_image_a
 /// needs better name
 /// should move ACTUAL width and height into the tile (how pressed for space is it actually?) -- well, it does try pretty hard, perhaps too hard to be space efficient
 /// bytes_per_pixel an even bigger pain to handle, perhaps byte size of tile? perhaps let it remain implied by user? put it in some spare bits?
-struct sol_buffer_allocation cvm_vk_stage_image_atlas_upload(struct sol_buffer* upload_buffer, struct cvm_vk_buffer_image_copy_stack* copy_buffer, const struct cvm_vk_image_atlas_tile * atlas_tile, uint32_t width,uint32_t height, uint32_t bytes_per_pixel)
+struct sol_buffer_segment cvm_vk_stage_image_atlas_upload(struct sol_buffer* upload_buffer, struct cvm_vk_buffer_image_copy_stack* copy_buffer, const struct cvm_vk_image_atlas_tile * atlas_tile, uint32_t width,uint32_t height, uint32_t bytes_per_pixel)
 {
-    struct sol_buffer_allocation allocation;
+    struct sol_buffer_segment segment;
 
     #warning implement using abse image
 
-    allocation = sol_buffer_fetch_aligned_allocation(upload_buffer, bytes_per_pixel * width * height, 16);
+    segment = sol_buffer_fetch_aligned_segment(upload_buffer, bytes_per_pixel * width * height, 16);
 
     *cvm_vk_buffer_image_copy_stack_append_ptr(copy_buffer) = (VkBufferImageCopy)
     {
-        .bufferOffset=allocation.offset,
+        .bufferOffset=segment.offset,
         .bufferRowLength=width,
         .bufferImageHeight=height,
         .imageSubresource=(VkImageSubresourceLayers)
@@ -878,7 +878,7 @@ struct sol_buffer_allocation cvm_vk_stage_image_atlas_upload(struct sol_buffer* 
         }
     };
 
-    return allocation;
+    return segment;
 }
 
 

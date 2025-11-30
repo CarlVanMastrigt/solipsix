@@ -294,7 +294,7 @@ static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font
 
             #warning need a better interface for this, JFC
             g->tile = cvm_vk_acquire_image_atlas_tile(render_batch->alpha_atlas, w, h);
-            staging = (uint8_t*)cvm_vk_stage_image_atlas_upload(&render_batch->upload_shunt_buffer, &render_batch->alpha_atlas_copy_actions, g->tile, w, h, render_batch->alpha_atlas->bytes_per_pixel).allocation;
+            staging = (uint8_t*)cvm_vk_stage_image_atlas_upload(&render_batch->upload_shunt_buffer, &render_batch->alpha_atlas_copy_actions, g->tile, w, h, render_batch->alpha_atlas->bytes_per_pixel).ptr;
 
             if(g->tile)
             {

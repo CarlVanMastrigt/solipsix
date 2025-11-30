@@ -46,14 +46,14 @@ struct sol_buffer
 
 /** cannot be terminated
  * NOTE: provided offset should not be applied when indexing */
-struct sol_buffer_allocation
+struct sol_buffer_segment
 {
-	void* allocation;
+	void* ptr;
 	uint32_t size;
 	uint32_t offset;
 };
 
-#define SOL_BUFFER_ALLOCATION_NULL ((struct sol_buffer_allocation){.allocation = NULL, .size=0, .offset = 0})
+#define SOL_BUFFER_SEGMENT_NULL ((struct sol_buffer_segment){.ptr = NULL, .size=0, .offset = 0})
 
 static inline void sol_buffer_initialise(struct sol_buffer* b, uint32_t space, uint32_t alignment)
 {
@@ -78,7 +78,7 @@ static inline void sol_buffer_copy(struct sol_buffer* b, void* dst)
 }
 
 /** will return empty allocation if insufficient space remains */
-static inline struct sol_buffer_allocation sol_buffer_fetch_aligned_allocation(struct sol_buffer* b, uint32_t size, uint32_t alignment)
+static inline struct sol_buffer_segment sol_buffer_fetch_aligned_segment(struct sol_buffer* b, uint32_t size, uint32_t alignment)
 {
 	/** make sure not to ask for more space than buffer has */
 	assert(size <= b->total_space);
@@ -87,14 +87,14 @@ static inline struct sol_buffer_allocation sol_buffer_fetch_aligned_allocation(s
 
 	if(offset + size > b->total_space)
 	{
-		return SOL_BUFFER_ALLOCATION_NULL;
+		return SOL_BUFFER_SEGMENT_NULL;
 	}
 	else
 	{
 		b->used_space = offset + size;
-		return (struct sol_buffer_allocation)
+		return (struct sol_buffer_segment)
 		{
-			.allocation = b->allocation + offset,
+			.ptr = b->allocation + offset,
 			.size = size,
 			.offset = offset,
 		};

@@ -162,7 +162,7 @@ void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch*
 /** step : encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
 void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, VkPipeline pipeline, VkCommandBuffer command_buffer);
 
-/** step : add the resource(atlas) management semaphores that must be signalled to the list that will be signalled when work is executed (likely the command buffer signal list) */
+/** step : add the resource(image atlas) management semaphores to the list that will be signalled when work is executed (likely the command buffer signal list) */
 void sol_overlay_render_step_append_signals(struct sol_overlay_render_batch* batch, struct sol_vk_semaphore_submit_list* signal_list, VkPipelineStageFlags2 combined_stage_masks);
 
 /** step : when rendering is known to have completed (e.g. after the render pass in which the render was submitted) use a semaphore moment to synchronise/signal the completion of rendering */

@@ -20,8 +20,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "solipsix.h"
 
 
-void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_device * device, uint32_t device_queue_family_index, uint32_t device_queue_index)
+void sol_vk_command_pool_initialise(struct sol_vk_command_pool * pool, struct cvm_vk_device * device, uint32_t device_queue_family_index, uint32_t device_queue_index)
 {
+    VkResult result;
     VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -30,37 +31,36 @@ void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_dev
         .queueFamilyIndex=device_queue_family_index,
     };
 
-    CVM_VK_CHECK(vkCreateCommandPool(device->device,&command_pool_create_info,NULL,&pool->pool));
+    result = vkCreateCommandPool(device->device, &command_pool_create_info, device->host_allocator, &pool->pool);
+    assert(result == VK_SUCCESS);
 
     pool->device_queue_family_index=device_queue_family_index;
     pool->device_queue_index=device_queue_index;
     pool->acquired_buffer_count=0;
     pool->submitted_buffer_count=0;
-    pool->total_buffer_count=0;
-    pool->buffers      = NULL;
-    pool->signal_lists = NULL;
-    pool->wait_lists   = NULL;
+
+    sol_vk_command_buffer_stack_initialise(&pool->buffer_stack, 0);
 }
 
-void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_device * device)
+void sol_vk_command_pool_terminate(struct sol_vk_command_pool* pool, struct cvm_vk_device* device)
 {
     uint32_t i;
-    for(i = 0; i < pool->total_buffer_count; i++)
+    assert(pool->acquired_buffer_count == pool->submitted_buffer_count);///not all acquired command buffers were submitted
+    struct sol_vk_command_buffer* command_buffer;
+
+    while(sol_vk_command_buffer_stack_remove_ptr(&pool->buffer_stack, &command_buffer))
     {
-        sol_vk_semaphore_submit_list_terminate(pool->signal_lists + i);
-        sol_vk_semaphore_submit_list_terminate(pool->wait_lists   + i);
+        vkFreeCommandBuffers(device->device, pool->pool, 1, &command_buffer->buffer);
+        sol_vk_semaphore_submit_list_terminate(&command_buffer->signal_list);
+        sol_vk_semaphore_submit_list_terminate(&command_buffer->wait_list);
     }
 
-    if(pool->total_buffer_count)
-    {
-        vkFreeCommandBuffers(device->device,pool->pool,pool->total_buffer_count,pool->buffers);
-        free(pool->buffers);
-    }
+    sol_vk_command_buffer_stack_terminate(&pool->buffer_stack);
 
     vkDestroyCommandPool(device->device,pool->pool,NULL);
 }
 
-void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device * device)
+void sol_vk_command_pool_reset(struct sol_vk_command_pool * pool, struct cvm_vk_device * device)
 {
     vkResetCommandPool(device->device, pool->pool, 0);
     assert(pool->acquired_buffer_count == pool->submitted_buffer_count);///not all acquired command buffers were submitted
@@ -70,41 +70,42 @@ void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device *
 
 
 
-void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer)
+void sol_vk_command_pool_acquire_command_buffer(struct sol_vk_command_pool* pool, struct cvm_vk_device* device, struct sol_vk_command_buffer* command_buffer)
 {
-    const uint32_t new_count = 4;
+    const uint32_t command_buffer_allocation_count = 8;
+
     uint32_t i;
+    VkCommandBuffer command_buffer_allocation_array[command_buffer_allocation_count];
+    VkResult result;
+    struct sol_vk_command_buffer* new_command_buffers;
+    bool acquired;
 
-    if(pool->acquired_buffer_count==pool->total_buffer_count)
+    if( ! sol_vk_command_buffer_stack_remove(&pool->buffer_stack, command_buffer))
     {
-        pool->buffers      = realloc(pool->buffers     ,sizeof(VkCommandBuffer)                     * (pool->total_buffer_count + new_count));
-        pool->signal_lists = realloc(pool->signal_lists,sizeof(struct sol_vk_semaphore_submit_list) * (pool->total_buffer_count + new_count));
-        pool->wait_lists   = realloc(pool->wait_lists  ,sizeof(struct sol_vk_semaphore_submit_list) * (pool->total_buffer_count + new_count));
-
         VkCommandBufferAllocateInfo allocate_info=
         {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .pNext = NULL,
             .commandPool = pool->pool,
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = new_count,
+            .commandBufferCount = command_buffer_allocation_count,
         };
 
-        CVM_VK_CHECK(vkAllocateCommandBuffers(device->device,&allocate_info,pool->buffers+pool->total_buffer_count));
+        result = vkAllocateCommandBuffers(device->device, &allocate_info, command_buffer_allocation_array);
+        assert(result == VK_SUCCESS);
 
-        for(i = 0; i < new_count; i++)
+        new_command_buffers = sol_vk_command_buffer_stack_append_many_ptr(&pool->buffer_stack, command_buffer_allocation_count);
+
+        for(i = 0; i < command_buffer_allocation_count; i++)
         {
-            sol_vk_semaphore_submit_list_initialise(pool->signal_lists + pool->total_buffer_count + i, 8);
-            sol_vk_semaphore_submit_list_initialise(pool->wait_lists   + pool->total_buffer_count + i, 8);
+            new_command_buffers[i].buffer = command_buffer_allocation_array[i];
+            sol_vk_semaphore_submit_list_initialise(&new_command_buffers[i].signal_list, 8);
+            sol_vk_semaphore_submit_list_initialise(&new_command_buffers[i].wait_list  , 8);
         }
 
-        pool->total_buffer_count += new_count;
+        acquired = sol_vk_command_buffer_stack_remove(&pool->buffer_stack, command_buffer);
+        assert(acquired);
     }
-
-    command_buffer->parent_pool = pool;
-    command_buffer->buffer      = pool->buffers     [pool->acquired_buffer_count];
-    command_buffer->signal_list = pool->signal_lists[pool->acquired_buffer_count];
-    command_buffer->wait_list   = pool->wait_lists  [pool->acquired_buffer_count];
 
     /** make sure the semaphore lists are empty */
     assert(sol_vk_semaphore_submit_list_count(&command_buffer->signal_list) == 0);
@@ -123,17 +124,19 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
     CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer->buffer, &command_buffer_begin_info));
 }
 
-struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages)
+struct sol_vk_timeline_semaphore_moment sol_vk_command_pool_submit_command_buffer(struct sol_vk_command_pool* pool, struct cvm_vk_device* device, struct sol_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages)
 {
     struct sol_vk_timeline_semaphore_moment completion_moment;
     const cvm_vk_device_queue_family * queue_family;
     cvm_vk_device_queue * queue;
+    VkResult result;
 
     queue_family = device->queue_families + pool->device_queue_family_index;
     assert(pool->device_queue_index < queue_family->queue_count);
     queue = queue_family->queues + pool->device_queue_index;
 
-    CVM_VK_CHECK(vkEndCommandBuffer(command_buffer->buffer));
+    result = vkEndCommandBuffer(command_buffer->buffer);
+    assert(result == VK_SUCCESS);
 
     completion_moment = sol_vk_timeline_semaphore_generate_new_moment(&queue->timeline);
     *sol_vk_semaphore_submit_list_append_ptr(&command_buffer->signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&completion_moment, completion_signal_stages);
@@ -159,14 +162,13 @@ struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffe
         .pSignalSemaphoreInfos    = sol_vk_semaphore_submit_list_data (&command_buffer->signal_list),
     };
 
-    CVM_VK_CHECK(vkQueueSubmit2(queue->queue, 1, &submit_info, VK_NULL_HANDLE));
+    result = vkQueueSubmit2(queue->queue, 1, &submit_info, VK_NULL_HANDLE);
+    assert(result == VK_SUCCESS);
 
     sol_vk_semaphore_submit_list_reset(&command_buffer->signal_list);
     sol_vk_semaphore_submit_list_reset(&command_buffer->wait_list);
 
-    pool->signal_lists[pool->submitted_buffer_count] = command_buffer->signal_list;
-    pool->wait_lists  [pool->submitted_buffer_count] = command_buffer->wait_list;
-    pool->buffers     [pool->submitted_buffer_count] = command_buffer->buffer;
+    sol_vk_command_buffer_stack_append(&pool->buffer_stack, *command_buffer);
 
     pool->submitted_buffer_count++;
 

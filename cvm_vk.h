@@ -74,6 +74,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_STACK_STRUCT_NAME sol_vk_semaphore_submit_list
 #include "data_structures/stack.h"
 
+#define SOL_STACK_ENTRY_TYPE VkWriteDescriptorSet
+#define SOL_STACK_STRUCT_NAME sol_vk_write_descriptor_set_list
+#include "data_structures/stack.h"
+
 
 typedef struct cvm_vk_managed_buffer cvm_vk_managed_buffer;
 typedef struct cvm_vk_managed_buffer_dismissal_list cvm_vk_managed_buffer_dismissal_list;
@@ -336,7 +340,7 @@ void cvm_vk_destroy_sampler(VkSampler sampler);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
-
+/** will return 0xFFFFFFFF upon failure to find appropriate memory type **/
 uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties);
 
 

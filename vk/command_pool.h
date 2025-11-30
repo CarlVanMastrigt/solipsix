@@ -28,44 +28,42 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #warning move this somewhere more appropriate
 
 
+struct sol_vk_command_buffer
+{
+    /** nothing in this is owned */
+    // const cvm_vk_command_pool* parent_pool;
+    VkCommandBuffer buffer;
+
+    struct sol_vk_semaphore_submit_list signal_list;
+    struct sol_vk_semaphore_submit_list wait_list;
+};
+
+#define SOL_STACK_ENTRY_TYPE struct sol_vk_command_buffer
+#define SOL_STACK_STRUCT_NAME sol_vk_command_buffer_stack
+#include "data_structures/stack.h"
+
 /** single threaded data structure! */
-typedef struct cvm_vk_command_pool
+struct sol_vk_command_pool
 {
     uint32_t device_queue_family_index;
     uint32_t device_queue_index;
 
     VkCommandPool pool;
 
-    VkCommandBuffer* buffers;/// this almost certainly wants to be a list/stack and init as necessary
-    #warning REALLY need to handle this better... use the fixed pool to manage command buffers instead and vend pointers??
-    struct sol_vk_semaphore_submit_list* signal_lists;
-    struct sol_vk_semaphore_submit_list* wait_lists;
+    struct sol_vk_command_buffer_stack buffer_stack;
 
     uint32_t acquired_buffer_count;
     uint32_t submitted_buffer_count;
-    uint32_t total_buffer_count;
-}
-cvm_vk_command_pool;
+};
 
-typedef struct cvm_vk_command_buffer
-{
-    /** nothing in this is owned */
-    const cvm_vk_command_pool* parent_pool;
-    VkCommandBuffer buffer;
+void sol_vk_command_pool_initialise(struct sol_vk_command_pool* pool, struct cvm_vk_device* device, uint32_t device_queue_family_index, uint32_t device_queue_index);
+void sol_vk_command_pool_terminate(struct sol_vk_command_pool* pool, struct cvm_vk_device* device);
+void sol_vk_command_pool_reset(struct sol_vk_command_pool* pool, struct cvm_vk_device* device);
 
-    struct sol_vk_semaphore_submit_list signal_list;
-    struct sol_vk_semaphore_submit_list wait_list;
-}
-cvm_vk_command_buffer;
-
-void cvm_vk_command_pool_initialise(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, uint32_t device_queue_family_index, uint32_t device_queue_index);
-void cvm_vk_command_pool_terminate(cvm_vk_command_pool* pool, const struct cvm_vk_device* device);
-void cvm_vk_command_pool_reset(cvm_vk_command_pool* pool, const struct cvm_vk_device* device);
-
-void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer);
+void sol_vk_command_pool_acquire_command_buffer(struct sol_vk_command_pool* pool, struct cvm_vk_device* device, struct sol_vk_command_buffer* command_buffer);
 /** note: submit is also "release" - perhaps a better name then acquire is in order; perpare? */
 /** this must be synchronised with device/ the queue, submission must be well ordered */
-struct sol_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool* pool, const struct cvm_vk_device* device, cvm_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages);
+struct sol_vk_timeline_semaphore_moment sol_vk_command_pool_submit_command_buffer(struct sol_vk_command_pool* pool, struct cvm_vk_device* device, struct sol_vk_command_buffer* command_buffer, VkPipelineStageFlags2 completion_signal_stages);
 
 
 

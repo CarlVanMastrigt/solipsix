@@ -508,7 +508,7 @@ static inline bool sol_font_obtain_glyph_map_entry(struct sol_font* font, uint32
 
 static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, const struct sol_font_glyph_map_entry* glyph_map_entry, struct sol_overlay_render_batch* render_batch, struct sol_image_atlas_location* glyph_atlas_location_result)
 {
-	struct sol_buffer_allocation pixel_upload_allocation;
+	struct sol_buffer_segment pixel_upload_segment;
 	struct sol_image_atlas* image_atlas;
 	u16_vec2 glyph_size;
 	unsigned char* pixels_dst;
@@ -530,14 +530,14 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
 		/** get glyph pixels if not present in image atlas */
 
-		pixel_upload_allocation = sol_vk_image_prepare_copy_simple(&sol_image_atlas_acquire_supervised_image(image_atlas)->image,
+		pixel_upload_segment = sol_vk_image_prepare_copy_simple(&sol_image_atlas_acquire_supervised_image(image_atlas)->image,
 			render_batch->atlas_copy_lists + glyph_map_entry->atlas_type,
 			&render_batch->upload_buffer,
 			glyph_atlas_location_result->offset,
 			glyph_size,
 			glyph_atlas_location_result->array_layer);
 
-		if(pixel_upload_allocation.allocation == NULL)
+		if(pixel_upload_segment.ptr == NULL)
 		{
 			/** no space left in upload buffer, treat as fail-full */
 			sol_image_atlas_entry_release(image_atlas, glyph_map_entry->id_in_atlas);
@@ -571,8 +571,8 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 
 		/** R8 */
 		#warning am assuming R8 here...
-		pixels_dst = pixel_upload_allocation.allocation;
-		assert(pixel_upload_allocation.size == sizeof(unsigned char) * glyph_size.x * glyph_size.y);
+		pixels_dst = pixel_upload_segment.ptr;
+		assert(pixel_upload_segment.size == sizeof(unsigned char) * glyph_size.x * glyph_size.y);
 
 		for(row = 0; row < glyph_size.y; row++)
 		{

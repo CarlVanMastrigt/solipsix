@@ -73,7 +73,7 @@ struct cvm_overlay_target_resources
 /// resources used in a per cycle/frame fashion
 struct cvm_overlay_transient_resources
 {
-    cvm_vk_command_pool command_pool;
+    struct sol_vk_command_pool command_pool;
 
     VkDescriptorSet descriptor_set;
 
@@ -360,7 +360,7 @@ static inline void cvm_overlay_target_resources_release(struct cvm_overlay_targe
 }
 
 
-static inline void cvm_overlay_add_target_acquire_instructions(cvm_vk_command_buffer * command_buffer, const struct cvm_overlay_target * target)
+static inline void cvm_overlay_add_target_acquire_instructions(struct sol_vk_command_buffer * command_buffer, const struct cvm_overlay_target * target)
 {
     sol_vk_semaphore_submit_list_append_many(&command_buffer->wait_list, target->wait_semaphores, target->wait_semaphore_count);
 
@@ -383,7 +383,7 @@ static inline void cvm_overlay_add_target_acquire_instructions(cvm_vk_command_bu
     }
 }
 
-static inline void cvm_overlay_add_target_release_instructions(cvm_vk_command_buffer * command_buffer, const struct cvm_overlay_target * target)
+static inline void cvm_overlay_add_target_release_instructions(struct sol_vk_command_buffer * command_buffer, const struct cvm_overlay_target * target)
 {
     sol_vk_semaphore_submit_list_append_many(&command_buffer->signal_list, target->signal_semaphores, target->signal_semaphore_count);
 
@@ -419,12 +419,12 @@ static inline struct cvm_overlay_transient_resources* cvm_overlay_transient_reso
         sol_vk_timeline_semaphore_moment_wait(&transient_resources->last_use_moment, device);
 
         /// reset resources
-        cvm_vk_command_pool_reset(&transient_resources->command_pool, device);
+        sol_vk_command_pool_reset(&transient_resources->command_pool, device);
     }
     else
     {
         // enqueued, so need to init
-        cvm_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
+        sol_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
         transient_resources->descriptor_set = sol_overlay_render_descriptor_set_allocate(device, &renderer->persistent_rendering_resources);
     }
     transient_resources->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
@@ -476,7 +476,7 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, struct 
     {
         assert(!transient_resources->active);
         sol_vk_timeline_semaphore_moment_wait(&transient_resources->last_use_moment, device);
-        cvm_vk_command_pool_terminate(&transient_resources->command_pool, device);
+        sol_vk_command_pool_terminate(&transient_resources->command_pool, device);
     }
     cvm_overlay_transient_resources_queue_terminate(&renderer->transient_resources_queue);
 
@@ -501,7 +501,7 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, struct 
 
 struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_vk_device * device, struct cvm_overlay_renderer* renderer, struct sol_gui_context* gui_context, const struct cvm_overlay_target* target)
 {
-    cvm_vk_command_buffer cb;
+    struct sol_vk_command_buffer cb;
     struct sol_vk_timeline_semaphore_moment completion_moment;
 //    sol_vk_staging_buffer_allocation staging_buffer_allocation;
 //    VkDeviceSize upload_offset,instance_offset,uniform_offset,staging_space;
@@ -542,7 +542,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     target_resources = cvm_overlay_target_resources_acquire(renderer, device, target);
     frame_resources = cvm_overlay_frame_resources_acquire(target_resources, device, target);
 
-    cvm_vk_command_pool_acquire_command_buffer(&transient_resources->command_pool, device, &cb);
+    sol_vk_command_pool_acquire_command_buffer(&transient_resources->command_pool, device, &cb);
 
     sol_overlay_render_step_append_waits(render_batch, &cb.wait_list, VK_PIPELINE_STAGE_2_NONE);
 
@@ -581,7 +581,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     cvm_overlay_add_target_release_instructions(&cb, target);
 
-    completion_moment = cvm_vk_command_pool_submit_command_buffer(&transient_resources->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+    completion_moment = sol_vk_command_pool_submit_command_buffer(&transient_resources->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
     sol_overlay_render_step_completion(render_batch, completion_moment);
 

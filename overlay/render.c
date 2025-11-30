@@ -435,6 +435,7 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
         fprintf(stderr, "overlay doesn't fit on screen\n");
     }
 
+#warning rename this to compose?
     sol_gui_context_render(gui_context, batch);
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
@@ -553,8 +554,6 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
         }
     };
 
-    // printf("NUMCOLOURS: %u\n", OVERLAY_NUM_COLOURS);
-
     vkUpdateDescriptorSets(device->device, 2, writes, 0, NULL);
 
     batch->descriptor_set = descriptor_set;
@@ -573,7 +572,6 @@ void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch
 
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        //sol_overlay_atlas_access_scope_execute_copies(batch->atlas_access_scopes + i, command_buffer, staging_buffer, staging_offset);
         atlas_copy_list = batch->atlas_copy_lists + i;
         atlas_supervised_image = batch->atlas_supervised_images[i];
         sol_vk_supervised_image_execute_copies(atlas_supervised_image, atlas_copy_list, command_buffer, staging_buffer, staging_offset);

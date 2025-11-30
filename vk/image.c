@@ -28,14 +28,83 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
+#warning move default view for image here??
 
+void sol_vk_image_get_default_view_create_info(VkImageViewCreateInfo* view_create_info, const struct sol_vk_image* image)
+{
+    VkImageViewType view_type;
+    VkImageAspectFlags aspect;
 
+    /// cannot create a cube array like this unfortunately
+    switch(image->properties.imageType)
+    {
+    case VK_IMAGE_TYPE_1D:
+        view_type = (image->properties.arrayLayers == 1) ? VK_IMAGE_VIEW_TYPE_1D : VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+        break;
+    case VK_IMAGE_TYPE_2D:
+        view_type = (image->properties.arrayLayers == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        break;
+    case VK_IMAGE_TYPE_3D:
+        assert(image->properties.arrayLayers == 1);
+        view_type = VK_IMAGE_VIEW_TYPE_3D;
+        break;
+    default:
+        assert(false);// this is unhandled
+        view_type = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+    }
+
+    /// remember these are DEFAULTS, none of the exotic aspects need be considered
+    switch(image->properties.format)
+    {
+    case VK_FORMAT_D16_UNORM:
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+    case VK_FORMAT_D32_SFLOAT:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        break;
+    case VK_FORMAT_S8_UINT:
+        aspect = VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    default:
+        aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        break;
+    }
+
+    *view_create_info = (VkImageViewCreateInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .image = image->image,
+        .viewType = view_type,
+        .format = image->properties.format,
+        .components = (VkComponentMapping)
+        {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange = (VkImageSubresourceRange)
+        {
+            .aspectMask = aspect,
+            .baseMipLevel = 0,
+            .levelCount = image->properties.mipLevels,
+            .baseArrayLayer = 0,
+            .layerCount = image->properties.arrayLayers,
+        }
+    };
+}
 
 VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* default_view_create_info)
 {
     VkResult result;
     uint32_t memory_type_index;
-    VkImageViewCreateInfo view_create_info_internal;
+    VkImageViewCreateInfo view_create_info_internal;// can either be derived from the image or
 
     VkMemoryDedicatedRequirements dedicated_requirements =
     {
@@ -81,8 +150,6 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
         };
 
         vkGetImageMemoryRequirements2(device->device, &image_requirements_info, &memory_requirements);
-
-        printf("sol_vk_image_create: %d : %d @ %lu\n", dedicated_requirements.prefersDedicatedAllocation, dedicated_requirements.requiresDedicatedAllocation,  memory_requirements.memoryRequirements.size);
 
         memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
@@ -130,7 +197,8 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
     {
         if(default_view_create_info == NULL)
         {
-            sol_vk_default_view_for_image(&view_create_info_internal, image_create_info, image->image);
+            /** NOTE: `image.image` and `image.properties` must be fully set when this is run*/
+            sol_vk_image_get_default_view_create_info(&view_create_info_internal, image);
         }
         else
         {
@@ -170,10 +238,10 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
 }
 
 
-struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
+struct sol_buffer_segment sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
 {
     struct sol_vk_format_block_properties block_properties;
-    struct sol_buffer_allocation upload_allocation;
+    struct sol_buffer_segment upload_segment;
     VkDeviceSize byte_count;
     uint32_t alignemt;
     VkDeviceSize w, h;
@@ -207,13 +275,13 @@ struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* imag
         alignemt *= 2;
     }
 
-    upload_allocation = sol_buffer_fetch_aligned_allocation(upload_buffer, byte_count, alignemt);
+    upload_segment = sol_buffer_fetch_aligned_segment(upload_buffer, byte_count, alignemt);
 
-    if(upload_allocation.allocation)
+    if(upload_segment.ptr)
     {
         *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
         {
-            .bufferOffset = (VkDeviceSize)upload_allocation.offset,
+            .bufferOffset = (VkDeviceSize)upload_segment.offset,
             /** 0 indicates tightly packed */
             .bufferRowLength = 0,
             .bufferImageHeight = 0,
@@ -223,10 +291,10 @@ struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* imag
         };
     }
 
-    return upload_allocation;
+    return upload_segment;
 }
 
-struct sol_buffer_allocation sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
+struct sol_buffer_segment sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
 {
     VkImageSubresourceLayers vk_subresource =
     {

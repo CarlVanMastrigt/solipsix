@@ -29,7 +29,19 @@ struct cvm_vk_device;
 
 struct sol_vk_buf_img_copy_list;
 
-
+// struct sol_vk_image_properties
+// {
+//     VkImageCreateFlags       flags;
+//     VkImageType              imageType;
+//     VkFormat                 format;
+//     VkExtent3D               extent;
+//     uint32_t                 mipLevels;
+//     uint32_t                 arrayLayers;
+//     VkSampleCountFlagBits    samples;
+//     VkImageTiling            tiling;
+//     VkImageUsageFlags        usage;
+//     VkSharingMode            sharingMode;
+// };
 
 struct sol_vk_image
 {
@@ -49,8 +61,8 @@ struct sol_vk_image
     properties;
 
     VkImage image;
-    VkImageView base_view;
-    VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by
+    VkImageView base_view;// perfectly matches properties
+    VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by the system -- in which case should have different reference
 };
 
 /** if view_create_info is NULL, the default view will be created
@@ -58,9 +70,11 @@ struct sol_vk_image
 VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* default_view_create_info);
 void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* device);
 
+void sol_vk_image_get_default_view_create_info(VkImageViewCreateInfo* view_create_info, const struct sol_vk_image* image);
+
 /** these will automatically apply copy operations */
-struct sol_buffer_allocation sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource);
-struct sol_buffer_allocation sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer);
+struct sol_buffer_segment sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource);
+struct sol_buffer_segment sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer);
 
 void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);
 
