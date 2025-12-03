@@ -24,6 +24,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 #include <string.h>
 
+#include "sol_utils.h"
+
 
 // struct sol_vk_shunt_buffer
 // {
@@ -42,6 +44,7 @@ struct sol_buffer
 	char* allocation;
 	uint32_t total_space;
 	uint32_t used_space;
+	uint32_t alignment;
 };
 
 /** cannot be terminated
@@ -61,6 +64,7 @@ static inline void sol_buffer_initialise(struct sol_buffer* b, uint32_t space, u
 	b->allocation = malloc(space);
 	b->total_space = space;
 	b->used_space = 0;
+	b->alignment = alignment;
 }
 static inline void sol_buffer_terminate(struct sol_buffer* b)
 {
@@ -82,6 +86,7 @@ static inline struct sol_buffer_segment sol_buffer_fetch_aligned_segment(struct 
 {
 	/** make sure not to ask for more space than buffer has */
 	assert(size <= b->total_space);
+	alignment = SOL_MAX(b->alignment, alignment);
 	assert((alignment & (alignment - 1)) == 0);
 	const uint32_t offset = (b->used_space + alignment - 1) & (- alignment);
 

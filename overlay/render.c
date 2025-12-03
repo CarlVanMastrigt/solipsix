@@ -478,6 +478,8 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     #warning if a non-ring buffer implementation (buddy allocator) for staging is preferred it may be worthwhile to break this into chunks (by comparing required size across approaches?)
     #warning need to make sure upload alignment here is a multiple of any possible texture upload format
     #warning FUCK, would have to know required specialised alignment for textures that require non power of 2 pixel alignmenment!
+
+    /* very ad-hoc use of staging (for now) */
     upload_offset   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset  + sizeof(float) * 4 * OVERLAY_NUM_COLOURS);
     elements_offset = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset   + sol_buffer_used_space(&batch->upload_buffer));
     staging_space   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, elements_offset + sol_overlay_render_element_list_size(&batch->elements));

@@ -74,13 +74,21 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_STACK_STRUCT_NAME sol_vk_semaphore_submit_list
 #include "data_structures/stack.h"
 
-#define SOL_STACK_ENTRY_TYPE VkWriteDescriptorSet
-#define SOL_STACK_STRUCT_NAME sol_vk_write_descriptor_set_list
-#include "data_structures/stack.h"
+// #define SOL_STACK_ENTRY_TYPE VkWriteDescriptorSet
+// #define SOL_STACK_STRUCT_NAME sol_vk_write_descriptor_set_list
+// #include "data_structures/stack.h"
+
+// #define SOL_STACK_ENTRY_TYPE VkDescriptorBufferInfo
+// #define SOL_STACK_STRUCT_NAME sol_vk_descriptor_buffer_info_list
+// #include "data_structures/stack.h"
 
 
+/** remove these */
 typedef struct cvm_vk_managed_buffer cvm_vk_managed_buffer;
 typedef struct cvm_vk_managed_buffer_dismissal_list cvm_vk_managed_buffer_dismissal_list;
+
+
+
 
 /**
 features to be cognisant of:
@@ -401,7 +409,6 @@ struct cvm_vk_descriptor_pool_requirements
 };
 VkResult cvm_vk_create_descriptor_set_layout_registering_requirements(VkDescriptorSetLayout* set_layout, const VkDescriptorSetLayoutCreateInfo* set_layout_create_info, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements, uint32_t sets_using_this_layout);
 VkResult cvm_vk_create_descriptor_pool_for_sizes(VkDescriptorPool* pool, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements);
-
 
 
 

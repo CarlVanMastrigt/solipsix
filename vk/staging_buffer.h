@@ -26,9 +26,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "vk/timeline_semaphore.h"
 
-
-#warning separate out backed buffer from cvm_vk
-
 struct cvm_vk_device;
 
 /// for when its desirable to support a simple staging buffer or a more complex staging manager backing
