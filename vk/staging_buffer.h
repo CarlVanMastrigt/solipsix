@@ -88,5 +88,8 @@ void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_bu
 /** the release moments are all the moments required to wait on for this allocation/segment to no longer be in use (i.e. moments after all separate uses) */
 void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* staging_buffer, struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count);
 
+/** as above but using only the segment index/identifier to minimise data that is required to be preserved */
+void sol_vk_staging_buffer_allocation_release_index(struct sol_vk_staging_buffer* staging_buffer, uint32_t allocation_segment_index, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count);
+
 VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_staging_buffer* staging_buffer, VkDeviceSize offset);
 

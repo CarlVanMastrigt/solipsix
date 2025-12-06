@@ -250,15 +250,21 @@ void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_bu
 
 void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* staging_buffer, struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count)
 {
-    struct sol_vk_staging_buffer_segment* segment;
-    
     assert(allocation->mapping == NULL);
+
+    sol_vk_staging_buffer_allocation_release_index(staging_buffer, allocation->segment_index, release_moments, release_moment_count);
+}
+
+void sol_vk_staging_buffer_allocation_release_index(struct sol_vk_staging_buffer* staging_buffer, uint32_t allocation_segment_index, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count)
+{
+    struct sol_vk_staging_buffer_segment* segment;
+
     assert(release_moment_count > 0);
     assert(release_moment_count <= SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT);
 
     mtx_lock(&staging_buffer->access_mutex);
 
-    segment = sol_vk_staging_buffer_segment_queue_access_entry(&staging_buffer->segment_queue, allocation->segment_index);
+    segment = sol_vk_staging_buffer_segment_queue_access_entry(&staging_buffer->segment_queue, allocation_segment_index);
 
     memcpy(segment->release_moments, release_moments, sizeof(struct sol_vk_timeline_semaphore_moment) * release_moment_count);
     segment->release_moment_count = release_moment_count;
