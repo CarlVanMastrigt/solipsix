@@ -32,6 +32,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 void sol_buddy_tree_initialise(struct sol_buddy_tree* tree, uint32_t size)
 {
 	uint32_t offset, current_size_bit, remaining_bits, size_exponent;
+	assert(size > 1);
 	
 	size_exponent = sol_u32_exp_ge(size);
 
@@ -41,8 +42,9 @@ void sol_buddy_tree_initialise(struct sol_buddy_tree* tree, uint32_t size)
 	tree->size = size;
 
 	tree->availablity_masks = malloc((sizeof(uint32_t) << (size_exponent + 1)));
+	// memset(tree->availablity_masks, 0xFF, (sizeof(uint32_t) << (size_exponent + 1)));// use to verify bit structure is correct
 
-	/** this is a slight optimization that improves addition, avoiding an inxex check when scanning parents siblings for splittable size.
+	/** this is a slight optimization that improves addition, avoiding an index check when scanning parents siblings for splittable size.
 		this nodes neighbour(buddy) is the top of the tree and can thus we can idicate nothing more needs to be propagated "up the tree" if all of its bits are set */
 	tree->availablity_masks[0] = ~0u;
 
@@ -50,6 +52,7 @@ void sol_buddy_tree_initialise(struct sol_buddy_tree* tree, uint32_t size)
 	current_size_bit = 1u << size_exponent;
 	remaining_bits = size;
 
+	/** behaviour / control-flow is slightly weird here if size == current_size_bit, but it still works */
 	while(remaining_bits)
 	{
 		if(remaining_bits & current_size_bit)
@@ -57,6 +60,10 @@ void sol_buddy_tree_initialise(struct sol_buddy_tree* tree, uint32_t size)
 			tree->availablity_masks[offset] = current_size_bit;
 			offset++;
 			remaining_bits ^= current_size_bit;
+		}
+		else
+		{
+			tree->availablity_masks[offset+1] = 0;
 		}
 		tree->availablity_masks[offset] = remaining_bits;
 		offset <<= 1;
