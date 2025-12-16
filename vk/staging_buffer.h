@@ -66,7 +66,6 @@ struct sol_vk_staging_buffer
 
     VkDeviceSize buffer_size;/** also present in backing description, but more convenient to access like this */
     VkDeviceSize alignment;
-    VkDeviceSize reserved_high_priority_space;
 
     VkDeviceSize current_offset;
     VkDeviceSize remaining_space;
@@ -77,11 +76,11 @@ struct sol_vk_staging_buffer
     struct sol_vk_staging_buffer_segment_queue segment_queue;
 };
 
-VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space);
+VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size);
 void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device);
 
 /** TODO: at present this will stall (mutex lock) until space is made, this design can (and should) be improved to allow task system integration (take/signal a sync primitive)*/
-struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkDeviceSize requested_space, bool high_priority);
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkDeviceSize requested_space);
 
 void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
 
@@ -90,3 +89,6 @@ void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* stag
 
 VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_staging_buffer* staging_buffer, VkDeviceSize offset);
 
+
+/** better to change interface slightly? 
+ * begin_allocation_run -> end_allocation_run that handles stalls internally and will fail under certain circumstances (which should be handled externally) ??*/

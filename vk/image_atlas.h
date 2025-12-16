@@ -83,6 +83,9 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_begin
  *      ^ the same goes for supervided image state tracking, as such its likely best to "single thread" gpu work */
 struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas);
 
+/** should ONLY be used for validation, not for devision making */
+bool sol_image_atlas_access_scope_is_active(struct sol_image_atlas* atlas);
+
 /** acquire a unique identifier for accessing/indexing entries in the atlas in the setup phase
  * `transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used */
 uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient);
@@ -106,6 +109,7 @@ use that new spot (consider allowing image->image copy list to facilitate this t
 
 
 struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas);
+VkImageView sol_image_atlas_acquire_image_view(struct sol_image_atlas* atlas);
 
 
 // bool sol_image_atlas_defragment(struct sol_image_atlas* atlas, const struct cvm_vk_device* device, )

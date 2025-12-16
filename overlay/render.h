@@ -34,8 +34,8 @@ struct sol_overlay_render_element
 {
     int16_t pos_rect[4];/// start(x,y), end(x,y)
     uint16_t tex_coords[4];/// base_tex(x,y), mask_tex(x,y)
-    uint16_t other_data[4];// extra data - texture_id:2
-    uint16_t idk[4];// extra data - texture_id:2
+    uint16_t other_data[4];// extra data - texture_id:2 - reserved
+    uint16_t idk[4];// reserved
 };
 
 #define SOL_STACK_ENTRY_TYPE struct sol_overlay_render_element
@@ -122,10 +122,8 @@ struct sol_overlay_render_batch
     /** offset applied to all copies */
     VkDeviceSize upload_offset;
 
+    #warning in order to permit other systems to use the same image atlases properly; the atlas access scope should be lifted to be the callers responsibility
     struct sol_vk_timeline_semaphore_moment atlas_acquire_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    struct sol_vk_timeline_semaphore_moment atlas_release_moments[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-
-    struct sol_vk_supervised_image* atlas_supervised_images[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
 
     /** this is just a data container for when the staging allocayion is made */
     struct sol_vk_staging_buffer_allocation staging_buffer_allocation;
@@ -140,12 +138,12 @@ struct sol_overlay_render_batch
 };
 
 
-void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize shunt_buffer_size);
+void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize upload_buffer_size);
 void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch);
 
 
-/** step : traverse the widget tree, creating the commands to render each element and loading resources (or creating instructions to load resources) when a requirement is encountered */
-void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct sol_overlay_rendering_resources* render_context, VkExtent2D target_extent);
+/** step : the initial setup step; traverse the widget tree, creating the commands to render each element and loading resources (or creating instructions to load resources) when a requirement is encountered */
+void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* batch, struct sol_gui_context* gui_context, struct sol_overlay_rendering_resources* rendering_resources, VkExtent2D target_extent);
 
 /** step : move all resources (e.g. new image atlas pixel data) and draw instructions to staging and write the descriptors for resources rendering will use */
 void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
@@ -162,7 +160,8 @@ void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch*
 /** step : encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
 void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, VkPipeline pipeline, VkCommandBuffer command_buffer);
 
-/** step : add the resource(image atlas) management semaphores to the list that will be signalled when work is executed (likely the command buffer signal list) */
+#warning overlay rendering should NOT handle atlases; ergo this function can/should be removed
+/** step : add the resource(image atlas) management semaphores to the list that will be signalled when work is executed (likely the command buffer signal list), this is also the moment where the atlas resources are no longer held by batch rendering */
 void sol_overlay_render_step_append_signals(struct sol_overlay_render_batch* batch, struct sol_vk_semaphore_submit_list* signal_list, VkPipelineStageFlags2 combined_stage_masks);
 
 /** step : when rendering is known to have completed (e.g. after the render pass in which the render was submitted) use a semaphore moment to synchronise/signal the completion of rendering */

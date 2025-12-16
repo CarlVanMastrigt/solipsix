@@ -125,6 +125,26 @@ static inline bool sol_vk_timeline_semaphore_moment_wait_multiple_timed(const st
     return result == VK_SUCCESS;
 }
 
+void sol_vk_timeline_semaphore_moment_signal_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, const struct cvm_vk_device* device)
+{
+    uint32_t i;
+    VkResult result;
+    VkSemaphoreSignalInfo signal_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+        .pNext = NULL,
+    };
+
+    for (i = 0; i < moment_count; i++)
+    {
+        signal_info.semaphore = moments[i].semaphore;
+        signal_info.value     = moments[i].value;
+
+        result = vkSignalSemaphore(device->device, &signal_info);
+        assert(result == VK_SUCCESS);
+    }
+}
+
 void sol_vk_timeline_semaphore_moment_wait(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device)
 {
     sol_vk_timeline_semaphore_moment_wait_multiple_timed(moment, 1, true, true, SOL_VK_DEFAULT_TIMEOUT, device);
@@ -151,24 +171,6 @@ bool sol_vk_timeline_semaphore_moment_query_multiple(const struct sol_vk_timelin
     return sol_vk_timeline_semaphore_moment_wait_multiple_timed(moments, moment_count, wait_on_all, false, 0, device);
 }
 
-void sol_vk_timeline_semaphore_moment_signal_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, const struct cvm_vk_device* device)
-{
-    uint32_t i;
-    VkResult result;
-    VkSemaphoreSignalInfo signal_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-        .pNext = NULL,
-    };
 
-    for (i = 0; i < moment_count; i++)
-    {
-        signal_info.semaphore = moments[i].semaphore;
-        signal_info.value     = moments[i].value;
-
-        result = vkSignalSemaphore(device->device, &signal_info);
-        assert(result == VK_SUCCESS);
-    }
-}
 
 

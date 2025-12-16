@@ -63,6 +63,7 @@ void sol_buddy_tree_initialise(struct sol_buddy_tree* tree, uint32_t size)
 		}
 		else
 		{
+			/** is *technically* correct without this, but it is perhaps very difficult to see why */
 			tree->availablity_masks[offset+1] = 0;
 		}
 		tree->availablity_masks[offset] = remaining_bits;
@@ -117,6 +118,9 @@ bool sol_buddy_tree_acquire(struct sol_buddy_tree* tree, uint32_t desired_size_e
 	{
 		/** splitable bit must be present */
 		assert(tree->availablity_masks[offset] & splitable_size_bit);
+
+		/** smaller sizes that are still larger than or equal to the desired size should also not be present, 
+		 * otherwise they would have been split/used, ergo tree is in an invalid state */
 		assert((tree->availablity_masks[offset] & introduced_sizes_mask) == 0);
 
 		tree->availablity_masks[offset] |= introduced_sizes_mask;

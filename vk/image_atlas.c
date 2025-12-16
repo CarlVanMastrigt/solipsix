@@ -20,6 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdio.h>
 
+#include "cvm_vk.h"
 #include "vk/image_atlas.h"
 #include "vk/image_utils.h"
 #include "vk/image.h"
@@ -227,6 +228,7 @@ struct sol_image_atlas
 	struct sol_image_atlas_description description;
 
 	struct sol_vk_supervised_image image;
+	VkImageView image_view;
 
 	/** this is the management semaphore for accesses in the image atlas, it will signal availability and write completion
 	 * users of the image atlas must signal moments vended to them to indicate reads and writes have completed
@@ -1032,6 +1034,7 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 {
 	uint32_t x_size_class, y_size_class, array_layer, entry_index;
 	struct sol_image_atlas* atlas = malloc(sizeof(struct sol_image_atlas));
+	VkResult result;
 
 	assert(description->image_x_dimension_exponent >= 8 && description->image_x_dimension_exponent <= 16);
 	assert(description->image_y_dimension_exponent >= 8 && description->image_y_dimension_exponent <= 16);
@@ -1064,12 +1067,15 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
+	result = sol_vk_supervised_image_initialise(&atlas->image, device, &image_create_info);
+	assert(result == VK_SUCCESS);
+
 	const VkImageViewCreateInfo view_create_info =
 	{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		//.image = , // not necessary, will be set as part of image initialise
+		.image = atlas->image.image.image,/** i swear this encapsulation makes sense, despite it looking silly */
 		.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
 		.format = description->format,
 		.components = (VkComponentMapping)
@@ -1090,7 +1096,8 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
         }
 	};
 
-	sol_vk_supervised_image_initialise(&atlas->image, device, &image_create_info, &view_create_info);
+    result = vkCreateImageView(device->device, &view_create_info, device->host_allocator, &atlas->image_view);
+    assert(result == VK_SUCCESS);
 
 	sol_image_atlas_entry_array_initialise(&atlas->entry_array, 1024);
 
@@ -1247,6 +1254,7 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 
 	sol_vk_timeline_semaphore_terminate(&atlas->timeline_semaphore, device);
 
+	vkDestroyImageView(device->device, atlas->image_view, device->host_allocator);
 	sol_vk_supervised_image_terminate(&atlas->image, device);
 
 	free(atlas);
@@ -1286,7 +1294,10 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_end(s
 	return atlas->current_moment;
 }
 
-
+bool sol_image_atlas_access_scope_is_active(struct sol_image_atlas* atlas)
+{
+	return atlas->accessor_active;
+}
 
 uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient)
 {
@@ -1552,6 +1563,11 @@ bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry
 struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas)
 {
 	return &atlas->image;
+}
+
+VkImageView sol_image_atlas_acquire_image_view(struct sol_image_atlas* atlas)
+{
+	return atlas->image_view;
 }
 
 

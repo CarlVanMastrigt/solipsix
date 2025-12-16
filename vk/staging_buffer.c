@@ -21,9 +21,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "vk/staging_buffer.h"
 
-VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
+VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size)
 {
     VkResult result;
+    struct sol_vk_backed_buffer backing;
+
     const VkDeviceSize alignment = cvm_vk_buffer_alignment_requirements(device, usage);
 
     buffer_size = cvm_vk_align(buffer_size, alignment);/// round to multiple of alignment
@@ -36,19 +38,22 @@ VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_
         .desired_properties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
     };
 
-    result = sol_vk_backed_buffer_create(device, &backing_description, &staging_buffer->backing);
+    result = sol_vk_backed_buffer_create(device, &backing_description, &backing);
 
     if(result == VK_SUCCESS)
     {
-        staging_buffer->threads_waiting_on_semaphore_setup = false;
-        staging_buffer->terminating = false;
+        *staging_buffer = (struct sol_vk_staging_buffer)
+        {
+            .backing = backing,
+            .threads_waiting_on_semaphore_setup = false,
+            .terminating = false,
 
-        staging_buffer->buffer_size = buffer_size;
-        staging_buffer->alignment = alignment;
-        staging_buffer->reserved_high_priority_space = reserved_high_priority_space;
+            .buffer_size = buffer_size,
+            .alignment = alignment,
 
-        staging_buffer->current_offset = 0;
-        staging_buffer->remaining_space = buffer_size;
+            .current_offset = 0,
+            .remaining_space = buffer_size,
+        };
 
         mtx_init(&staging_buffer->access_mutex, mtx_plain);
         cnd_init(&staging_buffer->setup_stall_condition);
@@ -136,7 +141,7 @@ static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging
     }
 }
 
-struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device * device, VkDeviceSize requested_space, bool high_priority)
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device * device, VkDeviceSize requested_space)
 {
     #warning this functions structure is a bit fucky; cleanup would be good
     VkDeviceSize required_space;
@@ -168,10 +173,10 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
         /** if this request must wrap then we need to consume the unused section of the buffer that remains */
         required_space = requested_space + (wrap ? (staging_buffer->buffer_size - staging_buffer->current_offset) : 0);
 
+        /** is an api violation to request more space than there is room for */
         assert(required_space < staging_buffer->buffer_size);
 
-        /** check that the reserved high priority space will be preserved when processing low priority requests */
-        if(required_space + (high_priority ? 0 : staging_buffer->reserved_high_priority_space) <= staging_buffer->remaining_space)
+        if(required_space <= staging_buffer->remaining_space)
         {
             /**  request will fit, we're done checking for space*/
             break;

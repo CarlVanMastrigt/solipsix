@@ -102,7 +102,7 @@ void sol_vk_uniform_descriptor_allocator_upload(struct sol_vk_uniform_descriptor
 
     total_size = uniform_allocator->host_buffer.used_space;
 
-    uniform_allocator->staging_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, total_size, true);
+    uniform_allocator->staging_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, total_size);
 
     sol_buffer_copy(&uniform_allocator->host_buffer ,uniform_allocator->staging_allocation.mapping);
     sol_buffer_reset(&uniform_allocator->host_buffer);

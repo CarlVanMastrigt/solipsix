@@ -100,11 +100,10 @@ void sol_vk_image_get_default_view_create_info(VkImageViewCreateInfo* view_creat
     };
 }
 
-VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* default_view_create_info)
+VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info)
 {
     VkResult result;
     uint32_t memory_type_index;
-    VkImageViewCreateInfo view_create_info_internal;// can either be derived from the image or
 
     VkMemoryDedicatedRequirements dedicated_requirements =
     {
@@ -133,7 +132,6 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
             .sharingMode = image_create_info->sharingMode,
         },
         .image     = VK_NULL_HANDLE,
-        .base_view = VK_NULL_HANDLE,
         .memory    = VK_NULL_HANDLE,
     };
 
@@ -193,22 +191,6 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
         result = vkBindImageMemory(device->device, image->image, image->memory, 0);
     }
 
-    if(result == VK_SUCCESS)
-    {
-        if(default_view_create_info == NULL)
-        {
-            /** NOTE: `image.image` and `image.properties` must be fully set when this is run*/
-            sol_vk_image_get_default_view_create_info(&view_create_info_internal, image);
-        }
-        else
-        {
-            view_create_info_internal = *default_view_create_info;
-            view_create_info_internal.image = image->image;
-        }
-
-        result = vkCreateImageView(device->device, &view_create_info_internal, device->host_allocator, &image->base_view);
-    }
-
     if(result != VK_SUCCESS)
     {
         sol_vk_image_destroy(image, device);
@@ -224,11 +206,6 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
     {
         vkDestroyImage(device->device, image->image, device->host_allocator);
         image->image = VK_NULL_HANDLE;
-    }
-    if(image->base_view != VK_NULL_HANDLE)
-    {
-        vkDestroyImageView(device->device, image->base_view, device->host_allocator);
-        image->base_view = VK_NULL_HANDLE;
     }
     if(image->memory != VK_NULL_HANDLE)
     {
@@ -339,16 +316,24 @@ void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_i
     }
 }
 
-
-
-
-
-
-
-
-void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info, const VkImageViewCreateInfo* view_create_info)
+VkResult sol_vk_image_create_view(VkImageView* view, struct cvm_vk_device* device, const struct sol_vk_image* image, const VkImageViewCreateInfo* view_create_info)
 {
-    sol_vk_image_create(&supervised_image->image, device, image_create_info, view_create_info);
+    assert(image->image == view_create_info->image);
+    return vkCreateImageView(device->device, view_create_info, device->host_allocator, view);
+}
+
+
+
+
+
+
+
+
+
+VkResult sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device, const VkImageCreateInfo* image_create_info)
+{
+    VkResult result;
+    result = sol_vk_image_create(&supervised_image->image, device, image_create_info);
 
     supervised_image->current_layout = image_create_info->initialLayout;
 
@@ -357,6 +342,8 @@ void sol_vk_supervised_image_initialise(struct sol_vk_supervised_image* supervis
 
     supervised_image->read_stage_mask = VK_PIPELINE_STAGE_2_NONE;
     supervised_image->read_access_mask = VK_ACCESS_2_NONE;
+
+    return result;
 }
 
 void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervised_image, struct cvm_vk_device* device)
@@ -398,7 +385,7 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
     const VkPipelineStageFlagBits2 src_stage_mask  = supervised_image->write_stage_mask;
     const VkAccessFlagBits2        src_access_mask = supervised_image->write_access_mask;
 
-    /** make sure no unknown masks are used */
+    /** make sure no unknown access masks form part of required barrier calculations (read-write determinations) */
     assert((dst_access_mask & (all_image_read_access_mask | all_image_write_access_mask)) == dst_access_mask);
     assert(dst_stage_mask != VK_PIPELINE_STAGE_2_NONE);
     assert(dst_access_mask != VK_ACCESS_2_NONE);
@@ -407,7 +394,15 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
     if(dst_access_mask & all_image_write_access_mask)
     {
         /** is a write op
-         * reset all barriers, fresh slate, assumes this barrier transitively includes prior read & write scope */
+         * reset all barriers, fresh slate, assumes this barrier transitively includes prior read & write scope 
+         * transitivity here meaning: if B waits on A correctly and C waits on B correctly then C implicityly waits on A correctly
+         * note: this is only a reasonable assumption if barriers are NOT applied to more fine grained regions than specified by the driver 
+         *      ^ e.g. by looking at subsequent commands
+         * I cannot find the part of the spec that guarantees this though... */
+
+        /** note: (again) the following lines are NOT required if an execution dependency exists; and the barrier about to be inserted is the execution dependency
+         * src_stage_mask  |= supervised_image->read_stage_mask;
+         * src_access_mask |= supervised_image->read_access_mask; */
 
         supervised_image->write_stage_mask  = dst_stage_mask;
         supervised_image->write_access_mask = dst_access_mask;
