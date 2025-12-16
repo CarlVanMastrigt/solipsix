@@ -474,6 +474,72 @@ void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_
     supervised_image->current_layout = new_layout;
 }
 
+bool sol_vk_supervised_image_validate_state(const struct sol_vk_supervised_image* supervised_image, VkImageLayout layout, VkPipelineStageFlagBits2 stage_mask, VkAccessFlagBits2 access_mask)
+{
+    #warning functionalise? macroise?
+    static const VkAccessFlagBits2 all_image_read_access_mask =
+        VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT          |
+        VK_ACCESS_2_SHADER_READ_BIT                    |
+        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT          |
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT  |
+        VK_ACCESS_2_TRANSFER_READ_BIT                  |
+        VK_ACCESS_2_HOST_READ_BIT                      |
+        VK_ACCESS_2_MEMORY_READ_BIT                    |
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT            |
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT            |
+        VK_ACCESS_2_VIDEO_DECODE_READ_BIT_KHR          |
+        VK_ACCESS_2_VIDEO_ENCODE_READ_BIT_KHR;
+
+    static const VkAccessFlagBits2 all_image_write_access_mask =
+        VK_ACCESS_2_SHADER_WRITE_BIT                   |
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT         |
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+        VK_ACCESS_2_TRANSFER_WRITE_BIT                 |
+        VK_ACCESS_2_HOST_WRITE_BIT                     |
+        VK_ACCESS_2_MEMORY_WRITE_BIT                   |
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT           |
+        VK_ACCESS_2_VIDEO_DECODE_WRITE_BIT_KHR         |
+        VK_ACCESS_2_VIDEO_ENCODE_WRITE_BIT_KHR;
+
+    if(layout != supervised_image->current_layout)
+    {
+        return false;
+    }
+
+    if(access_mask & all_image_write_access_mask)
+    {
+        /** write access */
+        if(supervised_image->read_stage_mask != VK_PIPELINE_STAGE_2_NONE ||
+           supervised_image->read_access_mask != VK_ACCESS_2_NONE)
+        {
+            /** if a read barrier has been inserted since the last write then the state is NOT correct for another write, a barrier is needed to prevent overwriting data referenced in reads */
+            return false;
+        }
+        if((supervised_image->write_access_mask & access_mask) != access_mask ||
+           (supervised_image->write_stage_mask  & stage_mask ) != stage_mask)
+        {
+            /** access/stage mask not set up in prior write */
+            return false;
+        }
+    }
+    else
+    {
+        /** read access */
+
+        /** IMPORTANT NOTE:
+         * THIS MAY GIVE FALSE NEGATIVES
+         * if a write access mask included some read accesses, then ONLY those read accesses are checked against; this check may miss them as they're in the write mask */
+        if((supervised_image->read_access_mask & access_mask) != access_mask ||
+           (supervised_image->read_stage_mask  & stage_mask ) != stage_mask)
+        {
+            /** access/stage mask not established in prior read */
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void sol_vk_supervised_image_execute_copies(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
 {
     if(sol_vk_buf_img_copy_list_count(copy_list) > 0)

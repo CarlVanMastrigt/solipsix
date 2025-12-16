@@ -68,7 +68,7 @@ struct cvm_overlay_renderer;
 
 
 
-struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_render_context, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count);
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_rendering_resources, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count);
 void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, struct cvm_vk_device* device);
 
 struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_vk_device* device, struct cvm_overlay_renderer* renderer, struct sol_gui_context* gui_context, const struct cvm_overlay_target* target);

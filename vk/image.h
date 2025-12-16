@@ -114,9 +114,8 @@ void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervise
 void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer command_buffer, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask);
 /** TODO: want a function that manages similar to above but in the context of render passes */
 
-// VkImageView sol_vk_supervised_image_view_get(struct sol_vk_supervised_image* supervised_image);
-
-
+/** really best used in correctness checking rather than decision making, returns true if correctly barriered for the specified layout-stage-access state */
+bool sol_vk_supervised_image_validate_state(const struct sol_vk_supervised_image* supervised_image, VkImageLayout layout, VkPipelineStageFlagBits2 stage_mask, VkAccessFlagBits2 access_mask);
 
 
 void sol_vk_supervised_image_execute_copies(struct sol_vk_supervised_image* dst_image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);

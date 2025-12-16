@@ -530,7 +530,7 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
 		/** get glyph pixels if not present in image atlas */
 
-		pixel_upload_segment = sol_vk_image_prepare_copy_simple(&sol_image_atlas_acquire_supervised_image(image_atlas)->image,
+		pixel_upload_segment = sol_vk_image_prepare_copy_simple(&sol_image_atlas_access_supervised_image(image_atlas)->image,
 			render_batch->atlas_copy_lists + glyph_map_entry->atlas_type,
 			&render_batch->upload_buffer,
 			glyph_atlas_location_result->offset,

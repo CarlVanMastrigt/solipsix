@@ -1560,12 +1560,12 @@ bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry
 	return false;
 }
 
-struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas)
+struct sol_vk_supervised_image* sol_image_atlas_access_supervised_image(struct sol_image_atlas* atlas)
 {
 	return &atlas->image;
 }
 
-VkImageView sol_image_atlas_acquire_image_view(struct sol_image_atlas* atlas)
+VkImageView sol_image_atlas_access_image_view(struct sol_image_atlas* atlas)
 {
 	return atlas->image_view;
 }

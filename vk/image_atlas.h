@@ -108,8 +108,8 @@ bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry
 use that new spot (consider allowing image->image copy list to facilitate this type of behaviour)
 
 
-struct sol_vk_supervised_image* sol_image_atlas_acquire_supervised_image(struct sol_image_atlas* atlas);
-VkImageView sol_image_atlas_acquire_image_view(struct sol_image_atlas* atlas);
+struct sol_vk_supervised_image* sol_image_atlas_access_supervised_image(struct sol_image_atlas* atlas);
+VkImageView sol_image_atlas_access_image_view(struct sol_image_atlas* atlas);
 
 
 // bool sol_image_atlas_defragment(struct sol_image_atlas* atlas, const struct cvm_vk_device* device, )

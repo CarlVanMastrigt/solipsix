@@ -95,7 +95,7 @@ struct cvm_overlay_renderer
 {
     /** for uploading to images, is NOT locally owned*/
     #warning instead provide these on calling it?
-    struct sol_overlay_rendering_resources* overlay_render_context;
+    struct sol_overlay_rendering_resources* overlay_rendering_resources;
     struct sol_vk_staging_buffer* staging_buffer;
 
     struct cvm_overlay_transient_resources_queue transient_resources_queue;
@@ -447,7 +447,7 @@ static inline void cvm_overlay_transient_resources_release(struct cvm_overlay_tr
 
 
 
-struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_render_context, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count)
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_rendering_resources, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count)
 {
     struct cvm_overlay_renderer* renderer;
     renderer = malloc(sizeof(struct cvm_overlay_renderer));
@@ -459,7 +459,7 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* d
 
     cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue, active_render_count);
 
-    renderer->overlay_render_context = overlay_render_context;
+    renderer->overlay_rendering_resources = overlay_rendering_resources;
     renderer->staging_buffer = staging_buffer;
 
     cvm_overlay_target_resources_queue_initialise(&renderer->target_resources, 16);
@@ -510,19 +510,9 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     struct cvm_overlay_frame_resources* frame_resources;
     struct cvm_overlay_transient_resources* transient_resources;
     float screen_w,screen_h;
+    uint32_t i;
+    struct sol_vk_timeline_semaphore_moment atlas_scope_begin_moment, atlas_scope_end_moment;
 
-
-
-    render_batch = &renderer->render_batch;
-
-    /// setup/reset the render batch
-    sol_overlay_render_step_compose_elements(render_batch, gui_context, renderer->overlay_render_context, target->extent);
-
-
-
-
-    /// move this somewhere?? theme data? allow non-destructive mutation based on these?
-    #warning make it so this is used in uniform texel buffer, good to test that
     const float overlay_colours[SOL_OVERLAY_COLOUR_COUNT*4]=
     {
         1.0,0.1,0.1,1.0,/// SOL_OVERLAY_COLOUR_ERROR | SOL_OVERLAY_COLOUR_DEFAULT
@@ -536,7 +526,6 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     };
 
 
-    /// acting on the shunt buffer directly in this way feels a little off
 
     transient_resources = cvm_overlay_transient_resources_acquire(renderer, device);
     target_resources = cvm_overlay_target_resources_acquire(renderer, device, target);
@@ -544,18 +533,26 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     sol_vk_command_pool_acquire_command_buffer(&transient_resources->command_pool, device, &cb);
 
-    sol_overlay_render_step_append_waits(render_batch, &cb.wait_list, VK_PIPELINE_STAGE_2_NONE);
 
+    render_batch = &renderer->render_batch;
+
+
+
+    for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        atlas_scope_begin_moment = sol_image_atlas_access_scope_setup_begin(renderer->overlay_rendering_resources->atlases[i]);
+        /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
+        *sol_vk_semaphore_submit_list_append_ptr(&cb.wait_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_begin_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+    }
+
+    /// setup/reset the render batch
+    sol_overlay_render_step_compose_elements(render_batch, gui_context, renderer->overlay_rendering_resources, target->extent);
     sol_overlay_render_step_write_descriptors(render_batch, device, renderer->staging_buffer, overlay_colours, transient_resources->descriptor_set);
     sol_overlay_render_step_submit_vk_transfers(render_batch, cb.buffer);
-
-    sol_overlay_render_step_insert_vk_barriers(render_batch, cb.buffer);
-
-
-
-
-    ///start of graphics
+    sol_overlay_render_step_insert_vk_barriers(render_batch, cb.buffer);/** optional, can be managed manually if altases are used for other things too */
     cvm_overlay_add_target_acquire_instructions(&cb, target);
+
+
 
 
     VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
@@ -564,7 +561,11 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
         .pNext=NULL,
         .renderPass=target_resources->render_pass,
         .framebuffer=frame_resources->framebuffer,
-        .renderArea=cvm_vk_get_default_render_area(),
+        .renderArea=(VkRect2D)
+        {
+            .offset=(VkOffset2D){.x=0,.y=0},
+            .extent=target->extent,
+        },
         .clearValueCount=1,
         .pClearValues=(VkClearValue[1]){{.color=(VkClearColorValue){.float32={0.0f,0.0f,0.0f,0.0f}}}},
         /// ^ do we even wat to clear? or should we assume all pixels will be rendered?
@@ -576,8 +577,14 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     vkCmdEndRenderPass(cb.buffer);///================
 
-    sol_overlay_render_step_append_signals(render_batch, &cb.signal_list, VK_PIPELINE_STAGE_2_NONE);
 
+
+    for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        atlas_scope_end_moment = sol_image_atlas_access_scope_setup_end(renderer->overlay_rendering_resources->atlases[i]);
+        /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
+        *sol_vk_semaphore_submit_list_append_ptr(&cb.signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_end_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+    }
 
     cvm_overlay_add_target_release_instructions(&cb, target);
 
@@ -605,7 +612,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(
         .image_view = presentable_image->image_view,
         .image_view_unique_identifier = presentable_image->image_view_unique_identifier,
 
-        .extent = presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent,
+        .extent = presentable_image->parent_swapchain_instance->extent,
         .format = presentable_image->parent_swapchain_instance->surface_format.format,
         .color_space = presentable_image->parent_swapchain_instance->surface_format.colorSpace,
 
