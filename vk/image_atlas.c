@@ -560,7 +560,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 	coalesce_entry->y_size_class++;
 
 	coalesce_entry->adj_end_right = buddy_entry->adj_end_right;
-	coalesce_entry->adj_end_down   = buddy_entry->adj_end_down;
+	coalesce_entry->adj_end_down  = buddy_entry->adj_end_down;
 
 	/** this combines the buddy (right tile of the 2) into the left tile
 	 * so need to set any link that referenced the buddy to now reference the coalesced tile

@@ -124,7 +124,51 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
     return vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, pipeline_layout);
 }
 
+void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device)
+{
+    const struct sol_image_atlas_description bc4_atlas_description =
+    {
+        .format = VK_FORMAT_BC4_UNORM_BLOCK,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .image_array_dimension = 1,
+        .image_x_dimension_exponent = 11,
+        .image_y_dimension_exponent = 11,
+    };
 
+    const struct sol_image_atlas_description r8_atlas_description =
+    {
+        .format = VK_FORMAT_R8_UNORM,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .image_array_dimension = 1,
+        .image_x_dimension_exponent = 11,
+        .image_y_dimension_exponent = 11,
+    };
+
+    const struct sol_image_atlas_description rgba8_atlas_description =
+    {
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .image_array_dimension = 1,
+        .image_x_dimension_exponent = 11,
+        .image_y_dimension_exponent = 11,
+    };
+
+    *overlay_rendering_resources = (struct sol_overlay_rendering_resources)
+    {
+        .atlases =
+        {
+            [SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4]         = sol_image_atlas_create(&bc4_atlas_description  , device),
+            [SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM]    = sol_image_atlas_create(&r8_atlas_description   , device),
+            [SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM] = sol_image_atlas_create(&rgba8_atlas_description, device)
+        }
+    };
+}
+void sol_overlay_rendering_resources_terminate(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device)
+{
+    sol_image_atlas_destroy(overlay_rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4]        , device);
+    sol_image_atlas_destroy(overlay_rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM]   , device);
+    sol_image_atlas_destroy(overlay_rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM], device);
+}
 
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count)
 {

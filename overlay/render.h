@@ -83,7 +83,6 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
 VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device* device, struct sol_overlay_render_persistent_resources* persistent_resources);
 VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
 
-#warning rename to sol_overlay_rendering_resources
 struct sol_overlay_rendering_resources
 {
     /** atlases used for storing backing information for verious purposes
@@ -94,6 +93,9 @@ struct sol_overlay_rendering_resources
     // struct sol_image_atlas* rgba8_atlas;
     struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
 };
+
+void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device); 
+void sol_overlay_rendering_resources_terminate(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device); 
 
 
 /** batch is a bad name, need context, sub context stack/ranges for (potential) compositing passes
@@ -110,7 +112,7 @@ struct sol_overlay_render_batch
     /** actual UI element instance data */
     struct sol_overlay_render_element_list elements;
 
-    /** this and count should be in an array per composite range */
+    /** this and count+offset should be in an array per composite range */
     VkDeviceSize element_offset;
 
 
@@ -130,7 +132,8 @@ struct sol_overlay_render_batch
     /** extent set at compose stage */
     VkExtent2D target_extent;
     VkDescriptorSet descriptor_set;
-    /*staging buffer provided to `sol_overlay_render_step_write_descriptors`, used to track the release of this allocation properly */
+    
+    /** staging buffer provided to `sol_overlay_render_step_write_descriptors`, used to track the release of this allocation properly */
     struct sol_vk_staging_buffer* staging_buffer;
 };
 
@@ -149,7 +152,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
 void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
 /** step : write barriers to put required resources (e.g. image atlases) in correct state to e read from while drawing overlay elements to the render target 
- * this step is optional if all image atlases are barriered manually; e.g. if they are to be rendered into between `sol_overlay_render_step_submit_vk_transfers` and `sol_overlay_render_step_draw_elements` */
+ * OPTIONAL IF: all image atlases are barriered manually; e.g. if they are to be rendered into between `sol_overlay_render_step_submit_vk_transfers` and `sol_overlay_render_step_draw_elements` */
 void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
 /** step : encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */

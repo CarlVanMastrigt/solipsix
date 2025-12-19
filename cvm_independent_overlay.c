@@ -95,7 +95,7 @@ struct cvm_overlay_renderer
 {
     /** for uploading to images, is NOT locally owned*/
     #warning instead provide these on calling it?
-    struct sol_overlay_rendering_resources* overlay_rendering_resources;
+    struct sol_overlay_rendering_resources overlay_rendering_resources;
     struct sol_vk_staging_buffer* staging_buffer;
 
     struct cvm_overlay_transient_resources_queue transient_resources_queue;
@@ -447,7 +447,7 @@ static inline void cvm_overlay_transient_resources_release(struct cvm_overlay_tr
 
 
 
-struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_rendering_resources, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count)
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, uint32_t active_render_count)
 {
     struct cvm_overlay_renderer* renderer;
     renderer = malloc(sizeof(struct cvm_overlay_renderer));
@@ -459,7 +459,7 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* d
 
     cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue, active_render_count);
 
-    renderer->overlay_rendering_resources = overlay_rendering_resources;
+    sol_overlay_rendering_resources_default_initialise(&renderer->overlay_rendering_resources, device);
     renderer->staging_buffer = staging_buffer;
 
     cvm_overlay_target_resources_queue_initialise(&renderer->target_resources, 16);
@@ -490,6 +490,7 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer* renderer, struct 
 
     sol_overlay_render_batch_terminate(&renderer->render_batch);
     sol_overlay_render_persistent_resources_terminate(&renderer->persistent_rendering_resources, device);
+    sol_overlay_rendering_resources_terminate(&renderer->overlay_rendering_resources, device);
 
     free(renderer);
 }
@@ -540,13 +541,13 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_scope_begin_moment = sol_image_atlas_access_scope_setup_begin(renderer->overlay_rendering_resources->atlases[i]);
+        atlas_scope_begin_moment = sol_image_atlas_access_scope_setup_begin(renderer->overlay_rendering_resources.atlases[i]);
         /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
         *sol_vk_semaphore_submit_list_append_ptr(&cb.wait_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_begin_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
     }
 
     /// setup/reset the render batch
-    sol_overlay_render_step_compose_elements(render_batch, gui_context, renderer->overlay_rendering_resources, target->extent);
+    sol_overlay_render_step_compose_elements(render_batch, gui_context, &renderer->overlay_rendering_resources, target->extent);
     sol_overlay_render_step_write_descriptors(render_batch, device, renderer->staging_buffer, overlay_colours, transient_resources->descriptor_set);
     sol_overlay_render_step_submit_vk_transfers(render_batch, cb.buffer);
     sol_overlay_render_step_insert_vk_barriers(render_batch, cb.buffer);/** optional, can be managed manually if altases are used for other things too */
@@ -581,7 +582,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_scope_end_moment = sol_image_atlas_access_scope_setup_end(renderer->overlay_rendering_resources->atlases[i]);
+        atlas_scope_end_moment = sol_image_atlas_access_scope_setup_end(renderer->overlay_rendering_resources.atlases[i]);
         /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
         *sol_vk_semaphore_submit_list_append_ptr(&cb.signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_end_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
     }
