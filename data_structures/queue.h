@@ -32,14 +32,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_QUEUE_ENTRY_TYPE int
 #endif
 
-#ifndef SOL_QUEUE_FUNCTION_PREFIX
-#error must define SOL_QUEUE_FUNCTION_PREFIX
-#define SOL_QUEUE_FUNCTION_PREFIX placeholder_queue
-#endif
-
 #ifndef SOL_QUEUE_STRUCT_NAME
 #error must define SOL_QUEUE_STRUCT_NAME
 #define SOL_QUEUE_STRUCT_NAME placeholder_queue
+#endif
+
+#ifndef SOL_QUEUE_FUNCTION_PREFIX
+#define SOL_QUEUE_FUNCTION_PREFIX SOL_QUEUE_STRUCT_NAME
 #endif
 
 /**
@@ -93,7 +92,7 @@ static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(str
     assert(index_ptr);
     if(q->count == q->space)
     {
-        q->data = realloc(q->data, sizeof(SOL_QUEUE_ENTRY_TYPE) * q->count * 2);
+        q->data = realloc(q->data, sizeof(SOL_QUEUE_ENTRY_TYPE) * q->space * 2);
         front_offset = q->front & (q->space - 1);
         if(q->front & q->space)
         {
@@ -126,13 +125,22 @@ static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(struc
 
 static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE value, uint32_t* index_ptr)
 {
-    uint32_t index;
-    SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(q, &index);
-    if(index_ptr)
+    SOL_QUEUE_ENTRY_TYPE* entry_ptr;
+    SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(q, &entry_ptr, index_ptr);
+    *entry_ptr = value;
+}
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_many)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE* values, uint32_t count, uint32_t* index_ptr)
+{
+    SOL_QUEUE_ENTRY_TYPE* entry_ptr;
+    SOL_QUEUE_ENTRY_TYPE* values_end = values + count;
+
+    while(values < values_end)
     {
-        *index_ptr = index;
+        SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(q, &entry_ptr, index_ptr);
+        *entry_ptr = *values++;/** note: AFTER deref increment */
+        index_ptr = NULL;/** only record index of first */
     }
-    q->data[index & (q->space - 1)] = value;
 }
 
 static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue_ptr)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr)
@@ -152,6 +160,7 @@ static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue_ptr)(struc
 static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE* value)
 {
     assert(value);
+
     if(q->count == 0)
     {
         return false;
@@ -162,13 +171,64 @@ static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue)(struct SO
     return true;
 }
 
-/** remove the front of the queue without accessing its contents */
-/** should only be used after access_front has been used to check the entry that will be pruned */
+static inline uint32_t SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue_many)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE* values, uint32_t desired_count)
+{
+    uint32_t count = 0;
+    assert(values);
+
+    while(count < desired_count && SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_dequeue)(q, values))
+    {
+        count++;
+        values++;
+    }
+    
+    return count;
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_copy_front)(const struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE* entry_ptr)
+{
+    assert(entry_ptr);
+    if(q->count == 0)
+    {
+        return false;
+    }
+    *entry_ptr = q->data[q->front & (q->space - 1)];
+    return true;
+}
+
+/** used in similar scenarios to access but allows a contiguous array of entries (which is only possible if copying) */
+static inline uint32_t SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_copy_many_front)(const struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE* values, uint32_t desired_count)
+{
+    uint32_t count = 0;
+    assert(values);
+
+    while(count < desired_count && count < q->count)
+    {
+        *values = q->data[(q->front + count) & (q->space - 1)];
+        count++;
+        values++;
+    }
+    
+    return count;
+}
+
+
+
+/** remove the front of the queue without accessing its contents 
+ * should only be used after `access_front` has been used to check/assess the entry that will be pruned */
 static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_prune_front)(struct SOL_QUEUE_STRUCT_NAME* q)
 {
     assert(q->count > 0);
     q->front++;
     q->count--;
+}
+
+/** should only be used after `copy_many_front` has been used to check/assess the entries that will be pruned */
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_prune_many_front)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t count)
+{
+    assert(q->count >= count);
+    q->front += count;
+    q->count -= count;
 }
 
 static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_front)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr)

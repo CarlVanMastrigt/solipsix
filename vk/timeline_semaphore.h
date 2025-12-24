@@ -38,6 +38,11 @@ struct sol_vk_timeline_semaphore_moment
 
 #define SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL ((struct sol_vk_timeline_semaphore_moment){.semaphore=VK_NULL_HANDLE,.value=0})
 
+#define SOL_QUEUE_ENTRY_TYPE struct sol_vk_timeline_semaphore_moment
+#define SOL_QUEUE_STRUCT_NAME sol_vk_timeline_semaphore_moment_queue
+#include "data_structures/queue.h"
+
+
 void sol_vk_timeline_semaphore_initialise(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device);
 void sol_vk_timeline_semaphore_terminate(struct sol_vk_timeline_semaphore* timeline_semaphore, const struct cvm_vk_device* device);
 
@@ -55,7 +60,8 @@ bool sol_vk_timeline_semaphore_moment_query(const struct sol_vk_timeline_semapho
 /** will signal the specified moment, allows signalling the device from the host */
 void sol_vk_timeline_semaphore_moment_signal(const struct sol_vk_timeline_semaphore_moment* moment, const struct cvm_vk_device* device);
 
-#define SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT 8
+/** need to impose a reasonable limit to allow stack allocations of the wait parameters */
+#define SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT 16
 
 void sol_vk_timeline_semaphore_moment_wait_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device);
 bool sol_vk_timeline_semaphore_moment_query_multiple(const struct sol_vk_timeline_semaphore_moment* moments, uint32_t moment_count, bool wait_on_all, const struct cvm_vk_device* device);
