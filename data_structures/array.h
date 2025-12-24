@@ -34,14 +34,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_ARRAY_ENTRY_TYPE int
 #endif
 
-#ifndef SOL_ARRAY_FUNCTION_PREFIX
-#error must define SOL_ARRAY_FUNCTION_PREFIX
-#define SOL_ARRAY_FUNCTION_PREFIX placeholder_array
-#endif
-
 #ifndef SOL_ARRAY_STRUCT_NAME
 #error must define SOL_ARRAY_STRUCT_NAME
 #define SOL_ARRAY_STRUCT_NAME placeholder_array
+#endif
+
+#ifndef SOL_ARRAY_FUNCTION_PREFIX
+#define SOL_ARRAY_FUNCTION_PREFIX SOL_ARRAY_STRUCT_NAME
 #endif
 
 

@@ -259,7 +259,7 @@ static float cvm_vk_device_feature_validation(const VkPhysicalDeviceFeatures2* v
     (void)extension_properties;
     (void)extension_count;
 
-    for(entry = (VkBaseInStructure*)valid_list;entry;entry=entry->pNext)
+    for(entry = (VkBaseInStructure*)valid_list; entry; entry = entry->pNext)
     {
         switch(entry->sType)
         {

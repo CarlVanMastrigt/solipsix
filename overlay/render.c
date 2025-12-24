@@ -239,7 +239,7 @@ VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device*
     return descriptor_set;
 }
 
-VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
+VkPipeline sol_overlay_render_pipeline_create_static(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
 {
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkResult result;
@@ -303,7 +303,7 @@ VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, cons
             .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///not the default
+            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
             .primitiveRestartEnable = VK_FALSE
         },
         .pTessellationState = NULL,
@@ -389,6 +389,164 @@ VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, cons
         .layout = persistent_resources->pipeline_layout,
         .renderPass = render_pass,
         .subpass = subpass,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1
+    };
+
+    result = vkCreateGraphicsPipelines(device->device, device->pipeline_cache.cache, 1, &create_info, device->host_allocator, &pipeline);
+    assert(result == VK_SUCCESS);
+
+    return pipeline;
+}
+
+VkPipeline sol_overlay_render_pipeline_create_dynamic(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkFormat target_format)
+{
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkResult result;
+
+    ;
+
+    VkGraphicsPipelineCreateInfo create_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .stageCount = 2,
+        .pStages = (VkPipelineShaderStageCreateInfo[2])
+        {
+            persistent_resources->vertex_pipeline_stage,
+            persistent_resources->fragment_pipeline_stage,
+        },
+        .pVertexInputState = &(VkPipelineVertexInputStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .vertexBindingDescriptionCount = 1,
+            .pVertexBindingDescriptions =  (VkVertexInputBindingDescription[1])
+            {
+                {
+                    .binding = 0,
+                    .stride = sizeof(struct sol_overlay_render_element),
+                    .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE
+                }
+            },
+            .vertexAttributeDescriptionCount = 4,
+            .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[4])
+            {
+                {
+                    .location = 0,
+                    .binding = 0,
+                    .format = VK_FORMAT_R16G16B16A16_UINT,
+                    .offset = offsetof(struct sol_overlay_render_element,pos_rect)
+                },
+                {
+                    .location = 1,
+                    .binding = 0,
+                    .format = VK_FORMAT_R16G16B16A16_UINT,
+                    .offset = offsetof(struct sol_overlay_render_element, tex_coords)
+                },
+                {
+                    .location = 2,
+                    .binding = 0,
+                    .format = VK_FORMAT_R16G16B16A16_UINT,
+                    .offset = offsetof(struct sol_overlay_render_element, other_data)
+                },
+                {
+                    .location = 3,
+                    .binding = 0,
+                    .format = VK_FORMAT_R16G16B16A16_UINT,
+                    .offset = offsetof(struct sol_overlay_render_element, idk)
+                },
+            }
+        },
+        .pInputAssemblyState = &(VkPipelineInputAssemblyStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+            .primitiveRestartEnable = VK_FALSE
+        },
+        .pTessellationState = NULL,
+        .pViewportState = &(VkPipelineViewportStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            /** viewport and scissor are dynamic **/
+            .viewportCount = 0,
+            .pViewports = NULL,
+            .scissorCount = 0,
+            .pScissors = NULL,
+        },
+        .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .depthClampEnable = VK_FALSE,
+            .rasterizerDiscardEnable = VK_FALSE,
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullMode = VK_CULL_MODE_NONE,
+            .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            .depthBiasEnable = VK_FALSE,
+            .depthBiasConstantFactor = 0.0,
+            .depthBiasClamp = 0.0,
+            .depthBiasSlopeFactor = 0.0,
+            .lineWidth = 1.0
+        },
+        .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            .sampleShadingEnable = VK_FALSE,
+            .minSampleShading = 1.0,
+            .pSampleMask = NULL,
+            .alphaToCoverageEnable = VK_FALSE,
+            .alphaToOneEnable = VK_FALSE
+        },
+        .pDepthStencilState = NULL,
+        .pColorBlendState = &(VkPipelineColorBlendStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .logicOpEnable = VK_FALSE,
+            .logicOp = VK_LOGIC_OP_COPY,
+            .attachmentCount = 1,
+            .pAttachments =  (VkPipelineColorBlendAttachmentState[1])
+            {
+                {
+                    .blendEnable = VK_TRUE,
+                    .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                    .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                    .colorBlendOp = VK_BLEND_OP_ADD,
+                    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                    .alphaBlendOp = VK_BLEND_OP_ADD,
+                    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
+                },
+            },
+            .blendConstants = {0.0, 0.0, 0.0, 0.0},
+        },
+        .pDynamicState = &(VkPipelineDynamicStateCreateInfo) 
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .dynamicStateCount = 2,
+            .pDynamicStates = (VkDynamicState[2])
+            {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR,
+            },
+        },
+        .layout = persistent_resources->pipeline_layout,
+        .renderPass = VK_NULL_HANDLE,
+        .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE,
         .basePipelineIndex = -1
     };

@@ -78,10 +78,9 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
 #warning consider make resolution dynamic state for the purposes of compositing! - removes need for this AND allows compositing with different resolutions
 /** maybe a hybrid approach is warranted, if dynamic pipelines cannot be guaranteed... or a solution that takes advantage of a potential compositing image atlas... */
 
-
-
 VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device* device, struct sol_overlay_render_persistent_resources* persistent_resources);
-VkPipeline sol_overlay_render_pipeline_create(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
+VkPipeline sol_overlay_render_pipeline_create_static(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
+VkPipeline sol_overlay_render_pipeline_create_dynamic(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, VkFormat target_format);
 
 struct sol_overlay_rendering_resources
 {

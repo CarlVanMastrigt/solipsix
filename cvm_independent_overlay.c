@@ -278,7 +278,7 @@ static inline void cvm_overlay_target_resources_initialise(struct cvm_overlay_ta
     target_resources->clear_image = target->clear_image;
 
     target_resources->render_pass = cvm_overlay_render_pass_create(device, target->format, target->initial_layout, target->final_layout, target->clear_image);
-    target_resources->pipeline = sol_overlay_render_pipeline_create(device, persistent_rendering_resources, target_resources->render_pass, target->extent, 0);/// subpass=0, b/c is only subpass
+    target_resources->pipeline = sol_overlay_render_pipeline_create_static(device, persistent_rendering_resources, target_resources->render_pass, target->extent, 0);/// subpass=0, b/c is only subpass
 
     cvm_overlay_frame_resources_cache_initialise(&target_resources->frame_resources, 8);
 
