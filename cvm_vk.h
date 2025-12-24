@@ -321,8 +321,8 @@ void cvm_vk_destroy_pipeline_layout(VkPipelineLayout pipeline_layout);
 void cvm_vk_create_graphics_pipeline(VkPipeline * pipeline,VkGraphicsPipelineCreateInfo * info);
 void cvm_vk_destroy_pipeline(VkPipeline pipeline);
 
-void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const struct cvm_vk_device* device,const char * filename,VkShaderStageFlagBits stage);
-void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const struct cvm_vk_device* device);
+void sol_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo* stage_info,struct cvm_vk_device* device,const char * filename,VkShaderStageFlagBits stage);
+void sol_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo* stage_info,struct cvm_vk_device* device);
 
 void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info);
 void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_layout);

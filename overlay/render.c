@@ -189,13 +189,13 @@ VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_r
 
     if(device->feature_int_16_shader_types)
     {
-        cvm_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,   device, "solipsix/shaders/overlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-        cvm_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device, "solipsix/shaders/overlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        sol_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,   device, "solipsix/shaders/overlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        sol_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device, "solipsix/shaders/overlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
     }
     else
     {
-        cvm_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,   device, "solipsix/shaders/overlay_reference.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-        cvm_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device, "solipsix/shaders/overlay_reference.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        sol_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,   device, "solipsix/shaders/overlay_reference.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        sol_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device, "solipsix/shaders/overlay_reference.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
     }
 
     return result;
@@ -205,8 +205,8 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
 {
     VkResult result;
 
-    cvm_vk_destroy_shader_stage_info(&persistent_resources->vertex_pipeline_stage  , device);
-    cvm_vk_destroy_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device);
+    sol_vk_destroy_shader_stage_info(&persistent_resources->vertex_pipeline_stage  , device);
+    sol_vk_destroy_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device);
 
     vkDestroyPipelineLayout(device->device, persistent_resources->pipeline_layout, device->host_allocator);
 

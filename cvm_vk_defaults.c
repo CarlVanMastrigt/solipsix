@@ -288,14 +288,14 @@ void cvm_vk_create_defaults_old(void)
         .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
     };
 
-    cvm_vk_create_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage, NULL, "solipsix/shaders/fullscreen.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    sol_vk_create_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage, NULL, "solipsix/shaders/fullscreen.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
 }
 
 void cvm_vk_destroy_defaults_old(void)
 {
     cvm_vk_destroy_default_vertex_bindings();
 
-    cvm_vk_destroy_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage, NULL);
+    sol_vk_destroy_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage, NULL);
 }
 
 void cvm_vk_create_swapchain_dependent_defaults(uint32_t width,uint32_t height)

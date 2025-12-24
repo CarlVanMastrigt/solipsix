@@ -1338,7 +1338,7 @@ void cvm_vk_destroy_pipeline(VkPipeline pipeline)
 
 
 ///return VkPipelineShaderStageCreateInfo, but hold on to VkShaderModule (passed by ptr) for deletion at program cleanup ( that module can be kept inside the creation info! )
-void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info, const struct cvm_vk_device* device, const char * filename,VkShaderStageFlagBits stage)
+void sol_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo* stage_info, struct cvm_vk_device* device, const char * filename, VkShaderStageFlagBits stage)
 {
     if(device==NULL) device = &cvm_vk_;
     static char * entrypoint="main";
@@ -1359,8 +1359,12 @@ void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_inf
     char * data_buffer;
 
     f=fopen(filename,"rb");
+    if(f == NULL)
+    {
+        fprintf(stderr,"COULD NOT LOAD SHADER: %s\n",filename);
+    }
 
-    assert(f || !fprintf(stderr,"COULD NOT LOAD SHADER: %s\n",filename));
+    assert(f);
 
     if(f)
     {
@@ -1392,7 +1396,7 @@ void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_inf
 }
 
 
-void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info, const struct cvm_vk_device* device)
+void sol_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo* stage_info, struct cvm_vk_device* device)
 {
     if(device==NULL) device = &cvm_vk_;
     vkDestroyShaderModule(device->device, stage_info->module, device->host_allocator);
