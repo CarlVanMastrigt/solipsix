@@ -85,12 +85,17 @@ static inline SOL_QUEUE_ENTRY_TYPE* SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_a
     return q->data + (index & (q->space - 1));
 }
 
-static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t* index_ptr)
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_many_index)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t count, uint32_t* first_index_ptr)
 {
     uint32_t front_offset, move_count;
     SOL_QUEUE_ENTRY_TYPE * src;
-    assert(index_ptr);
-    if(q->count == q->space)
+
+    assert(first_index_ptr);
+
+    *first_index_ptr = q->front + q->count;
+    q->count += count;
+    /** note: this may copy some uninitialised data but whatever... */
+    while(q->count > q->space)
     {
         q->data = realloc(q->data, sizeof(SOL_QUEUE_ENTRY_TYPE) * q->space * 2);
         front_offset = q->front & (q->space - 1);
@@ -107,8 +112,14 @@ static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(str
         memcpy(src + q->space, src, sizeof(SOL_QUEUE_ENTRY_TYPE) * move_count);
         q->space *= 2;
     }
-    *index_ptr = q->front + q->count;
-    q->count++;
+}
+
+static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_index)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t* index_ptr)
+{
+    uint32_t front_offset, move_count;
+    SOL_QUEUE_ENTRY_TYPE * src;
+    
+    SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_many_index)(q, 1, index_ptr);
 }
 
 static inline void SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_enqueue_ptr)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr, uint32_t* index_ptr)
@@ -258,15 +269,26 @@ static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_back)(struc
 /** note: index may become valid again if queue cycles the full u32 before being assessed */
 static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_index_valid)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t index)
 {
-    /** get index as relative */
-    index -= q->front;
-    return index < q->count;
+    /** use index as relative to front */
+    return index - q->front < q->count;
 }
 
 static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_index_is_front)(struct SOL_QUEUE_STRUCT_NAME* q, uint32_t index)
 {
     /** get index as relative */
     return (q->count) > 0 && (index == q->front);
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_index)(struct SOL_QUEUE_STRUCT_NAME* q, SOL_QUEUE_ENTRY_TYPE** entry_ptr, uint32_t index)
+{
+    assert(entry_ptr);
+    if(index - q->front >= q->count)
+    {
+        *entry_ptr = NULL;
+        return false;
+    }
+    *entry_ptr = q->data + (index & (q->space - 1));
+    return true;
 }
 
 

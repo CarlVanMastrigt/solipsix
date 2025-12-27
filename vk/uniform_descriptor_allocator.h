@@ -69,6 +69,6 @@ bool sol_vk_uniform_descriptor_allocator_append(struct sol_vk_uniform_descriptor
 void sol_vk_uniform_descriptor_allocator_upload(struct sol_vk_uniform_descriptor_allocator* uniform_allocator, struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer);
 
 /** also resets the buffer */
-void sol_vk_uniform_descriptor_allocator_finalise(struct sol_vk_uniform_descriptor_allocator* uniform_allocator, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count);
+void sol_vk_uniform_descriptor_allocator_finalise(struct sol_vk_uniform_descriptor_allocator* uniform_allocator, const struct sol_vk_timeline_semaphore_moment* release_moment);
 
 

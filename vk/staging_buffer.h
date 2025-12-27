@@ -41,9 +41,10 @@ struct sol_vk_staging_buffer_allocation
 
 struct sol_vk_staging_buffer_segment
 {
-    struct sol_vk_timeline_semaphore_moment release_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
-    uint32_t release_moment_count;
-    bool release_moments_set;
+    uint32_t release_moment_count;/** how many to actually wait on */
+    uint32_t release_moment_queue_index;
+    uint32_t retain_count;
+    uint32_t reserved_moment_count;/** how many were reserved based on assumed usage */
 
     VkDeviceSize offset;
     VkDeviceSize size;
@@ -74,18 +75,23 @@ struct sol_vk_staging_buffer
     cnd_t setup_stall_condition;
 
     struct sol_vk_staging_buffer_segment_queue segment_queue;
+    struct sol_vk_timeline_semaphore_moment_queue release_moment_queue;
 };
 
 VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size);
 void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device);
 
-/** TODO: at present this will stall (mutex lock) until space is made, this design can (and should) be improved to allow task system integration (take/signal a sync primitive)*/
-struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkDeviceSize requested_space);
+/** TODO: at present this will stall (mutex lock) until space is made, 
+ * this design can (and should) be improved to allow task system integration 
+ * take/signal a sync primitive, possibly as variant function) */
+/** must release exactly as many times as retain count */
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkDeviceSize requested_space, uint32_t retain_count);
 
-void sol_vk_staging_buffer_allocation_flush_range(const struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
+void sol_vk_staging_buffer_allocation_flush_range(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device, const struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
 
-/** the release moments are all the moments required to wait on for this allocation/segment to no longer be in use (i.e. moments after all separate uses) */
-void sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* staging_buffer, struct sol_vk_staging_buffer_allocation* allocation, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count);
+/** the release moments are all the moments required to wait on for this allocation/segment to no longer be in use (i.e. moments after all separate uses) 
+ * will return true if this is the last required release (which can/should be used for validation) */
+bool sol_vk_staging_buffer_allocation_release(struct sol_vk_staging_buffer* staging_buffer, const struct sol_vk_staging_buffer_allocation* allocation, const struct sol_vk_timeline_semaphore_moment* release_moment);
 
 VkDeviceSize sol_vk_staging_buffer_allocation_align_offset(const struct sol_vk_staging_buffer* staging_buffer, VkDeviceSize offset);
 

@@ -657,7 +657,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     elements_offset = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset   + sol_buffer_used_space(&batch->upload_buffer));
     staging_space   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, elements_offset + sol_overlay_render_element_list_size(&batch->elements));
 
-    batch->staging_buffer_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, staging_space);
+    batch->staging_buffer_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, staging_space, 1);
 
     batch->staging_buffer = staging_buffer;
 
@@ -800,7 +800,8 @@ void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, 
 {
     uint32_t i;
 
-    sol_vk_staging_buffer_allocation_release(batch->staging_buffer, &batch->staging_buffer_allocation, &completion_moment, 1);
+    const bool last_release = sol_vk_staging_buffer_allocation_release(batch->staging_buffer, &batch->staging_buffer_allocation, &completion_moment);
+    assert(last_release);
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {

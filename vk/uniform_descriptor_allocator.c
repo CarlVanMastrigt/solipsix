@@ -102,7 +102,7 @@ void sol_vk_uniform_descriptor_allocator_upload(struct sol_vk_uniform_descriptor
 
     total_size = uniform_allocator->host_buffer.used_space;
 
-    uniform_allocator->staging_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, total_size);
+    uniform_allocator->staging_allocation = sol_vk_staging_buffer_allocation_acquire(staging_buffer, device, total_size, 1);
 
     sol_buffer_copy(&uniform_allocator->host_buffer ,uniform_allocator->staging_allocation.mapping);
     sol_buffer_reset(&uniform_allocator->host_buffer);
@@ -157,7 +157,7 @@ void sol_vk_uniform_descriptor_allocator_upload(struct sol_vk_uniform_descriptor
     while(removed_entry);
 }
 
-void sol_vk_uniform_descriptor_allocator_finalise(struct sol_vk_uniform_descriptor_allocator* uniform_allocator, struct sol_vk_timeline_semaphore_moment* release_moments, uint32_t release_moment_count)
+void sol_vk_uniform_descriptor_allocator_finalise(struct sol_vk_uniform_descriptor_allocator* uniform_allocator, const struct sol_vk_timeline_semaphore_moment* release_moment)
 {
     assert(uniform_allocator->staging_buffer);
     /* should not yet have an allocation in the actual staging (API use issue) */
@@ -165,6 +165,6 @@ void sol_vk_uniform_descriptor_allocator_finalise(struct sol_vk_uniform_descript
     assert(sol_vk_uniform_descriptor_entry_list_count(&uniform_allocator->descriptor_list) == 0);
     /* should have removed all descriptors to write as part of upload */
 
-    sol_vk_staging_buffer_allocation_release(uniform_allocator->staging_buffer, &uniform_allocator->staging_allocation, release_moments, release_moment_count);
+    sol_vk_staging_buffer_allocation_release(uniform_allocator->staging_buffer, &uniform_allocator->staging_allocation, release_moment);
     uniform_allocator->staging_buffer = NULL;
 }
