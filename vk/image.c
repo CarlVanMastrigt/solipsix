@@ -149,16 +149,12 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
 
         vkGetImageMemoryRequirements2(device->device, &image_requirements_info, &memory_requirements);
 
-        memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        if(!sol_vk_find_appropriate_memory_type(device, &memory_type_index, memory_requirements.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
         {
-            memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryRequirements.memoryTypeBits, 0);
-        }
-
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
-        {
-            result = VK_ERROR_UNKNOWN;
+            if(!sol_vk_find_appropriate_memory_type(device, &memory_type_index, memory_requirements.memoryRequirements.memoryTypeBits, 0))
+            {
+                result = VK_RESULT_MAX_ENUM;
+            }
         }
     }
 
@@ -191,7 +187,11 @@ VkResult sol_vk_image_create(struct sol_vk_image* image, struct cvm_vk_device* d
         result = vkBindImageMemory(device->device, image->image, image->memory, 0);
     }
 
-    if(result != VK_SUCCESS)
+    if(result == VK_SUCCESS)
+    {
+        image->unique_resource_identifier = sol_vk_resource_unique_identifier_acquire(device);
+    }
+    else
     {
         sol_vk_image_destroy(image, device);
     }
@@ -256,8 +256,10 @@ struct sol_buffer_segment sol_vk_image_prepare_copy(struct sol_vk_image* image, 
 
     if(upload_segment.ptr)
     {
-        *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy)
+        *sol_vk_buf_img_copy_list_append_ptr(copy_list) = (VkBufferImageCopy2)
         {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+            .pNext = NULL,
             .bufferOffset = (VkDeviceSize)upload_segment.offset,
             /** 0 indicates tightly packed */
             .bufferRowLength = 0,
@@ -299,7 +301,7 @@ struct sol_buffer_segment sol_vk_image_prepare_copy_simple(struct sol_vk_image* 
 void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset)
 {
     uint32_t i, copy_count;
-    VkBufferImageCopy* copy_actions;
+    VkBufferImageCopy2* copy_actions;
 
     copy_count = sol_vk_buf_img_copy_list_count(copy_list);
     copy_actions = sol_vk_buf_img_copy_list_data(copy_list);
@@ -310,7 +312,16 @@ void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_i
         {
             copy_actions[i].bufferOffset += src_buffer_offset;
         }
-        vkCmdCopyBufferToImage(command_buffer, src_buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_count, copy_actions);
+        vkCmdCopyBufferToImage2(command_buffer, &(VkCopyBufferToImageInfo2)
+        {
+            .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
+            .pNext = NULL,
+            .srcBuffer = src_buffer, 
+            .dstImage = image->image, 
+            .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+            .regionCount = copy_count, 
+            .pRegions = copy_actions,
+        });
 
         sol_vk_buf_img_copy_list_reset(copy_list);
     }
@@ -353,6 +364,9 @@ void sol_vk_supervised_image_terminate(struct sol_vk_supervised_image* supervise
 
 void sol_vk_supervised_image_barrier(struct sol_vk_supervised_image* supervised_image, VkCommandBuffer command_buffer, VkImageLayout new_layout, VkPipelineStageFlagBits2 dst_stage_mask, VkAccessFlagBits2 dst_access_mask)
 {
+    VkPipelineRobustnessBufferBehavior aa;
+
+    
     /// thse definitions do restrict future use, but there isnt a good way around that, would be good to specify these values on the device...
     static const VkAccessFlagBits2 all_image_read_access_mask =
         VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT          |

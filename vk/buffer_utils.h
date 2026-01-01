@@ -22,23 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 #include <inttypes.h>
 
-#warning put wrapper around this, to require initialization with src and dst, then asserting they match when items are appended
-#define SOL_STACK_ENTRY_TYPE VkBufferImageCopy2
-#define SOL_STACK_STRUCT_NAME sol_vk_buf_img_copy_list
+#define SOL_STACK_ENTRY_TYPE VkBufferCopy2
+#define SOL_STACK_STRUCT_NAME sol_vk_buffer_copy_list
 #include "data_structures/stack.h"
 
-
-/** TODO: (maybe) add a compatibility class parameter with 0 indicating incompatible with any other format */
-struct sol_vk_format_block_properties
-{
-	uint8_t bytes:6;
-	uint8_t alignment:6;
-	uint8_t compressed:1;
-	uint8_t texel_width:4;
-	uint8_t texel_height:4;
-
-	/** TODO: need handling of planar formats, multiplanar alignment &c. have above per plane basically */
-};
-
-/** should possibly move this to general utils as it applies to more than images */
-struct sol_vk_format_block_properties sol_vk_format_block_properties(VkFormat format);

@@ -255,7 +255,8 @@ struct sol_image_atlas
 	 * it can be ensured that zero will not be hit for 2^64 requests, and thus treated as an invalid identifier */
 	uint64_t current_identifier;
 
-	/** the (reserved/unused) entry delineating the start and end of the linked list of entries and the threshold of the current "access" */
+	/** the (reserved/unused) entry delineating the start and end of the linked list of entries and the threshold of the current "access" 
+	 * note: `header_entry_index` is the start and end because the linked list is a ring */
 	uint32_t header_entry_index;
 	uint32_t threshold_entry_index;
 
@@ -1279,7 +1280,8 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_end(s
 	atlas->accessor_active = false;
 
 	/** NOTE: it is very important that nothing in this loop will alter the backing of the entry array
-	 * doing so would invalidate the threshold entry pointer */
+	 * doing so would invalidate the `threshold_entry` pointer 
+	 * note that this works because transient entries are placed at the back of the queue of the current "access" (between the front of the queue and the threshold entry) */
 	threshold_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, atlas->threshold_entry_index);
 	while(sol_image_atlas_entry_array_access_entry(&atlas->entry_array, threshold_entry->next_entry_index)->identifier & SOL_IA_IDENTIFIER_TRANSIENT_BIT)
 	{

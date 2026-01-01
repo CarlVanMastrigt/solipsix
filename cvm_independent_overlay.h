@@ -40,7 +40,7 @@ struct cvm_overlay_target
 {
     /// framebuffer depends on these
     VkImageView image_view;
-    cvm_vk_resource_identifier image_view_unique_identifier;
+    uint64_t image_view_unique_identifier;
     /// render pass depends on these
     VkExtent2D extent;
     VkFormat format;

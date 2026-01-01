@@ -87,9 +87,6 @@ struct sol_overlay_rendering_resources
     /** atlases used for storing backing information for verious purposes
      * some of these may be null depending on implementation details
      * these will, in order, match bind points in shader that renders overlay elements */
-    // struct sol_image_atlas* bc4_atlas;
-    // struct sol_image_atlas* r8_atlas;
-    // struct sol_image_atlas* rgba8_atlas;
     struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
 };
 
@@ -118,7 +115,8 @@ struct sol_overlay_render_batch
     /** miscellaneous inline upload buffer */
     struct sol_buffer upload_buffer;
 
-    /** copy/upload lists that will be provided to the image atlas for scope setup */
+    /** copy/upload lists that will be provided to the image atlas for scope setup 
+     * note: these are NOT provided/managed as part of image atlas interface because there are legitimate uses of the image atlas that do not require upload */
     struct sol_vk_buf_img_copy_list atlas_copy_lists[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     /** offset applied to all copies */
     VkDeviceSize upload_offset;

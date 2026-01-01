@@ -559,24 +559,6 @@ VkPipeline sol_overlay_render_pipeline_create_dynamic(struct cvm_vk_device* devi
 
 
 
-// VkDescriptorSet sol_overlay_render_descriptor_set_acquire(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device)
-// {
-//     VkDescriptorSet descriptor_set;
-//     if(!sol_vk_limited_descriptor_set_stack_remove(&persistent_resources->descriptor_sets, &descriptor_set))
-//     {
-//         descriptor_set = sol_overlay_render_descriptor_set_allocate(device, persistent_resources);
-//     }
-//     return descriptor_set;
-// }
-
-// void sol_overlay_render_descriptor_set_release(struct sol_overlay_render_persistent_resources* persistent_resources, VkDescriptorSet set)
-// {
-//     sol_vk_limited_descriptor_set_stack_append(&persistent_resources->descriptor_sets, set);
-// }
-
-
-
-
 
 void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize upload_buffer_size)
 {
@@ -585,8 +567,8 @@ void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch,
 
     sol_overlay_render_element_list_initialise(&batch->elements, 64);
 
-// fixed/limited size lends itself well to buddy allocator use
-    sol_buffer_initialise(&batch->upload_buffer, upload_buffer_size, upload_buffer_alignment);///256k, plenty for per frame
+    /** note: fixed/limited size lends itself well to buddy allocator use */
+    sol_buffer_initialise(&batch->upload_buffer, upload_buffer_size, upload_buffer_alignment);
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {

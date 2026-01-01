@@ -57,7 +57,7 @@ typedef struct cvm_vk_swapchain_presentable_image
 {
     VkImage image;///theese are provided by the WSI, need access to this for synchronization purposes
     VkImageView image_view;
-    cvm_vk_resource_identifier image_view_unique_identifier;
+    uint64_t image_view_unique_identifier;
 
     VkFence presentation_fence;// used if swapchain maintainence is present
     bool presentation_fence_active;
@@ -129,11 +129,11 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
-void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup);
-void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device);
+void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup);
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain* swapchain, struct cvm_vk_device* device);
 
 /** may return NULL, e.g. when minimized, so calling code should avoid rendering when NULL */
-cvm_vk_swapchain_presentable_image* cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, VkExtent2D extent);
+cvm_vk_swapchain_presentable_image* cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, struct cvm_vk_device* device, VkExtent2D extent);
 
 void cvm_vk_surface_swapchain_present_image(const cvm_vk_device* device, cvm_vk_swapchain_presentable_image* presentable_image, cvm_vk_device_queue* present_queue);
 

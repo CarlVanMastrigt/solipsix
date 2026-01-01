@@ -29,7 +29,7 @@ struct cvm_overlay_frame_resources
     #warning does this require a last use moment!?
     /// copy of target image view, used as key to the framebuffer cache
     VkImageView image_view;
-    cvm_vk_resource_identifier image_view_unique_identifier;
+    uint64_t image_view_unique_identifier;
 
     /// data to cache
     VkFramebuffer framebuffer;
@@ -39,7 +39,7 @@ struct cvm_overlay_frame_resources
 #define SOL_LIMITED_CACHE_KEY_TYPE struct cvm_overlay_target*
 #define SOL_LIMITED_CACHE_FUNCTION_PREFIX cvm_overlay_frame_resources_cache
 #define SOL_LIMITED_CACHE_STRUCT_NAME cvm_overlay_frame_resources_cache
-#define SOL_LIMITED_CACHE_CMP_EQ( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
+#define SOL_LIMITED_CACHE_CMP_EQ( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier)
 #include "data_structures/limited_cache.h"
 
 /// needs a better name

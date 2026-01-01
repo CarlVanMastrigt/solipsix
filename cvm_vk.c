@@ -1181,8 +1181,7 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup* 
 
     #warning generally could do with cleanup, perhaps separating logical and physical devices?
 
-    device->resource_identifier_monotonic = malloc(sizeof(atomic_uint_least64_t));
-    atomic_init(device->resource_identifier_monotonic, 1);/// nonzero for debugging zero is invalid while testing
+    atomic_init(&device->resource_identifier_monotonic, 1);/// nonzero for debugging zero is invalid while testing
 
 #warning make create
     cvm_vk_pipeline_cache_initialise(&device->pipeline_cache, device, device_setup->pipeline_cache_file_name);
@@ -1219,8 +1218,6 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
     cvm_vk_destroy_transfer_chain();///make conditional on separate transfer queue?
 
     cvm_vk_destroy_logical_device(device);
-
-    free(device->resource_identifier_monotonic);
 }
 
 
@@ -1443,17 +1440,19 @@ void cvm_vk_destroy_image(VkImage image)
     vkDestroyImage(cvm_vk_.device,image,NULL);
 }
 
-uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
+bool sol_vk_find_appropriate_memory_type(const struct cvm_vk_device* device, uint32_t* result_type, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
 {
     uint32_t i;
     for(i=0; i<device->memory_properties.memoryTypeCount; i++)
     {
         if(( supported_type_bits & 1<<i ) && ((device->memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
         {
-            return i;
+            *result_type = i;
+            return true;
         }
     }
-    return CVM_INVALID_U32_INDEX;
+    *result_type = CVM_INVALID_U32_INDEX;
+    return false;
 }
 
 
@@ -1580,17 +1579,12 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
 
     if(result == VK_SUCCESS)
     {
-        memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, supported_type_bits, desired_properties|required_properties);
-
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        if(!sol_vk_find_appropriate_memory_type(&cvm_vk_, &memory_type_index, supported_type_bits, desired_properties|required_properties))
         {
-            memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, supported_type_bits, required_properties);
-        }
-
-        if(memory_type_index == CVM_INVALID_U32_INDEX)
-        {
-            //fprintf(stderr,"CVM VK ERROR - images have no singular supported memory types with required properties, consider splitting backing memory, or perhaps using less stringent requirements\n");
-            result = VK_RESULT_MAX_ENUM;
+            if(!sol_vk_find_appropriate_memory_type(&cvm_vk_, &memory_type_index, supported_type_bits, required_properties))
+            {
+                result = VK_RESULT_MAX_ENUM;
+            }
         }
     }
 
@@ -1674,14 +1668,11 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
     VkMemoryRequirements buffer_memory_requirements;
     vkGetBufferMemoryRequirements(cvm_vk_.device,*buffer,&buffer_memory_requirements);
 
-    memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, buffer_memory_requirements.memoryTypeBits, desired_properties|required_properties);
-
-    if(memory_type_index == CVM_INVALID_U32_INDEX)
+    if(!sol_vk_find_appropriate_memory_type(&cvm_vk_, &memory_type_index, supported_type_bits, desired_properties|required_properties))
     {
-        memory_type_index = sol_vk_find_appropriate_memory_type(&cvm_vk_, buffer_memory_requirements.memoryTypeBits, required_properties);
-        assert(memory_type_index != CVM_INVALID_U32_INDEX);
+        const bool fallback = sol_vk_find_appropriate_memory_type(&cvm_vk_, &memory_type_index, supported_type_bits, required_properties);
+        assert(fallback);
     }
-
 
     VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
     {
@@ -1828,21 +1819,15 @@ VkResult sol_vk_backed_buffer_create(const cvm_vk_device * device, const struct 
     {
         vkGetBufferMemoryRequirements(device->device, buffer->buffer, &memory_requirements);
 
-        memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, desired_properties);
-
-        if(memory_type_index == SOL_U32_INVALID)
+        if(!sol_vk_find_appropriate_memory_type(&cvm_vk_, &memory_type_index, memory_requirements.memoryTypeBits, desired_properties|required_properties))
         {
-            /** try again with only required properties */
-            memory_type_index = sol_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, required_properties);
+            if(!sol_vk_find_appropriate_memory_type(&cvm_vk_, &memory_type_index, memory_requirements.memoryTypeBits, required_properties))
+            {
+                result = VK_RESULT_MAX_ENUM;
+            }
         }
-
-        if(memory_type_index == SOL_U32_INVALID)
-        {
-            //fprintf(stderr,"CVM VK ERROR - memory with required properties not found in buffer allocation\n");
-            /** no VK error to represent that no memory types have the required properties */
-            result = VK_RESULT_MAX_ENUM;
-        }
-        else
+        
+        if(result == VK_SUCCESS)
         {
             buffer->memory_properties = device->memory_properties.memoryTypes[memory_type_index].propertyFlags;
             buffer->memory_type_index = memory_type_index;

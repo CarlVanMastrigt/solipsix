@@ -21,30 +21,34 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "vk/staging_buffer.h"
 
-VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size)
+VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size)
 {
     VkResult result;
-    struct sol_vk_backed_buffer backing;
+    struct sol_vk_buffer backing_buffer;
 
     const VkDeviceSize alignment = cvm_vk_buffer_alignment_requirements(device, usage);
 
     buffer_size = cvm_vk_align(buffer_size, alignment);/// round to multiple of alignment
 
-    struct sol_vk_backed_buffer_description backing_description =
+    const VkBufferCreateInfo buffer_create_info =
     {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
         .size = buffer_size,
         .usage = usage,
-        .required_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        .desired_properties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices = NULL,
     };
 
-    result = sol_vk_backed_buffer_create(device, &backing_description, &backing);
+    result = sol_vk_buffer_initialise(&backing_buffer, device, &buffer_create_info, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     if(result == VK_SUCCESS)
     {
         *staging_buffer = (struct sol_vk_staging_buffer)
         {
-            .backing = backing,
+            .backing_buffer = backing_buffer,
             .threads_waiting_on_semaphore_setup = false,
             .terminating = false,
 
@@ -66,7 +70,7 @@ VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_
 }
 
 /// cannot acquire allocations after this has been called
-void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
+void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device)
 {
     struct sol_vk_staging_buffer_segment * oldest_active_segment;
     struct sol_vk_timeline_semaphore_moment release_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
@@ -113,11 +117,11 @@ void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffe
     sol_vk_timeline_semaphore_moment_queue_terminate(&staging_buffer->release_moment_queue);
     sol_vk_staging_buffer_segment_queue_terminate(&staging_buffer->segment_queue);
 
-    sol_vk_backed_buffer_destroy(device, &staging_buffer->backing);
+    sol_vk_buffer_terminate(&staging_buffer->backing_buffer, device);
 }
 
 /** MUST only be called inside mutex locked region */
-static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device)
+static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device)
 {
     struct sol_vk_staging_buffer_segment * oldest_active_segment;
     struct sol_vk_timeline_semaphore_moment release_moments[SOL_VK_TIMELINE_SEMAPHORE_MOMENT_MAX_WAIT_COUNT];
@@ -162,7 +166,7 @@ static inline void sol_vk_staging_buffer_prune_allocations(struct sol_vk_staging
     }
 }
 
-struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device * device, VkDeviceSize requested_space, uint32_t retain_count)
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device * device, VkDeviceSize requested_space, uint32_t retain_count)
 {
     #warning this functions structure is a bit fucky; cleanup would be good
     VkDeviceSize required_space;
@@ -258,7 +262,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
     };
 
     acquired_offset = wrap ? 0 : staging_buffer->current_offset;
-    mapping = staging_buffer->backing.mapping + acquired_offset;
+    mapping = staging_buffer->backing_buffer.mapping + acquired_offset;
 
     staging_buffer->remaining_space -= required_space;
     staging_buffer->current_offset  += required_space;
@@ -273,7 +277,7 @@ struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire
 
     return (struct sol_vk_staging_buffer_allocation)
     {
-        .acquired_buffer = staging_buffer->backing.buffer,
+        .acquired_buffer = staging_buffer->backing_buffer.buffer,
         .acquired_offset = acquired_offset,
         .mapping = mapping,
         .segment_index = segment_index,
@@ -284,7 +288,7 @@ void sol_vk_staging_buffer_allocation_flush_range(struct sol_vk_staging_buffer* 
 {
     mtx_lock(&staging_buffer->access_mutex);
 
-    sol_vk_backed_buffer_flush_range(device, &staging_buffer->backing, allocation->acquired_offset + relative_offset, size);
+    sol_vk_buffer_flush_range(device, &staging_buffer->backing_buffer, allocation->acquired_offset + relative_offset, size);
 
     mtx_unlock(&staging_buffer->access_mutex);
 }

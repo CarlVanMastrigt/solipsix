@@ -123,8 +123,6 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 
 typedef struct cvm_vk_device cvm_vk_device;
 
-typedef uint_least64_t cvm_vk_resource_identifier;
-
 static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignment)
 {
     return (size+alignment-1) & ~(alignment-1);
@@ -256,7 +254,7 @@ struct cvm_vk_device
 
     struct cvm_vk_defaults defaults;
 
-    atomic_uint_least64_t * resource_identifier_monotonic;
+    _Atomic uint64_t resource_identifier_monotonic;
     #warning make above track/manage all resources as well as their backing memory
     #warning add image backing blocks per heap type (start with 0 blocks, used for small, non-dedicated allocations)
 
@@ -270,10 +268,9 @@ struct cvm_vk_device
 #include "vk/command_pool.h"
 #include "vk/swapchain.h"
 
-#warning remove const from below
-static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acquire(const cvm_vk_device * device)
+static inline uint64_t sol_vk_resource_unique_identifier_acquire(struct cvm_vk_device* device)
 {
-    return atomic_fetch_add_explicit(device->resource_identifier_monotonic, 1, memory_order_relaxed);
+    return atomic_fetch_add_explicit(&device->resource_identifier_monotonic, 1, memory_order_relaxed);
 }
 
 VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance,const cvm_vk_instance_setup * setup);
@@ -348,8 +345,7 @@ void cvm_vk_destroy_sampler(VkSampler sampler);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
-/** will return 0xFFFFFFFF upon failure to find appropriate memory type **/
-uint32_t sol_vk_find_appropriate_memory_type(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties);
+bool sol_vk_find_appropriate_memory_type(const struct cvm_vk_device* device, uint32_t* result_type, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties);
 
 
 

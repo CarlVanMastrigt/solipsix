@@ -21,7 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, VkImage image, uint32_t index, cvm_vk_swapchain_instance * parent_swapchain_instance)
+static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchain_presentable_image * presentable_image, struct cvm_vk_device * device, VkImage image, uint32_t index, cvm_vk_swapchain_instance * parent_swapchain_instance)
 {
     uint32_t i;
 
@@ -41,7 +41,7 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
 
     ///image view
     presentable_image->image_view = VK_NULL_HANDLE;
-    presentable_image->image_view_unique_identifier = cvm_vk_resource_unique_identifier_acquire(device);
+    presentable_image->image_view_unique_identifier = sol_vk_resource_unique_identifier_acquire(device);
     #warning move above into handled function that atomically increments, ideally in a way that doesnt require a non-const device
     VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
     {
@@ -96,7 +96,7 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
 
 #warning if current extent is not 0xFFFFFFFF then use that and ignore desired extent here and in swapchin recreation
 #warning handle 0x0 resolution when minimized (app level? i.e. don't render allow non-rendering)
-static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance* instance, const cvm_vk_device* device, const cvm_vk_surface_swapchain* swapchain, VkExtent2D extent, VkSwapchainKHR old_swapchain)
+static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance* instance, struct cvm_vk_device* device, const cvm_vk_surface_swapchain* swapchain, VkExtent2D extent, VkSwapchainKHR old_swapchain)
 {
     uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,width,height;
     VkBool32 surface_supported;
@@ -280,7 +280,7 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
 
 
 
-void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup)
+void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, struct cvm_vk_device* device, const cvm_vk_swapchain_setup* setup)
 {
     swapchain->setup_info = *setup;
 
@@ -295,7 +295,7 @@ void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain* swapchain, const struc
     cvm_vk_swapchain_instance_queue_initialise(&swapchain->swapchain_queue, 16);
 }
 
-void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, const struct cvm_vk_device * device)
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, struct cvm_vk_device * device)
 {
     cvm_vk_swapchain_instance * instance;
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -395,7 +395,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
 }
 
 
-cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, const struct cvm_vk_device* device, VkExtent2D extent)
+cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain* swapchain, struct cvm_vk_device* device, VkExtent2D extent)
 {
     bool existing_instance;
     cvm_vk_swapchain_presentable_image * presentable_image;

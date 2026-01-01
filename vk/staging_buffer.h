@@ -25,6 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 
 #include "vk/timeline_semaphore.h"
+#include "vk/buffer.h"
 
 struct cvm_vk_device;
 
@@ -59,7 +60,7 @@ struct sol_vk_staging_buffer_segment
 
 struct sol_vk_staging_buffer
 {
-    struct sol_vk_backed_buffer backing;
+    struct sol_vk_buffer backing_buffer;
 
     bool threads_waiting_on_semaphore_setup;
 
@@ -78,14 +79,14 @@ struct sol_vk_staging_buffer
     struct sol_vk_timeline_semaphore_moment_queue release_moment_queue;
 };
 
-VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size);
-void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device);
+VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device, VkBufferUsageFlags usage, VkDeviceSize buffer_size);
+void sol_vk_staging_buffer_terminate(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device);
 
 /** TODO: at present this will stall (mutex lock) until space is made, 
  * this design can (and should) be improved to allow task system integration 
  * take/signal a sync primitive, possibly as variant function) */
 /** must release exactly as many times as retain count */
-struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, const struct cvm_vk_device* device, VkDeviceSize requested_space, uint32_t retain_count);
+struct sol_vk_staging_buffer_allocation sol_vk_staging_buffer_allocation_acquire(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device, VkDeviceSize requested_space, uint32_t retain_count);
 
 void sol_vk_staging_buffer_allocation_flush_range(struct sol_vk_staging_buffer* staging_buffer, struct cvm_vk_device* device, const struct sol_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
 

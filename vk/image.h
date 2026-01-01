@@ -61,7 +61,8 @@ struct sol_vk_image
     properties;
 
     VkImage image;
-    VkDeviceMemory memory;// may be VK_NULL_HANDLE if backed by the system -- in which case should have different reference
+    VkDeviceMemory memory;/** may be VK_NULL_HANDLE if backed by the system */
+    uint32_t unique_resource_identifier;
 };
 
 /** if view_create_info is NULL, the default view will be created
@@ -80,6 +81,9 @@ void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_i
 /** following just a convenience/example; instead please use the underlying call directly
  *  `vkCreateImageView(device->device, view_create_info, device->host_allocator, view);`  */
 VkResult sol_vk_image_create_view(VkImageView* view, struct cvm_vk_device* device, const struct sol_vk_image* image, const VkImageViewCreateInfo* view_create_info);
+
+
+
 
 
 
