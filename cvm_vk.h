@@ -361,30 +361,7 @@ VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, 
 
 
 
-struct sol_vk_backed_buffer_description
-{
-    VkDeviceSize size;
-    VkBufferUsageFlags usage;
-    /** if VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT is set in required_properties the buffer will be mapped*/
-    VkMemoryPropertyFlags required_properties;
-    VkMemoryPropertyFlags desired_properties;
-};
 
-struct sol_vk_backed_buffer
-{
-    struct sol_vk_backed_buffer_description description;
-
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-    void* mapping;
-    VkMemoryPropertyFlags memory_properties;
-    uint32_t memory_type_index;
-};
-
-VkResult sol_vk_backed_buffer_create(const cvm_vk_device * device, const struct sol_vk_backed_buffer_description* description, struct sol_vk_backed_buffer* buffer);
-void sol_vk_backed_buffer_destroy(const cvm_vk_device * device, struct sol_vk_backed_buffer* buffer);
-
-void sol_vk_backed_buffer_flush_range(const cvm_vk_device * device, const struct sol_vk_backed_buffer* buffer, VkDeviceSize offset, VkDeviceSize size);
 
 
 
@@ -418,8 +395,6 @@ VkResult cvm_vk_create_descriptor_pool_for_sizes(VkDescriptorPool* pool, const s
 
 
 #define CVM_VK_MAX_QUEUES 16
-
-bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags);
 
 typedef struct queue_transfer_synchronization_data
 {
