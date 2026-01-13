@@ -43,7 +43,7 @@ struct sol_image_atlas_entry
 	/** the start of each accessor and the start/end of the queue itself use (unreferenced) atlas entries in the linked list to designate ranges
 	 * the following are mutually exlusive; is_accessor indicating an accessor threshold entry and is_tile_entry indicating a pixel grid (real) entry
 	 * if neither are set that is the root of the linked list held by the atlas itself and used for insertion */
-	uint32_t is_tile_entry : 1;
+	uint64_t is_tile_entry : 1;
 
 	/** prev/next indices in linked list of entries my order of use, 16M is more than enough entries
 	 * NOTE: 0 is reserved for the dummy start index
@@ -86,6 +86,13 @@ struct sol_image_atlas_entry
 
 	/** 2 bits left over */
 };
+
+// ^ 32 bytes with full packing, 48 without
+
+void test_ia(void)
+{
+	printf("ia e: %lu\n", sizeof(struct sol_image_atlas_entry));
+}
 
 /** NOTE: 21 bits */
 #define SOL_IA_INVALID_IDX      0x001FFFFFu

@@ -36,7 +36,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "sol_utils.h"
 
 
-#include "data_structures/available_indices_stack.h"
+#include "data_structures/indices_stack.h"
 
 #include "overlay/render.h"
 #include "overlay/enums.h"
@@ -74,7 +74,7 @@ struct sol_font_library
 	FT_Library freetype_library;
 	// add pointer to image atlas here?
 	uint32_t vended_font_count;// identifier passed into hash map
-	struct sol_available_indices_stack available_font_indices;
+	struct sol_indices_stack available_font_indices;
 	#warning really not happy with the management of above
 
 	mtx_t mutex;

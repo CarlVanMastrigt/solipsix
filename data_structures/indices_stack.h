@@ -22,8 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#define SOL_STACK_ENTRY_TYPE void*
-#define SOL_STACK_FUNCTION_PREFIX sol_available_pointer_stack
-#define SOL_STACK_STRUCT_NAME sol_available_pointer_stack
+#define SOL_STACK_ENTRY_TYPE uint32_t
+#define SOL_STACK_STRUCT_NAME sol_indices_stack
 #include "data_structures/stack.h"
 

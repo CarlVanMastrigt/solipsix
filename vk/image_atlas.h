@@ -43,8 +43,7 @@ enum sol_image_atlas_result
 {
     SOL_IMAGE_ATLAS_FAIL_IMAGE_FULL, /** there are no remaining tiles, need to wait for space to be made */
     SOL_IMAGE_ATLAS_FAIL_MAP_FULL, /** hash map is full, need to wait for space to be made */
-    SOL_IMAGE_ATLAS_FAIL_UPLOAD_FULL, /** desire to upload contents for this tile, but there is no remaining space in upload buffer */
-    SOL_IMAGE_ATLAS_FAIL_ABSENT, /** if not forcing a dependency this may appear if a resource is written */
+    SOL_IMAGE_ATLAS_FAIL_ABSENT, /** if using find rather than obtain this will be returned if the entry is not already present */
     SOL_IMAGE_ATLAS_SUCCESS_FOUND, /** existing entry found; no need to initalise */
     SOL_IMAGE_ATLAS_SUCCESS_INSERTED, /** existing entry not found; space was made but contents must be initialised */
 };

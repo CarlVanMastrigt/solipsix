@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2024,2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -25,7 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sol_utils.h"
 
-#include "data_structures/available_indices_stack.h"
+#include "data_structures/indices_stack.h"
 
 
 
@@ -47,7 +47,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct SOL_ARRAY_STRUCT_NAME
 {
-    struct sol_available_indices_stack available_indices;
+    struct sol_indices_stack available_indices;
     SOL_ARRAY_ENTRY_TYPE* array;
     uint32_t space;
     uint32_t count;
@@ -56,7 +56,7 @@ struct SOL_ARRAY_STRUCT_NAME
 static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_initialise)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t initial_size)
 {
     assert((initial_size & (initial_size - 1)) == 0);
-    sol_available_indices_stack_initialise(&a->available_indices, initial_size);
+    sol_indices_stack_initialise(&a->available_indices, initial_size);
     a->array = malloc(sizeof(SOL_ARRAY_ENTRY_TYPE) * initial_size);
     a->space = initial_size;
     a->count = 0;
@@ -64,14 +64,14 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_initialise)(struct
 
 static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_terminate)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
-    sol_available_indices_stack_terminate(&a->available_indices);
+    sol_indices_stack_terminate(&a->available_indices);
     free(a->array);
 }
 
 static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
     uint32_t i;
-    if(!sol_available_indices_stack_remove(&a->available_indices, &i))
+    if(!sol_indices_stack_remove(&a->available_indices, &i))
     {
         if(a->count == a->space)
         {
@@ -105,25 +105,27 @@ static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct
 /** returned pointer cannot be used after any other operation has occurred*/
 static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
-    sol_available_indices_stack_append(&a->available_indices, index);
+    assert(index < a->count);
+    sol_indices_stack_append(&a->available_indices, index);
     return a->array + index;
 }
 
 static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
-    sol_available_indices_stack_append(&a->available_indices, index);
+    assert(index < a->count);
+    sol_indices_stack_append(&a->available_indices, index);
     return a->array[index];
 }
 
 static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_reset)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
-    sol_available_indices_stack_reset(&a->available_indices);
+    sol_indices_stack_reset(&a->available_indices);
     a->count = 0;
 }
 
 static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_is_empty)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
-    return a->count == sol_available_indices_stack_count(&a->available_indices);
+    return a->count == sol_indices_stack_count(&a->available_indices);
 }
 
 static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_get_entry)(const struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
@@ -138,8 +140,8 @@ static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_a
 
 static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_active_count)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
-    assert(a->count >= sol_available_indices_stack_count(&a->available_indices));
-    return a->count - sol_available_indices_stack_count(&a->available_indices);
+    assert(a->count >= sol_indices_stack_count(&a->available_indices));
+    return a->count - sol_indices_stack_count(&a->available_indices);
 }
 
 
