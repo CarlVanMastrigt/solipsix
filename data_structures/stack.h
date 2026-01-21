@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2024,2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -29,6 +29,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SOL_STACK_ENTRY_TYPE
 #error must define SOL_STACK_ENTRY_TYPE
+/** adding this inside erroring macro to get clang to recognise it */
+#define SOL_STACK_ALLOW_UNORDERED_OPERATIONS
 #define SOL_STACK_ENTRY_TYPE int
 #endif
 
@@ -191,6 +193,20 @@ static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_d
     return s->data;
 }
 
+/** basically the functions that turn a stack into a list
+ * it is recommended to define the type as a list to differentiate them */
+#ifdef SOL_STACK_ALLOW_UNORDERED_OPERATIONS
+static inline SOL_STACK_ENTRY_TYPE SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_get_entry)(struct SOL_STACK_STRUCT_NAME* s, uint32_t index)
+{
+    assert(index < s->count);
+    return s->data[index];
+}
+static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove_entry)(struct SOL_STACK_STRUCT_NAME* s, uint32_t index)
+{
+    assert(index < s->count);
+    s->data[index] = s->data[--s->count];
+}
+#endif
 
 #undef SOL_STACK_ENTRY_TYPE
 #undef SOL_STACK_FUNCTION_PREFIX
