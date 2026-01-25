@@ -214,8 +214,36 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
     }
 }
 
+/** returns a conservative value athat compensates for the worst case alignment requirements */
+void sol_vk_image_calculate_copy_space_requirements(const struct sol_vk_image* image, VkExtent3D extent, VkDeviceSize* byte_count, VkDeviceSize* alignment)
+{
+    struct sol_vk_format_block_properties block_properties;
+    VkDeviceSize w, h;
 
-struct sol_buffer_segment sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
+    block_properties = sol_vk_format_block_properties(image->properties.format);
+
+    assert(extent.width  % block_properties.texel_width  == 0);
+    assert(extent.height % block_properties.texel_height == 0);
+
+    w = (VkDeviceSize)extent.width  / (VkDeviceSize)block_properties.texel_width;
+    h = (VkDeviceSize)extent.height / (VkDeviceSize)block_properties.texel_height;
+    *byte_count = w * h * (VkDeviceSize)block_properties.bytes;
+    *alignment = block_properties.alignment;
+}
+
+void sol_vk_image_calculate_copy_space_requirements_simple(const struct sol_vk_image* image, u16_vec2 extent, VkDeviceSize* byte_count, VkDeviceSize* alignment)
+{
+    VkExtent3D vk_extent =
+    {
+        .width = extent.x,
+        .height = extent.y,
+        .depth = 1,
+    };
+
+    sol_vk_image_calculate_copy_space_requirements(image, vk_extent, byte_count, alignment);
+}
+
+struct sol_buffer_segment sol_vk_image_prepare_copy(const struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource)
 {
     struct sol_vk_format_block_properties block_properties;
     struct sol_buffer_segment upload_segment;
@@ -273,7 +301,7 @@ struct sol_buffer_segment sol_vk_image_prepare_copy(struct sol_vk_image* image, 
     return upload_segment;
 }
 
-struct sol_buffer_segment sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
+struct sol_buffer_segment sol_vk_image_prepare_copy_simple(const struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer)
 {
     VkImageSubresourceLayers vk_subresource =
     {

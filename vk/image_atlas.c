@@ -194,15 +194,12 @@ static inline bool sol_ia_p_loc_end_in_range_y(uint32_t packed_location, uint32_
 #include "data_structures/array.h"
 
 
-struct sol_image_atlas;
-
 /** the map takes a unique identifier and gets the index in the array of entries
  * NOTE: in the map `key` is just the entries identifier */
 static inline bool sol_image_atlas_identifier_entry_compare_equal(uint64_t key, uint32_t* entry_index, struct sol_image_atlas* atlas);
 static inline uint64_t sol_image_atlas_entry_identifier_get(const uint32_t* entry_index, struct sol_image_atlas* atlas);
 
 #define SOL_HASH_MAP_STRUCT_NAME sol_image_atlas_map
-#define SOL_HASH_MAP_FUNCTION_PREFIX sol_image_atlas_map
 #define SOL_HASH_MAP_KEY_TYPE uint64_t
 #define SOL_HASH_MAP_ENTRY_TYPE uint32_t
 #define SOL_HASH_MAP_FUNCTION_KEYWORDS static
@@ -1551,23 +1548,23 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 	return SOL_IMAGE_ATLAS_SUCCESS_INSERTED;
 }
 
-bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier)
-{
-	assert(false);// NYI
-	enum sol_map_result map_find_result;
-	uint32_t* entry_index_in_map;
+// bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier)
+// {
+// 	assert(false);// NYI
+// 	enum sol_map_result map_find_result;
+// 	uint32_t* entry_index_in_map;
 
-	map_find_result = sol_image_atlas_map_find(&atlas->itentifier_entry_map, entry_identifier, &entry_index_in_map);
+// 	map_find_result = sol_image_atlas_map_find(&atlas->itentifier_entry_map, entry_identifier, &entry_index_in_map);
 
-	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
-	{
-		sol_image_atlas_entry_make_available(atlas, *entry_index_in_map);
+// 	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+// 	{
+// 		sol_image_atlas_entry_make_available(atlas, *entry_index_in_map);
 
-		return true;
-	}
+// 		return true;
+// 	}
 
-	return false;
-}
+// 	return false;
+// }
 
 struct sol_vk_supervised_image* sol_image_atlas_access_supervised_image(struct sol_image_atlas* atlas)
 {

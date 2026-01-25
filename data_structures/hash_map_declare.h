@@ -26,8 +26,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifndef SOL_HASH_MAP_FUNCTION_PREFIX
-#error must define SOL_HASH_MAP_FUNCTION_PREFIX
-#define SOL_HASH_MAP_FUNCTION_PREFIX placeholder_hash_map
+#define SOL_HASH_MAP_FUNCTION_PREFIX SOL_HASH_MAP_STRUCT_NAME
 #endif
 
 #ifndef SOL_HASH_MAP_KEY_TYPE
@@ -89,7 +88,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_clear)(stru
 
 /** searches for key; then if found sets entry to allow direct access to it (if entry non null) then returns true
  *  pointer returned with entry becomes invalid after any other map functions are executed */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(const struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
 
 /** find that upon failure assigns space based key, returns true if insertion was performed
  *  pointer returned with entry becomes invalid after any other map functions are executed

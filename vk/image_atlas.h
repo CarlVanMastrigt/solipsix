@@ -100,8 +100,14 @@ enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* a
 
 
 /** if insertion happens but external systems fail to initialise an entry this should be called to release it
- * this must not be called on in use resources */
-bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier);
+ * this must not be called on in use resources 
+ * 
+ * this has been removed from the API because this behaviour should generally be avoided:
+ * 	^ it makes the worst case behaviour worse (add to hash map and then remove imddediately over and over again)
+ * 	^ it causes a mismatch with what is possible/desired in the buffer table algorithm
+ * 	^ it is also incompatible with any attempts at the use of this algorithm in a multitheaded fashion (other threads may see an entry as created/initialised and then it gets removed)
+ * >>  if REALLY needed: it can be uncommented out here and in `image_atlas.c` - it will *work* in the single threaded use case... */
+// bool sol_image_atlas_entry_release(struct sol_image_atlas* atlas, uint64_t entry_identifier);
 
 #warning if write access requested and there is a better slot to place the size of content desired (or a different size is requested) \
 use that new spot (consider allowing image->image copy list to facilitate this type of behaviour)

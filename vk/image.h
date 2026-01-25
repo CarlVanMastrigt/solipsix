@@ -72,9 +72,13 @@ void sol_vk_image_destroy(struct sol_vk_image* image, struct cvm_vk_device* devi
 
 void sol_vk_image_get_default_view_create_info(VkImageViewCreateInfo* view_create_info, const struct sol_vk_image* image);
 
+/** required for pre-epting whether or not to set up a resource based on whether there is space to fill it out */
+void sol_vk_image_calculate_copy_space_requirements(const struct sol_vk_image* image, VkExtent3D extent, VkDeviceSize* byte_count, VkDeviceSize* alignment);
+void sol_vk_image_calculate_copy_space_requirements_simple(const struct sol_vk_image* image, u16_vec2 extent, VkDeviceSize* byte_count, VkDeviceSize* alignment);
+
 /** these will automatically apply copy operations */
-struct sol_buffer_segment sol_vk_image_prepare_copy(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource);
-struct sol_buffer_segment sol_vk_image_prepare_copy_simple(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer);
+struct sol_buffer_segment sol_vk_image_prepare_copy(const struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, VkOffset3D offset, VkExtent3D extent, VkImageSubresourceLayers subresource);
+struct sol_buffer_segment sol_vk_image_prepare_copy_simple(const struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, struct sol_buffer* upload_buffer, u16_vec2 offset, u16_vec2 extent, uint32_t array_layer);
 
 void sol_vk_image_execute_copies(struct sol_vk_image* image, struct sol_vk_buf_img_copy_list* copy_list, VkCommandBuffer command_buffer, VkBuffer src_buffer, VkDeviceSize src_buffer_offset);
 

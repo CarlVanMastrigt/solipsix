@@ -111,3 +111,18 @@ static inline uint32_t sol_buffer_used_space(struct sol_buffer* b)
 	return b->used_space;
 }
 
+/** assumes size is already padded for required alignment or has no alignment requirements */
+static inline bool sol_buffer_can_accomodate_allocation(struct sol_buffer* b, uint32_t size)
+{
+	return b->used_space + size <= b->total_space;
+}
+
+static inline bool sol_buffer_can_accomodate_aligned_allocation(struct sol_buffer* b, uint32_t size, uint32_t alignment)
+{
+	alignment = SOL_MAX(b->alignment, alignment);
+	assert((alignment & (alignment - 1)) == 0);
+
+	const uint32_t offset = (b->used_space + alignment - 1) & (- alignment);
+	return offset + size <= b->total_space;
+}
+

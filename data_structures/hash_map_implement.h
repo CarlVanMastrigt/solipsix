@@ -26,8 +26,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifndef SOL_HASH_MAP_FUNCTION_PREFIX
-#error must define SOL_HASH_MAP_FUNCTION_PREFIX
-#define SOL_HASH_MAP_FUNCTION_PREFIX placeholder_hash_map
+#define SOL_HASH_MAP_FUNCTION_PREFIX SOL_HASH_MAP_STRUCT_NAME
 #endif
 
 #ifndef SOL_HASH_MAP_KEY_TYPE
@@ -165,7 +164,7 @@ static void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(struct SOL_
     free(old_entries);
 }
 
-static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(struct SOL_HASH_MAP_STRUCT_NAME* restrict map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_IDENTIFIER_TYPE* restrict identifier, uint64_t* restrict index)
+static inline bool SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_locate__i)(const struct SOL_HASH_MAP_STRUCT_NAME* restrict map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_IDENTIFIER_TYPE* restrict identifier, uint64_t* restrict index)
 {
     while( map->identifiers[*index] && map->identifiers[*index] < *identifier)
     {
@@ -292,7 +291,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 
 
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(const struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
     SOL_HASH_MAP_IDENTIFIER_TYPE key_identifier = (key_hash & SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK) | SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY;

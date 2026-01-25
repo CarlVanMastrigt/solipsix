@@ -144,6 +144,11 @@ static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_active_count)(
     return a->count - sol_indices_stack_count(&a->available_indices);
 }
 
+static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_base_pointer)(struct SOL_ARRAY_STRUCT_NAME* a)
+{
+    return a->array;
+}
+
 
 #undef SOL_ARRAY_ENTRY_TYPE
 #undef SOL_ARRAY_FUNCTION_PREFIX

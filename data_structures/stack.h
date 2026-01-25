@@ -188,6 +188,11 @@ static inline uint32_t SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_count)(struct 
     return s->count;
 }
 
+static inline bool SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_is_empty)(struct SOL_STACK_STRUCT_NAME* s)
+{
+    return s->count == 0;
+}
+
 static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_data)(struct SOL_STACK_STRUCT_NAME* s)
 {
     return s->data;

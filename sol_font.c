@@ -110,39 +110,39 @@ hb_buffer_t* sol_font_get_hb_buffer(struct sol_font_library* library)
 
 /** this should be subtracted from any offset value before being used */
 
-#define SOL_FONT_GLYPH_INDEX_MAX 65535u
-#define SOL_FONT_GLYPH_OFFSET_BIAS 255
-#define SOL_FONT_GLYPH_OFFSET_MAX  511
+#define SOL_FONT_GLYPH_INDEX_MAX     65535u
+#define SOL_FONT_GLYPH_OFFSET_BIAS   511
+#define SOL_FONT_GLYPH_OFFSET_MAX    1023
+#define SOL_FONT_GLYPH_DIMENSION_MAX 1023
 
 
 
 #warning NO, this is not enough, also want subpixel positioning!
 struct sol_font_glyph_map_entry
 {
-	// pack it in based on max unicode encoding possible, then distribute this space amongst the following
 	/** this is the packing of glyph_id and subpixel_advance : `glyph_id | (subpixel_offset << 16)`
 	 * glyph_id is the glyth index as returned by harfbuzz, it should be less than 2^16 based on opentype and freetype file formats
 	 * for rendering glyphs with better positioning, allow subpixel offset along the advance direction (horizontal OR vertical)
 	 * note: this must be considered in key for image atlas lookup (i.e. render glyph at subpixel offset)
-	 * there are 64 subpixel positions possible along the primary axis */
-	 // * because there are 64 subpixel positions possible: 0:[-7 -> 8] 1:[9 -> 24] 2:[25 -> 40] 3:[41 -> 56] to correctly round */
-	uint64_t key : 22;
+	 * there are 64 subpixel positions possible along the primary axis 
+	 * 
+	 * because there are 64 subpixel positions possible: 0:[-7 -> 8] 1:[9 -> 24] 2:[25 -> 40] 3:[41 -> 56] to correctly round */
+	uint32_t key : 22;
 
 	/** the positional information for the glyph, derived from the bounding box as returned by freetype
 	 * the offsets should have -511 applied to account for negative offsets */
-	uint64_t size_x   : 9;
-	uint64_t size_y   : 9;
-	uint64_t offset_x : 9;
-	uint64_t offset_y : 9;
+	uint32_t size_x   : 10;
+	uint32_t size_y   : 10;
+	uint32_t offset_x : 10;
+	uint32_t offset_y : 10;
 
 	/** which image atlas to use, may want to consider expanding this in future */
 	uint32_t atlas_type : 2;
 
-	/** 4 remaining bits */
-
 	/** identifier for the location in the image atlas where the pixel data for this glyph is stored */
 	uint64_t id_in_atlas;
 };
+// fuck it, make this 32 bytes rather than packing into 16
 
 
 static inline uint64_t sol_font_glyph_hash(uint32_t key)
@@ -435,6 +435,7 @@ static inline bool sol_font_obtain_glyph_map_entry(struct sol_font* font, uint32
 	// subpixel_offset_y = 0;
 	// printf("SPy: %u\n", subpixel_offset_y);
 
+	/** note: glyph codepoint is restricted to 16 bits for most fonts */
 	glyph_key = glyph_codepoint | (subpixel_offset << 16);
 
 	obtain_result = sol_font_glyph_map_obtain(&font->glyph_map, glyph_key, glyph_map_entry_result);
@@ -471,6 +472,8 @@ static inline bool sol_font_obtain_glyph_map_entry(struct sol_font* font, uint32
 		assert(glyph_slot->bitmap_top  >= -SOL_FONT_GLYPH_OFFSET_BIAS);
 		assert(glyph_slot->bitmap_left + SOL_FONT_GLYPH_OFFSET_BIAS <= SOL_FONT_GLYPH_OFFSET_MAX);
 		assert(glyph_slot->bitmap_top  + SOL_FONT_GLYPH_OFFSET_BIAS <= SOL_FONT_GLYPH_OFFSET_MAX);
+		assert(glyph_slot->bitmap.width <= SOL_FONT_GLYPH_DIMENSION_MAX);
+		assert(glyph_slot->bitmap.rows  <= SOL_FONT_GLYPH_DIMENSION_MAX);
 
 		if(glyph_slot->bitmap.width > 0 && glyph_slot->bitmap.rows > 0)
 		{
@@ -513,37 +516,56 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 	u16_vec2 glyph_size;
 	unsigned char* pixels_dst;
 	unsigned char* pixels_src;
-	enum sol_image_atlas_result obtain_result;
+	enum sol_image_atlas_result find_result, obtain_result;
 	FT_GlyphSlot glyph_slot;
 	int ft_result, src_pitch;
 	uint32_t subpixel_offset, glyph_index;
 	uint16_t row;
+	VkDeviceSize required_upload_bytes, required_uplaod_alignment;
+	struct sol_vk_image* atlas_raw_image;
 
 
-	glyph_size = u16_vec2_set(glyph_map_entry->size_x, glyph_map_entry->size_y);
 	image_atlas = render_batch->rendering_resources->atlases[glyph_map_entry->atlas_type];
 
-	obtain_result = sol_image_atlas_entry_obtain(image_atlas, glyph_map_entry->id_in_atlas, glyph_size, 0, glyph_atlas_location_result);
+	find_result = sol_image_atlas_entry_find(image_atlas, glyph_map_entry->id_in_atlas, glyph_atlas_location_result);
 
-	switch (obtain_result)
+	switch (find_result)
 	{
-	case SOL_IMAGE_ATLAS_SUCCESS_INSERTED:
-		/** get glyph pixels if not present in image atlas */
+	case SOL_IMAGE_ATLAS_FAIL_ABSENT:
+		/** setup glyph pixels (entry) if not present in image atlas */
 
-		pixel_upload_segment = sol_vk_image_prepare_copy_simple(&sol_image_atlas_access_supervised_image(image_atlas)->image,
+		glyph_size = u16_vec2_set(glyph_map_entry->size_x, glyph_map_entry->size_y);
+		
+		atlas_raw_image = &sol_image_atlas_access_supervised_image(image_atlas)->image;
+
+		sol_vk_image_calculate_copy_space_requirements_simple(atlas_raw_image, glyph_size, &required_upload_bytes, &required_uplaod_alignment);
+
+		if(!sol_buffer_can_accomodate_aligned_allocation(&render_batch->upload_buffer, required_upload_bytes, required_uplaod_alignment))
+		{
+			/** not enough space available in upload buffer */
+			return false;
+		}
+
+		obtain_result = sol_image_atlas_entry_obtain(image_atlas, glyph_map_entry->id_in_atlas, glyph_size, 0, glyph_atlas_location_result);
+
+		if(obtain_result != SOL_IMAGE_ATLAS_SUCCESS_INSERTED)
+		{
+			/** not enough space in the map */
+			assert(obtain_result != SOL_IMAGE_ATLAS_SUCCESS_FOUND);/* should have been detected as found earlier */
+			assert(obtain_result != SOL_IMAGE_ATLAS_FAIL_ABSENT);/* obtain should not return absent */
+			return false;
+		}
+
+		pixel_upload_segment = sol_vk_image_prepare_copy_simple(
+			atlas_raw_image,
 			render_batch->atlas_copy_lists + glyph_map_entry->atlas_type,
 			&render_batch->upload_buffer,
 			glyph_atlas_location_result->offset,
 			glyph_size,
 			glyph_atlas_location_result->array_layer);
 
-		if(pixel_upload_segment.ptr == NULL)
-		{
-			/** no space left in upload buffer, treat as fail-full */
-			sol_image_atlas_entry_release(image_atlas, glyph_map_entry->id_in_atlas);
-			return false;
-		}
-
+		/** required space was checked against available space BEFORE attempting upload, a null buffer should never be returned */
+		assert(pixel_upload_segment.ptr != NULL);
 
 		glyph_index = glyph_map_entry->key & 0xFFFF;
 		#warning this decoding of subpixel position in key should be different for horizontal vs vertical text
@@ -580,8 +602,7 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 			pixels_dst += glyph_size.x;
 			pixels_src += src_pitch;
 		}
-
-		/** note: intentional fallthrough */
+		return true;		
 	case SOL_IMAGE_ATLAS_SUCCESS_FOUND:
 
 		return true;
