@@ -1,6 +1,6 @@
 
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -40,6 +40,14 @@ void sol_buddy_tree_terminate(struct sol_buddy_tree* tree);
 bool sol_buddy_tree_acquire(struct sol_buddy_tree* tree, uint32_t desired_size_exponent, uint32_t* allocation_offset);
 void sol_buddy_tree_release(struct sol_buddy_tree* tree, uint32_t allocation_offset);
 
-/** allowing dynamic resizing of total space, while possible is a bad idea, 
- * as the slots opened up by any such resizing will be preferentially used/split
- * thus any subsequent resizing is very unlikely to work as the space it would try to take is the most likely region to have been allocated */ 
+uint32_t sol_buddy_tree_query_allocation_size_exponent(const struct sol_buddy_tree* tree, uint32_t allocation_offset);
+
+static inline bool sol_buddy_tree_has_space(struct sol_buddy_tree* tree, uint32_t desired_size_exponent)
+{
+	return tree->availablity_masks[1] >= (1u << desired_size_exponent);
+}
+
+
+/** allowing dynamic resizing of total space, while possible, is a bad idea.
+ * the slots opened up by any such resizing will be preferentially used/split
+ * thus any subsequent resizing is very unlikely to work as the space it would try to take is the most likely region to have been allocated by any appropriately sized allocations */ 

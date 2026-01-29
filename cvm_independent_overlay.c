@@ -541,7 +541,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_scope_begin_moment = sol_image_atlas_access_scope_setup_begin(renderer->overlay_rendering_resources.atlases[i]);
+        atlas_scope_begin_moment = sol_image_atlas_access_range_begin(renderer->overlay_rendering_resources.atlases[i]);
         /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
         *sol_vk_semaphore_submit_list_append_ptr(&cb.wait_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_begin_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
     }
@@ -582,7 +582,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_scope_end_moment = sol_image_atlas_access_scope_setup_end(renderer->overlay_rendering_resources.atlases[i]);
+        atlas_scope_end_moment = sol_image_atlas_access_range_end(renderer->overlay_rendering_resources.atlases[i]);
         /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
         *sol_vk_semaphore_submit_list_append_ptr(&cb.signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_end_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
     }

@@ -118,13 +118,13 @@ struct SOL_HASH_MAP_STRUCT_NAME
 
 
 /** need to early define insert as resize uses it */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, const SOL_HASH_MAP_ENTRY_TYPE* entry);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, const SOL_HASH_MAP_ENTRY_TYPE* entry);
 
 static void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_resize__i)(struct SOL_HASH_MAP_STRUCT_NAME* map)
 {
     const uint64_t old_entry_space = (uint64_t)1 << map->entry_space_exponent;
     uint64_t index;
-    enum sol_map_result insert_result;
+    enum sol_map_operation_result insert_result;
 
     map->entry_space_exponent++;
 
@@ -291,7 +291,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX
 
 
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(const struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_find)(const struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
     SOL_HASH_MAP_IDENTIFIER_TYPE key_identifier = (key_hash & SOL_HASH_MAP_IDENTIFIER_FRACTIONAL_HASH_MASK) | SOL_HASH_MAP_IDENTIFIER_MAXIMUM_DISPLACEMENT_CAPACITY;
@@ -307,7 +307,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     return SOL_MAP_FAIL_ABSENT;
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr)
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
 
@@ -401,10 +401,10 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     return SOL_MAP_SUCCESS_INSERTED;
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, const SOL_HASH_MAP_ENTRY_TYPE* entry)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, const SOL_HASH_MAP_ENTRY_TYPE* entry)
 {
     SOL_HASH_MAP_ENTRY_TYPE* entry_ptr;
-    enum sol_map_result result;
+    enum sol_map_operation_result result;
 
     result = SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_obtain)(map, SOL_HASH_MAP_KEY_FROM_ENTRY_CONTEXT(entry), &entry_ptr);
 
@@ -418,7 +418,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_
     return result;
 }
 
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE* entry)
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(SOL_HASH_MAP_FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE* entry)
 {
     const uint64_t key_hash = SOL_HASH_MAP_KEY_HASH_CONTEXT(key);
 

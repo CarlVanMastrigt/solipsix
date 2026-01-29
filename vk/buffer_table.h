@@ -32,20 +32,16 @@ enum sol_buffer_table_result
     SOL_BUFFER_TABLE_FAIL_FULL, /** there is no remaining space, need to wait for space to be made */
     SOL_BUFFER_TABLE_FAIL_MAP_FULL, /** hash map is full, need to wait for space to be made */
     SOL_BUFFER_TABLE_FAIL_ABSENT, /** if using find rather than obtain this will be returned if the entry is not already present */
-    SOL_BUFFER_TABLE_FAIL_NOT_WRITABLE, /** an entry already retained is not writable, this eill be returned if that happens */
+    SOL_BUFFER_TABLE_FAIL_NOT_INITIALISED, /** this resource will be initialised by a different access slot, but has not yet become available(visible) from the accessor slot used */
     SOL_BUFFER_TABLE_SUCCESS_FOUND, /** existing entry found; no need to initalise */
     SOL_BUFFER_TABLE_SUCCESS_INSERTED, /** existing entry not found; space was made but contents must be initialised */
 };
 
+/** TODO: may wish to separate the moment where an access ranges regions are init (and thus available to other access ranges) from the moment an accessrange last refrences/uses that resource, this would simply mean providing another function to signal that moment */
 
-// struct sol_buffer_table_allocation
-// {
-// 	VkDeviceSize offset;
-// 	VkDeviceSize size;
-// };
 
 /** re-writable resources require only one user at a time, same as obtaining a non-extant entry */
-#define SOL_BUFFER_TABLE_OBTAIN_FLAG_WRITE  0x00000001u
+// #define SOL_BUFFER_TABLE_OBTAIN_FLAG_WRITE  0x00000001u
 
 struct sol_vk_buffer_table_create_information
 {
@@ -57,8 +53,9 @@ struct sol_vk_buffer_table_create_information
     VkDeviceSize base_allocation_size;
 
     /** slots should be externally referenced/managed, 
-     * e.g. with an enum over uses: main render, compute, preload &c. */
-    uint32_t accessor_slot_count;
+     * e.g. with an enum over uses: main render, compute, preload &c. 
+     * only 255 available because we want to fit that data in (effectively) a u8 while having an invalid identifier */
+    uint8_t accessor_slot_count;
 
     /** at the cost of locking a mutex each time; the buffer table can automatically manage multithreaded access to the table, this includes mltithreaded access within a single accessor
      * it is still required to perform external synchronization to guarantee ordering of accessor management (i.e. acquire, release & get_wait_moment) */
@@ -75,28 +72,34 @@ void sol_vk_buffer_table_destroy(struct sol_vk_buffer_table* table, struct cvm_v
  * acquire: begin access range
  * get_wait_moment: before submitting GPU work wait on prior work for this accessor slot
  * release: stop allowing access to the moment and set the end of gpu work for this access range (reads and writes) 
- * for any given accessor slot these must have their ordering externally synchronised */
-void sol_vk_buffer_table_accessor_acquire(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct cvm_vk_device *device);
-void sol_vk_buffer_table_accessor_release(struct sol_vk_buffer_table* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* release_moment);
+ * for any given accessor slot these must have their ordering externally synchronised 
+ * (i.e. reads must wait on writes performed by prior access ranges using the same access slot) */
+void sol_vk_buffer_table_access_acquire(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct cvm_vk_device *device);
+void sol_vk_buffer_table_access_release(struct sol_vk_buffer_table* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* release_moment);
 
 /** TODO: could make this return a sequence by requiring it be called in a while loop */
 bool sol_vk_buffer_table_accessor_get_wait_moment(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct sol_vk_timeline_semaphore_moment* wait_moment);
 
 /** acquire a unique identifier for accessing/indexing entries in the table
- * note: because a buffer can be used by multiple command buffers at once (even across queues) the concept of a transient allocation cannot be applicable the same way it is to the image atlas */
-uint64_t sol_vk_buffer_table_acquire_entry_identifier(struct sol_vk_buffer_table* table);
+ * note: because a buffer can be used by multiple command buffers at once (even across queues) the concept of a transient allocation cannot be applicable the same way it is to the image atlas 
+ * note: a mutable region can only be accessed via one slot */
+uint64_t sol_vk_buffer_table_generate_region_identifier(struct sol_vk_buffer_table* table, bool mutable);
 
 
 /** note: due to being an automatically managed system: there is no guarantee that an entry that did exist previously will still exist; 
  * systems that use the buffer table must account for this */
 
 
-/** obtain and find must only be called between acquire and release of the slot used */
+/** `obtain` and `find` must only be called between `acquire` and `release` of the slot used */
 
-/** if extant will ensure size matches */
-enum sol_buffer_table_result sol_vk_buffer_table_entry_obtain(struct sol_vk_buffer_table* table, uint64_t entry_identifier, uint32_t accessor_slot, VkDeviceSize size, uint32_t flags, VkDeviceSize* entry_offset);
-/** size may be null, but onus is on caller to ensure size actually matches size that was provided on setup */
-enum sol_buffer_table_result sol_vk_buffer_table_entry_find(struct sol_vk_buffer_table* table, uint64_t entry_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size);
+/** if this function fails to find an extant region associated the identifier, the function will (if possible) allocate backing memory (a region) to accomodate the requested size and return it
+ * the onus then falls on the caller to ensure this memory is set up before the access scope's completion/release moment is signalled (obviously it must also be set up before bing used within the region too)
+ * onus is also on the caller to ensure any other resources required to set up the contents of this region (e.g. staging) can be made avilable BEFORE calling obtain
+ * note: if extant will assert size matches */
+enum sol_buffer_table_result sol_vk_buffer_table_region_obtain(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset);
+/** this will get the region (really just the offset) in the buffer associated with an identifier (if it is present) 
+ * size may be null, but onus is on caller to ensure size actually matches size that was provided on setup, so if non-null size will be set to the size of the region for validation */
+enum sol_buffer_table_result sol_vk_buffer_table_region_find(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size);
 
 
 #warning add utility/helper function to copy that acknowledges the fact that the buffer table may be visible to the host

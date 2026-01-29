@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -88,19 +88,19 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS void SOL_CONCATENATE(FUNCTION_PREFIX,_clear)(stru
 
 /** searches for key; then if found sets entry to allow direct access to it (if entry non null) then returns true
  *  pointer returned with entry becomes invalid after any other map functions are executed */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(const struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUNCTION_PREFIX,_find)(const struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
 
 /** find that upon failure assigns space based key, returns true if insertion was performed
  *  pointer returned with entry becomes invalid after any other map functions are executed
  *  effectively "find or insert" */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUNCTION_PREFIX,_obtain)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE** entry_ptr);
 
 /** assumes entry does not exist, returns false if (equivalent) entry already present (in which case it will copy contents) */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_ENTRY_TYPE* entry);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUNCTION_PREFIX,_insert)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_ENTRY_TYPE* entry);
 
 /** if key found copies it into entry (if entry nonnull) then returns true
  *  effectively: find() and delete() with (conditional) memcpy() in between */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE* key, SOL_HASH_MAP_ENTRY_TYPE* entry);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE* entry);
 
 /** entry MUST be EXACTLY the result of a prior successful `find()` or `obtain()` with no other map functions called in between
  *  will directly remove an entry from the map if it exists */

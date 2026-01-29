@@ -1,5 +1,5 @@
 /**
-Copyright 2021,2022,2024,2025 Carl van Mastrigt
+Copyright 2021,2022,2024,2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -52,7 +52,7 @@ enum sol_image_atlas_result
 
 struct sol_image_atlas_description
 {
-	// image details
+	/** image details */
 	VkFormat format;
 	VkImageUsageFlags usage;
 	uint8_t image_x_dimension_exponent;
@@ -66,28 +66,32 @@ struct sol_image_atlas_location
 	uint8_t array_layer;
 };
 
+/** Note: cannot realistically provide the capabilities offered by buffer table because of layout & queue family ownership considerations associated with images in vulkan */
+
+/** TODO: it may be desirable to allow external synchronization, as is done by buffer tables, 
+ * this would probably be the preferred mecahanism and would involve begin not providing a moment and end requiring an extrnal moment 
+ * (though; external synchonization can ensure scheduled writes occurr after reads, invalidating the need for any moments at all) */
 
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-#warning add notes on new access pattern
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_begin(struct sol_image_atlas* atlas);
+/** returned moment must be waited on before performing any reads or writes to the texture, this ensures;
+ * all prior reads have completed (avoiding errant read after write)
+ * all prior writes have completed (avoiding errant read before write) */
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_begin(struct sol_image_atlas* atlas);
 
-/** the `access_scope` set as part of this function describes the scope of the callers (i.e. external) permissions and responsibilities
- * NOTE: this will fully initialise `access_scope` which may be discarded after all its responsibilities are fulfilled
- * any accesses (entry read or write or supervised image state mutation) must be synchronised externally using the semaphore moments assigned in the `access_scope`
- * the assigned acquire semaphore must be waited on before any accesses of atlas
- * the assigned release remaphore must be signalled after any accesses of atlas
- * NOTE: its important to consider ordering of submissions to queues (erlier queue submissions should not depend on later submissions) when submitting work that uses the provided moments
- *      ^ the same goes for supervided image state tracking, as such its likely best to "single thread" gpu work */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_scope_setup_end(struct sol_image_atlas* atlas);
+/** returned moment must be signalled after all writes and reads of resources accessed in this access range have completed, this permits;
+ * subsequent reads to wait on writes performed in this access range
+ * subsequent writes to happen after all reads in this access range have completed
+ * (basically pairing with `sol_image_atlas_access_range_begin`) */
+struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_end(struct sol_image_atlas* atlas);
 
-/** should ONLY be used for validation, not for devision making */
-bool sol_image_atlas_access_scope_is_active(struct sol_image_atlas* atlas);
+/** should ONLY be used for validation, not for decision making */
+bool sol_image_atlas_access_range_is_active(struct sol_image_atlas* atlas);
 
 /** acquire a unique identifier for accessing/indexing entries in the atlas in the setup phase
  * `transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used */
-uint64_t sol_image_atlas_acquire_entry_identifier(struct sol_image_atlas* atlas, bool transient);
+uint64_t sol_image_atlas_generate_entry_identifier(struct sol_image_atlas* atlas, bool transient);
 
 /** if the entry didnt exist, create a slot for it, prefer this if entry will be created regardless (over calling find first)
  * this must be used with write if its contents will be modified in any way
@@ -99,11 +103,13 @@ enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas*
 enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
 
 
+
+
 /** if insertion happens but external systems fail to initialise an entry this should be called to release it
  * this must not be called on in use resources 
  * 
  * this has been removed from the API because this behaviour should generally be avoided:
- * 	^ it makes the worst case behaviour worse (add to hash map and then remove imddediately over and over again)
+ * 	^ it makes the worst case behaviour worse (add to hash map and then remove immediately over and over again, which can be non-performant)
  * 	^ it causes a mismatch with what is possible/desired in the buffer table algorithm
  * 	^ it is also incompatible with any attempts at the use of this algorithm in a multitheaded fashion (other threads may see an entry as created/initialised and then it gets removed)
  * >>  if REALLY needed: it can be uncommented out here and in `image_atlas.c` - it will *work* in the single threaded use case... */

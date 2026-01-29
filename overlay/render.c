@@ -605,7 +605,7 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
         assert(sol_vk_buf_img_copy_list_count(batch->atlas_copy_lists + i) == 0);
-        assert(sol_image_atlas_access_scope_is_active(rendering_resources->atlases[i]));
+        assert(sol_image_atlas_access_range_is_active(rendering_resources->atlases[i]));
     }
     assert(sol_buffer_used_space(&batch->upload_buffer) == 0);
     assert(sol_overlay_render_element_list_count(&batch->elements) == 0);

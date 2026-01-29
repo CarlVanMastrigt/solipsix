@@ -422,7 +422,7 @@ void sol_font_destroy(struct sol_font* font)
 
 static inline bool sol_font_obtain_glyph_map_entry(struct sol_font* font, uint32_t glyph_codepoint, uint32_t subpixel_offset, struct sol_overlay_render_batch* render_batch, struct sol_font_glyph_map_entry** glyph_map_entry_result)
 {
-	enum sol_map_result obtain_result;
+	enum sol_map_operation_result obtain_result;
 	FT_GlyphSlot glyph_slot;
 	int ft_result;
 	uint32_t glyph_key;
@@ -486,7 +486,7 @@ static inline bool sol_font_obtain_glyph_map_entry(struct sol_font* font, uint32
 				.offset_y = glyph_slot->bitmap_top  + SOL_FONT_GLYPH_OFFSET_BIAS,
 				.size_x = glyph_slot->bitmap.width,
 				.size_y = glyph_slot->bitmap.rows,
-				.id_in_atlas = sol_image_atlas_acquire_entry_identifier(image_atlas, false),
+				.id_in_atlas = sol_image_atlas_generate_entry_identifier(image_atlas, false),
 			};
 		}
 		else

@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -256,3 +256,27 @@ void sol_buddy_tree_release(struct sol_buddy_tree* tree, uint32_t offset)
 
 	assert(tree->availablity_masks[0] == ~0u);
 }
+
+uint32_t sol_buddy_tree_query_allocation_size_exponent(const struct sol_buddy_tree* tree, uint32_t offset)
+{
+	uint32_t exponent;
+
+	/** check allocation offset is a valid value for this allocator */
+	assert(offset < tree->size);
+
+	/** check offset isn't too big */
+	assert(offset < tree->encompasing_bit);
+
+	/** indices in tree have (relative) high bit set */
+	offset |= tree->encompasing_bit;
+
+	/** allocate stores size class in last layer for any given offset */
+	exponent = tree->availablity_masks[offset];
+
+	/** ensure the alignment of the allocation offset is correct given the expected (stored) size class */
+	assert((offset & (((size_t)1 << exponent) - 1)) == 0);
+
+	return exponent;
+}
+
+

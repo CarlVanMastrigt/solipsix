@@ -21,18 +21,26 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <threads.h>
 #include <stdlib.h>
 #include <stdatomic.h>
+#include <stdio.h>
 
 #include "vk/buffer_table.h"
 
+#include "sol_utils.h"
 #include "vk/buffer.h"
-
+#include "vk/timeline_semaphore.h"
 #include "data_structures/indices_list.h"
 #include "data_structures/indices_stack.h"
 #include "data_structures/buddy_tree.h"
-#include "vk/timeline_semaphore.h"
 
 
+/** the top bit, set as the identifier is generated */
+#define SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT (((uint64_t)1llu) << 63)
 
+#define SOL_BUFFER_TABLE_RETAIN_BIT_COUNT 20
+#define SOL_BUFFER_TABLE_MAX_RETAIN_COUNT (((uint32_t)1u << SOL_BUFFER_TABLE_RETAIN_BIT_COUNT) - 1u)
+
+#define SOL_BUFFER_TABLE_INVALID_INDEX 0xFFFFFFFFu
+#define SOL_BUFFER_TABLE_HEADER_INDEX 0xFFFFFFFFu
 
 
 /** the map takes a unique identifier and gets the index in the array of entries
@@ -40,7 +48,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 static inline bool sol_vk_buffer_table_identifier_entry_compare_equal(uint64_t key, uint32_t* entry_index, struct sol_vk_buffer_table* table);
 static inline uint64_t sol_vk_buffer_table_entry_identifier_get(const uint32_t* entry_index, struct sol_vk_buffer_table* table);
 
-#define SOL_HASH_MAP_STRUCT_NAME sol_vk_buffer_table_map
+#define SOL_HASH_MAP_STRUCT_NAME sol_vk_buffer_table_region_map
 #define SOL_HASH_MAP_KEY_TYPE uint64_t
 #define SOL_HASH_MAP_ENTRY_TYPE uint32_t
 #define SOL_HASH_MAP_FUNCTION_KEYWORDS static
@@ -51,6 +59,7 @@ static inline uint64_t sol_vk_buffer_table_entry_identifier_get(const uint32_t* 
 #include "data_structures/hash_map_implement.h"
 
 
+
 struct sol_vk_buffer_table_region
 {
 	/** the hash in the map, necessary to store for removal purposes */
@@ -58,24 +67,28 @@ struct sol_vk_buffer_table_region
 
 	/** TODO: consider compressing this into 8 bytes */
 
+	/** location in memory (in buddy allocator units: sol_vk_buffer_table.base_allocation_size) */
+	uint32_t offset;
+
 	/** indexes of the adjacent entries in the available region linked list 
 	 * linked list is required for random removal upon re-activation of available regions */
 	uint32_t prev;
 	uint32_t next;
 
-	/** location in memory (in buddy allocator units) */
-	uint32_t offset;
 
-	/** essentially a reference count */
-	uint32_t active_access_count : 23;
+	/**	retain count of the region for the accessor that is permitted to write (primary) and all others (secondary) 
+	 * primary is set/decided when written the first time */
+	uint32_t retain_count : SOL_BUFFER_TABLE_RETAIN_BIT_COUNT;
 
-	/** has the content been initialised */
-	uint32_t initialised : 1;
-
-	/** when the content was initialised which accessor slot performed the initialisation
-	 * subsequent accesses using the same slot will "see" the region as initialised 
+	/** when the content was initialised; which accessor slot performed the initialisation
+	 * subsequent accesses using the same slot will ALWAYS "see" the region as initialised rathern just after it was
 	 * this is because an accessor acts like an ordered queue */
-	uint32_t initialising_accessor_slot : 8;
+	uint32_t write_accessor_slot : 8;
+
+	/** has the content been made available to secondary accessor slots 
+	 * note secondary access precludes writing and writing precludes secondary access 
+	 * as such mutable content should be completely inaccessible from secondary accessors as that could effectively make it immutable */
+	uint32_t visible_from_read_accessors : 1;
 };
 
 
@@ -88,7 +101,6 @@ struct sol_vk_buffer_table_access_range
 {
 	struct sol_indices_stack retained_region_indices;
 	/** this access range */
-	struct sol_indices_stack initialised_region_indices;
 	struct sol_vk_timeline_semaphore_moment release_moment;
 	/** TODO: make above a sequence?? */
 	uint32_t accessor_slot;
@@ -115,6 +127,8 @@ struct sol_vk_buffer_table
 
 	struct sol_buddy_tree region_tree;
 
+	struct sol_vk_buffer_table_region_map* region_map;
+
 
 
 	/** note: accessor storage here is very similar to array, but its necessary to know which elements have been initialised */
@@ -126,6 +140,9 @@ struct sol_vk_buffer_table
 	struct sol_indices_list available_access_range_indices;
 	/** these are waiting on their release moment to pass */
 	struct sol_indices_list retained_access_range_indices;
+
+
+
 
 
 
@@ -180,16 +197,32 @@ static inline uint64_t sol_vk_buffer_table_entry_identifier_get(const uint32_t* 
 
 
 
-static inline void sol_vk_buffer_table_initialise(struct sol_vk_buffer_table* table, struct cvm_vk_device* device, const struct sol_vk_buffer_table_create_information* create_information)
+struct sol_vk_buffer_table* sol_vk_buffer_table_create(struct cvm_vk_device* device, const struct sol_vk_buffer_table_create_information* create_information)
 {
 	struct sol_vk_buffer_table_region* header_region_entry;
-	const uint32_t expected_range_count = sol_u32_exp_ge(create_information->accessor_slot_count * 2);
 	uint32_t header_region_entry_index, accessor_slot_index;
+	const uint32_t expected_range_count = sol_u32_exp_ge(create_information->accessor_slot_count * 2);
 
+	struct sol_vk_buffer_table* table = malloc(sizeof(struct sol_vk_buffer_table));
+
+	/** total buffer size should be a multiple of the base allocation size (i.e. the minumum allocation granularity) */
 	assert((create_information->buffer_create_info.size % create_information->base_allocation_size) == 0);
+
+	#warning make sure base allocation is a multiple of the required alignment for buffer usages
+
+
 	sol_vk_buffer_initialise(&table->backing, device, &create_information->buffer_create_info, create_information->required_properties, create_information->desired_properties);
 
 	sol_buddy_tree_initialise(&table->region_tree, create_information->buffer_create_info.size / create_information->base_allocation_size);
+
+	const struct sol_hash_map_descriptor map_descriptor = 
+	{
+		.entry_space_exponent_initial = 12,//4096
+		.entry_space_exponent_limit = 24,//16M
+		.resize_fill_factor = 160,// out of 256
+		.limit_fill_factor = 192,// out of 256
+	};
+	table->region_map = sol_vk_buffer_table_region_map_create(map_descriptor, table);
 
 	table->access_range_count = 0;
 	/** want a po2 number of them, but gte than the count */
@@ -220,9 +253,10 @@ static inline void sol_vk_buffer_table_initialise(struct sol_vk_buffer_table* ta
 
 	header_region_entry = sol_vk_buffer_table_region_array_append_ptr(&table->region_array, &header_region_entry_index);
 	/** is assumed the header entry gets index 0 */
-	assert(header_region_entry_index == 0);
+	assert(header_region_entry_index == SOL_BUFFER_TABLE_HEADER_INDEX);
 	*header_region_entry = (struct sol_vk_buffer_table_region)
 	{
+		.identifier = 0,
 		.next = header_region_entry_index,
 		.prev = header_region_entry_index,
 	};
@@ -236,9 +270,12 @@ static inline void sol_vk_buffer_table_initialise(struct sol_vk_buffer_table* ta
 	{
 		mtx_init(&table->mutex, mtx_plain);
 	}
+
+
+	return table;
 }
 
-static inline void sol_vk_buffer_table_terminate(struct sol_vk_buffer_table* table, struct cvm_vk_device* device)
+void sol_vk_buffer_table_destroy(struct sol_vk_buffer_table* table, struct cvm_vk_device* device)
 {
 	struct sol_vk_buffer_table_region* header_region_entry;
 	#warning wait on accessors
@@ -246,9 +283,9 @@ static inline void sol_vk_buffer_table_terminate(struct sol_vk_buffer_table* tab
 	#warning clean up regions including header
 
 	/** is assumed the header entry gets index 0 */
-	header_region_entry = sol_vk_buffer_table_region_array_remove_ptr(&table->region_array, 0);
+	header_region_entry = sol_vk_buffer_table_region_array_remove_ptr(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
 	/** the available ring linked list (header_region_entry) should be empty */
-	assert(header_region_entry->identifier == 0 && header_region_entry->prev == 0 && header_region_entry->next == 0);
+	assert(header_region_entry->identifier == 0 && header_region_entry->prev == SOL_BUFFER_TABLE_HEADER_INDEX && header_region_entry->next == SOL_BUFFER_TABLE_HEADER_INDEX);
 
 
 	/** all accessors must have been released before returning **/
@@ -266,7 +303,7 @@ static inline void sol_vk_buffer_table_terminate(struct sol_vk_buffer_table* tab
 	/** free accessor slot backing (i.e. the accessors) */
 	free(table->accessors);
 
-
+	sol_vk_buffer_table_region_map_destroy(table->region_map);
 	sol_buddy_tree_terminate(&table->region_tree);
 	sol_vk_buffer_terminate(&table->backing, device);
 
@@ -274,22 +311,11 @@ static inline void sol_vk_buffer_table_terminate(struct sol_vk_buffer_table* tab
 	{
 		mtx_destroy(&table->mutex);
 	}
-}
 
-struct sol_vk_buffer_table* sol_vk_buffer_table_create(struct cvm_vk_device* device, const struct sol_vk_buffer_table_create_information* create_information)
-{
-	struct sol_vk_buffer_table* table = malloc(sizeof(struct sol_vk_buffer_table));
-	sol_vk_buffer_table_initialise(table, device, create_information);
-	return table;
-}
-
-void sol_vk_buffer_table_destroy(struct sol_vk_buffer_table* table, struct cvm_vk_device* device)
-{
-	sol_vk_buffer_table_terminate(table, device);
 	free(table);
 }
 
-uint64_t sol_vk_buffer_table_acquire_entry_identifier(struct sol_vk_buffer_table* table)
+uint64_t sol_vk_buffer_table_generate_entry_identifier(struct sol_vk_buffer_table* table, bool mutable)
 {
 	uint64_t old_entry_identifier, new_entry_identifier;
 
@@ -302,7 +328,14 @@ uint64_t sol_vk_buffer_table_acquire_entry_identifier(struct sol_vk_buffer_table
 	}
 	while(atomic_compare_exchange_weak_explicit(&table->current_entry_identifier, &old_entry_identifier, new_entry_identifier, memory_order_relaxed, memory_order_relaxed));
 
-	return new_entry_identifier;
+	if(mutable)
+	{
+		return new_entry_identifier | SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT;
+	}
+	else
+	{
+		return new_entry_identifier & (~SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT);
+	}
 }
 
 
@@ -321,40 +354,46 @@ static inline void sol_vk_buffer_table_access_range_terminate(struct sol_vk_buff
 }
 
 /** note: this is a slight hack, as it operates on the array directly and assumes the base region is also the header and the whole array is a single contiguous array of memory */
-static inline void sol_vk_buffer_table_release_region_reference(struct sol_vk_buffer_table_region* base_region, uint32_t region_index)
+static inline void sol_vk_buffer_table_release_region_reference(struct sol_vk_buffer_table* table, uint32_t region_index)
 {
-	struct sol_vk_buffer_table_region* region = base_region + region_index;
-	struct sol_vk_buffer_table_region* header_region = base_region;
-	struct sol_vk_buffer_table_region* newest_region = base_region + header_region->prev;
+	struct sol_vk_buffer_table_region* region;
+	struct sol_vk_buffer_table_region* header_region;
+	struct sol_vk_buffer_table_region* newest_region;
 
-	assert(region->next == SOL_U32_INVALID && region->prev == SOL_U32_INVALID);
-	assert(region->active_access_count > 0);
+	region = sol_vk_buffer_table_region_array_access_entry(&table->region_array, region_index);
 
-	region->active_access_count--;
+	assert(region->next == SOL_BUFFER_TABLE_INVALID_INDEX && region->prev == SOL_BUFFER_TABLE_INVALID_INDEX);
 
-	if(region->active_access_count == 0)
+	/** if it was not yet visible it is now */
+	region->visible_from_read_accessors = true;
+
+	assert(region->retain_count > 0);
+	region->retain_count--;
+
+
+	if(region->retain_count == 0)
 	{
 		/** put this entry in the availability linked list, replacing the newest entry 
 		 * note: this still works if the available region linked list is empty (header.prev == header && header.next == header) */
 
+		header_region = sol_vk_buffer_table_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+		newest_region = sol_vk_buffer_table_region_array_access_entry(&table->region_array, header_region->prev);
+
 		region->prev = header_region->prev;
-		region->next = 0;/* header */
+		region->next = SOL_BUFFER_TABLE_HEADER_INDEX;
 		
 		newest_region->next = region_index;
 		header_region->prev = region_index;
 	}
 }
 
+
+#warning to prevent regions being constantly moved in and out of the available linked list; accessors should have SOME mechanism to delay their release a little longer if they are frequently used (must be balanced against wanting to make entries available ASAP)
+#warning perhaps when under memory stress (below 25% available?) clear all, otherwise only clear until one access range is left in the clear queue per accessor AND attempt to clear queue when out of memory during a run 
 static inline void sol_vk_buffer_table_try_releasing_retained_access_ranges(struct sol_vk_buffer_table* table, struct cvm_vk_device *device)
 {
 	uint32_t range_list_index, range_index, region_list_index, region_index;
 	struct sol_vk_buffer_table_access_range* access_range;
-
-	struct sol_vk_buffer_table_region* region;
-	struct sol_vk_buffer_table_region* base_region;
-
-	/** because this array will not be modified by this function it is safe to hold onto these pointers */
-	base_region = sol_vk_buffer_table_region_array_base_pointer(&table->region_array);
 
 	range_list_index = 0;
 
@@ -366,25 +405,12 @@ static inline void sol_vk_buffer_table_try_releasing_retained_access_ranges(stru
 		if(sol_vk_timeline_semaphore_moment_query(&access_range->release_moment, device))
 		{
 			/** accessors work has completed, i.e. it has been released */
-			while(sol_indices_stack_remove(&access_range->initialised_region_indices, &region_index))
-			{
-				region = base_region + region_index;
 
-				assert(region->initialising_accessor_slot == access_range->accessor_slot);
-				assert( ! region->initialised);
-				region->initialised = true;
-
-				sol_vk_buffer_table_release_region_reference(base_region, region_index);
-			}
-
+			/** note: this also empties the stack */
 			while(sol_indices_stack_remove(&access_range->retained_region_indices, &region_index))
 			{
-				sol_vk_buffer_table_release_region_reference(base_region, region_index);
+				sol_vk_buffer_table_release_region_reference(table, region_index);
 			}
-
-			/** range should effectively be emptied/reset before being put on the available list */
-			assert(sol_indices_stack_is_empty(&access_range->initialised_region_indices));
-			assert(sol_indices_stack_is_empty(&access_range->retained_region_indices));
 
 			/** move this range from the retained list to the available list */
 			sol_indices_list_remove_entry(&table->retained_access_range_indices, range_list_index);
@@ -399,7 +425,9 @@ static inline void sol_vk_buffer_table_try_releasing_retained_access_ranges(stru
 	}
 }
 
-void sol_vk_buffer_table_accessor_acquire(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct cvm_vk_device *device)
+
+
+void sol_vk_buffer_table_access_acquire(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct cvm_vk_device *device)
 {
 	struct sol_vk_buffer_table_accessor* accessor;
 	struct sol_vk_buffer_table_access_range* access_range;
@@ -429,8 +457,8 @@ void sol_vk_buffer_table_accessor_acquire(struct sol_vk_buffer_table* table, uin
 	}
 
 	access_range = table->access_ranges + access_range_index;
-	assert(sol_indices_stack_is_empty(&access_range->initialised_region_indices));
 	assert(sol_indices_stack_is_empty(&access_range->retained_region_indices));
+
 	access_range->accessor_slot = accessor_slot;
 
 	if(table->multithreaded)
@@ -443,7 +471,7 @@ void sol_vk_buffer_table_accessor_acquire(struct sol_vk_buffer_table* table, uin
 	accessor->moment_acquired = false;
 }
 
-void sol_vk_buffer_table_accessor_release(struct sol_vk_buffer_table* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* release_moment)
+void sol_vk_buffer_table_access_release(struct sol_vk_buffer_table* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* release_moment)
 {
 	struct sol_vk_buffer_table_accessor* accessor;
 	struct sol_vk_buffer_table_access_range* access_range;
@@ -490,23 +518,226 @@ bool sol_vk_buffer_table_accessor_get_wait_moment(struct sol_vk_buffer_table* ta
 	return accessor->moment_set;
 }
 
-
-
-enum sol_buffer_table_result sol_vk_buffer_table_entry_obtain(struct sol_vk_buffer_table* table, uint64_t entry_identifier, uint32_t accessor_slot, VkDeviceSize size, uint32_t flags, VkDeviceSize* entry_offset)
+/** must be called inside the mutex lock if multithreaded
+ * should be called on resources that are already extant and just need to be retained by this access range
+ * may fail to retain if not found but not yet initialised by its (different) initialising accessor slot */
+static inline enum sol_buffer_table_result sol_vk_buffer_table_region_retain(struct sol_vk_buffer_table* table, uint32_t accessor_slot, uint32_t region_index, VkDeviceSize* entry_offset, VkDeviceSize* size)
 {
-	//
+	struct sol_vk_buffer_table_region* region;
+	struct sol_vk_buffer_table_access_range* access_range;
+	uint32_t next_index, prev_index;
+
+	region = sol_vk_buffer_table_region_array_access_entry(&table->region_array, region_index);
+
+	/** regions must either be immutable, or accessed via the same slot every time */
+	assert( !(region->identifier & SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT) || accessor_slot == region->write_accessor_slot);
+
+	if(region->write_accessor_slot == accessor_slot || region->visible_from_read_accessors)
+	{
+		access_range = table->access_ranges + table->accessors[accessor_slot].active_range_index;
+		assert(access_range->accessor_slot == accessor_slot);
+
+		/** retain count of zero is indicator that this entry is available, move it out of the available list when encountered */
+		if(region->retain_count == 0)
+		{
+			next_index = region->next;
+			prev_index = region->prev;
+			assert(next_index != SOL_BUFFER_TABLE_INVALID_INDEX && prev_index != SOL_BUFFER_TABLE_INVALID_INDEX);
+
+			/** pull the region out of the available linked list */
+			sol_vk_buffer_table_region_array_access_entry(&table->region_array, prev_index)->next = next_index;
+			sol_vk_buffer_table_region_array_access_entry(&table->region_array, next_index)->prev = prev_index;
+			region->next = SOL_BUFFER_TABLE_INVALID_INDEX;
+			region->prev = SOL_BUFFER_TABLE_INVALID_INDEX;
+		}
+
+		/** region not in the available linked list should not have valid next/prev links */
+		assert(region->next == SOL_BUFFER_TABLE_INVALID_INDEX && region->prev == SOL_BUFFER_TABLE_INVALID_INDEX);
+
+		sol_indices_stack_append(&access_range->retained_region_indices, region_index);
+
+		/** make sure not to exceed retain count type */
+		assert(region->retain_count < SOL_BUFFER_TABLE_MAX_RETAIN_COUNT);
+
+		region->retain_count++;
+		*entry_offset = table->base_allocation_size * region->offset;
+
+		if(size)
+		{
+			*size = table->base_allocation_size << sol_buddy_tree_query_allocation_size_exponent(&table->region_tree, region->offset);
+		}
+
+		return SOL_BUFFER_TABLE_SUCCESS_FOUND;
+	}
+	else
+	{
+		return SOL_BUFFER_TABLE_FAIL_NOT_INITIALISED;
+	}
 }
 
-enum sol_buffer_table_result sol_vk_buffer_table_entry_find(struct sol_vk_buffer_table* table, uint64_t entry_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size)
+/** returns false if there are no more available regions to evict */
+static inline bool sol_vk_buffer_table_evict_oldest_available_allocation(struct sol_vk_buffer_table* table)
+{
+	struct sol_vk_buffer_table_region* header_region;
+	struct sol_vk_buffer_table_region* evicted_region;
+	uint32_t evicted_region_index;
+	uint32_t next_index, prev_index;
+
+	header_region = sol_vk_buffer_table_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+
+	/** 0 is header region index */
+	if(header_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX)
+	{
+		/** the available ring buffer/linked list is empty, there is nothing left to free */
+		assert(header_region->next == SOL_BUFFER_TABLE_HEADER_INDEX);
+		return false;
+	}
+
+	/** front of the queue/ oldest entry is one to evict */
+	evicted_region_index = header_region->next;
+	/** note: nothing else in this function can modify the arrays backing memory so this pointer will remain valid for as long as its used despite having been "removed" here */
+	evicted_region = sol_vk_buffer_table_region_array_remove_ptr(&table->region_array, evicted_region_index);
+	assert(evicted_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX);
+	assert(evicted_region->retain_count == 0);
+
+	/** remove evicted from the linked list */
+	sol_vk_buffer_table_region_array_access_entry(&table->region_array, evicted_region->next)->prev = SOL_BUFFER_TABLE_HEADER_INDEX;
+	header_region->next = evicted_region->next;
+
+	/** remove from the identifier hash map */
+	sol_vk_buffer_table_region_map_remove(table->region_map, evicted_region->identifier, NULL);
+
+	/** actually make the memory available in the buddy allocator */
+	sol_buddy_tree_release(&table->region_tree, evicted_region->offset);
+
+	return true;
+}
+
+static inline enum sol_buffer_table_result sol_vk_buffer_table_region_allocate(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
+{
+	struct sol_vk_buffer_table_access_range* access_range;
+	uint32_t* region_index_ptr;
+	uint32_t buffer_offset;
+	bool allocated_buddy_entry;
+
+	while( ! sol_buddy_tree_has_space(&table->region_tree, size_exponent))
+	{
+		if( ! sol_vk_buffer_table_evict_oldest_available_allocation(table))
+		{
+			/** no more entries to free, have run out of space */
+			return SOL_BUFFER_TABLE_FAIL_FULL;
+		}
+	}
+
+	while(true)
+	{
+		switch(sol_vk_buffer_table_region_map_obtain(table->region_map, region_identifier, &region_index_ptr)) 
+		{
+		case SOL_MAP_FAIL_FULL:
+			fprintf(stderr, "buffer table identifier map is full or has hashed a number of entries very poorly, this should not be possible in reasonable scenarios");
+			if( ! sol_vk_buffer_table_evict_oldest_available_allocation(table))
+			{
+				/** no more entries to free, map has somehow run out of space */
+				return SOL_BUFFER_TABLE_FAIL_MAP_FULL;
+			}
+			break;
+		case SOL_MAP_SUCCESS_INSERTED:
+			allocated_buddy_entry = sol_buddy_tree_acquire(&table->region_tree, size_exponent, &buffer_offset);
+			/** tree was checked for space prior to above command (at start of the function) */
+			assert(allocated_buddy_entry);
+
+			/** create and initialise the region metadata */
+			*sol_vk_buffer_table_region_array_append_ptr(&table->region_array, region_index_ptr) = (struct sol_vk_buffer_table_region)
+			{
+				.identifier = region_identifier,
+				/** not in available list so links are invalid */
+				.prev = SOL_BUFFER_TABLE_INVALID_INDEX,
+				.next = SOL_BUFFER_TABLE_INVALID_INDEX,
+				.offset = buffer_offset,
+				.retain_count = 1,/** this, the write access retains the allocation */
+				.write_accessor_slot = accessor_slot,
+				.visible_from_read_accessors = false,
+			};
+
+			*entry_offset = table->base_allocation_size * buffer_offset;
+
+			/** add the newly created region (its index) to the retained list for this access range */
+			access_range = table->access_ranges + table->accessors[accessor_slot].active_range_index;
+			sol_indices_stack_append(&access_range->retained_region_indices, *region_index_ptr);
+
+			return SOL_BUFFER_TABLE_SUCCESS_INSERTED;
+		default:
+			/** in this state no other return from the hash map makes sense, 
+			 * it should not have already been present, otherwise allocation wouldn't be necessary */
+			assert(false);
+		}
+	}
+}
+
+enum sol_buffer_table_result sol_vk_buffer_table_region_obtain(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset)
 {
 	enum sol_buffer_table_result result;
+	enum sol_map_operation_result map_find_result, map_obtain_result;
+	struct sol_vk_buffer_table_region* region;
+	uint32_t* region_index_ptr;
+	VkDeviceSize located_size;
+	bool found_allocation;
+	/** when calculating size exponent need to round up base allocation sizes */
+	const uint32_t size_exponent = sol_u64_exp_ge((size + table->base_allocation_size - 1) / table->base_allocation_size);
+
+	assert(size > 0);
 
 	if(table->multithreaded)
 	{
 		mtx_lock(&table->mutex);
 	}
 
-	//
+	map_find_result = sol_vk_buffer_table_region_map_find(table->region_map, region_identifier, &region_index_ptr);
+	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+	{
+		result = sol_vk_buffer_table_region_retain(table, accessor_slot, *region_index_ptr, entry_offset, &located_size);
+		/** if already extant on disk, should have the appropraie size class for the requested size */
+		assert(located_size == table->base_allocation_size << size_exponent);
+	}
+	else
+	{
+		/** if not found the only valid alternative should be absent */
+		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
+		result = sol_vk_buffer_table_region_allocate(table, region_identifier, accessor_slot, size_exponent, entry_offset);
+	}
+
+	if(table->multithreaded)
+	{
+		mtx_unlock(&table->mutex);
+	}
+
+	return result;
+}
+
+enum sol_buffer_table_result sol_vk_buffer_table_region_find(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size)
+{
+	enum sol_buffer_table_result result;
+	enum sol_map_operation_result map_find_result;
+	uint32_t* region_index_ptr;
+
+	assert(entry_offset != NULL);
+
+	if(table->multithreaded)
+	{
+		mtx_lock(&table->mutex);
+	}
+
+	map_find_result = sol_vk_buffer_table_region_map_find(table->region_map, region_identifier, &region_index_ptr);
+	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+	{
+		result = sol_vk_buffer_table_region_retain(table, accessor_slot, *region_index_ptr, entry_offset, size);
+	}
+	else
+	{
+		/** if not found the only valid alternative should be absent */
+		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
+		result = SOL_BUFFER_TABLE_FAIL_ABSENT;
+	}
 
 	if(table->multithreaded)
 	{
@@ -517,22 +748,3 @@ enum sol_buffer_table_result sol_vk_buffer_table_entry_find(struct sol_vk_buffer
 }
 
 
-
-#warning I'm not sure the following is actually possible, (though it or something like it seems necessary)
-/** if a resource is obtained on one thread, then another, the second thread sees the resource as being available
- * but if the first thread then cannot initialise the backing (and so needs to release it) then the second thread has effectively gained use of uninitialised data
- * each thread COULD use a different accessor, and obtain could be modified to permit attempted access by different accessors, but this removes the ability to "always" get/produce data the frame it was created!
- * 
- * the only way to alleviate is to make sure that the ability to initialise the resource is known up front by the user, in which case a single accessor is desired, but both approaches should remain open
- * this really puts an undesirable onus on caller to understand how the buffer table works and reason about the implications of its use
- * (maybe this is okay because its only applicable in the multithreaded case?)
- * 
- * COULD alter obtain such that it requires another call (to finalise or release the resource/entry) if the resource/entry was not already present
- * 
- * this all might be irrelevant anyway - because this backs a buffer, which may be CPU accessible, the interface could/should just return an initialisation pointer when obtain is called
- * this requires that staging is provided (at the callsite?) as well - but resources might NOT want to use upload to initialise a resorce (procedural gen contents via compute shader) so don't always need staging
- * 
- * ergo - onus on caller to ensure space is available beforehand */
-#warning  ^ in which case - probably also worth making this change to image atlas!
-
-void sol_buffer_table_entry_release(struct sol_vk_buffer_table* table, uint32_t accessor_index, uint64_t entry_identifier);
