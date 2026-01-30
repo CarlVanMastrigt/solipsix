@@ -23,11 +23,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 
 struct cvm_vk_device;
-struct sol_vk_buffer_table;
+struct sol_vk_buffer_atlas;
 struct sol_vk_timeline_semaphore_moment;
 
 
-enum sol_buffer_table_result
+enum sol_buffer_atlas_result
 {
     SOL_BUFFER_TABLE_FAIL_FULL, /** there is no remaining space, need to wait for space to be made */
     SOL_BUFFER_TABLE_FAIL_MAP_FULL, /** hash map is full, need to wait for space to be made */
@@ -43,7 +43,7 @@ enum sol_buffer_table_result
 /** re-writable resources require only one user at a time, same as obtaining a non-extant entry */
 // #define SOL_BUFFER_TABLE_OBTAIN_FLAG_WRITE  0x00000001u
 
-struct sol_vk_buffer_table_create_information
+struct sol_vk_buffer_atlas_create_information
 {
     VkBufferCreateInfo buffer_create_info;
 
@@ -63,27 +63,30 @@ struct sol_vk_buffer_table_create_information
 };
 
 /** note: buffer_create_info->size MUST be a multiple of base_allocation_size */
-struct sol_vk_buffer_table* sol_vk_buffer_table_create(struct cvm_vk_device* device, const struct sol_vk_buffer_table_create_information* create_information);
+struct sol_vk_buffer_atlas* sol_vk_buffer_atlas_create(struct cvm_vk_device* device, const struct sol_vk_buffer_atlas_create_information* create_information);
 
-void sol_vk_buffer_table_destroy(struct sol_vk_buffer_table* table, struct cvm_vk_device* device);
+void sol_vk_buffer_atlas_destroy(struct sol_vk_buffer_atlas* table, struct cvm_vk_device* device);
 
 
-/** usage pattern is
- * acquire: begin access range
- * get_wait_moment: before submitting GPU work wait on prior work for this accessor slot
- * release: stop allowing access to the moment and set the end of gpu work for this access range (reads and writes) 
- * for any given accessor slot these must have their ordering externally synchronised 
- * (i.e. reads must wait on writes performed by prior access ranges using the same access slot) */
-void sol_vk_buffer_table_access_acquire(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct cvm_vk_device *device);
-void sol_vk_buffer_table_access_release(struct sol_vk_buffer_table* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* release_moment);
+/** begin of range where reads and writes are able to be recorded for this buffer atlas (i.e. allowing access to its contents) 
+ * note allows reading of immutable resources from other slots if they can be guaranteed to be initialised */
+void sol_vk_buffer_atlas_access_range_begin(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, struct cvm_vk_device *device);
 
-/** TODO: could make this return a sequence by requiring it be called in a while loop */
-bool sol_vk_buffer_table_accessor_get_wait_moment(struct sol_vk_buffer_table* table, uint32_t accessor_slot, struct sol_vk_timeline_semaphore_moment* wait_moment);
+/** must pass in the moment where all reads and writes for this access range are known to have completed for the given slot 
+ * TODO: need to investigate whether accesses from other slots necessitate knowledge of all prior write methods, or whether the CPU operation is enough for visibility to be guaranteed */
+void sol_vk_buffer_atlas_access_range_end(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* last_use_moment);
+
+/** this can be used to access the moment where the most recent set of read and writes are known to have completed for the given slot
+ * note: will return false on first use
+ * TODO: could make this return a sequence by requiring it be called in a while loop 
+ * this isn't strictly necessary if access begin-end ranges can guarantee ordering externally 
+ * (i.e. all work done in a range must be synchronised to preceed subsequent begin) */
+bool sol_vk_buffer_atlas_accessor_get_wait_moment(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, struct sol_vk_timeline_semaphore_moment* wait_moment);
 
 /** acquire a unique identifier for accessing/indexing entries in the table
  * note: because a buffer can be used by multiple command buffers at once (even across queues) the concept of a transient allocation cannot be applicable the same way it is to the image atlas 
  * note: a mutable region can only be accessed via one slot */
-uint64_t sol_vk_buffer_table_generate_region_identifier(struct sol_vk_buffer_table* table, bool mutable);
+uint64_t sol_vk_buffer_atlas_generate_region_identifier(struct sol_vk_buffer_atlas* table, bool mutable);
 
 
 /** note: due to being an automatically managed system: there is no guarantee that an entry that did exist previously will still exist; 
@@ -96,12 +99,12 @@ uint64_t sol_vk_buffer_table_generate_region_identifier(struct sol_vk_buffer_tab
  * the onus then falls on the caller to ensure this memory is set up before the access scope's completion/release moment is signalled (obviously it must also be set up before bing used within the region too)
  * onus is also on the caller to ensure any other resources required to set up the contents of this region (e.g. staging) can be made avilable BEFORE calling obtain
  * note: if extant will assert size matches */
-enum sol_buffer_table_result sol_vk_buffer_table_region_obtain(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset);
+enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_obtain(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset);
 /** this will get the region (really just the offset) in the buffer associated with an identifier (if it is present) 
  * size may be null, but onus is on caller to ensure size actually matches size that was provided on setup, so if non-null size will be set to the size of the region for validation */
-enum sol_buffer_table_result sol_vk_buffer_table_region_find(struct sol_vk_buffer_table* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size);
+enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_find(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size);
 
 
 #warning add utility/helper function to copy that acknowledges the fact that the buffer table may be visible to the host
 
-struct sol_vk_buffer* sol_vk_buffer_table_access_buffer(struct sol_vk_buffer_table* table);
+struct sol_vk_buffer* sol_vk_buffer_atlas_access_buffer(struct sol_vk_buffer_atlas* table);

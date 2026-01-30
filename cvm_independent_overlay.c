@@ -541,9 +541,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_scope_begin_moment = sol_image_atlas_access_range_begin(renderer->overlay_rendering_resources.atlases[i]);
-        /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
-        *sol_vk_semaphore_submit_list_append_ptr(&cb.wait_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_begin_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+        sol_image_atlas_access_range_begin(renderer->overlay_rendering_resources.atlases[i]);
     }
 
     /// setup/reset the render batch
@@ -579,17 +577,14 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     vkCmdEndRenderPass(cb.buffer);///================
 
 
+    cvm_overlay_add_target_release_instructions(&cb, target);
+
+    completion_moment = sol_vk_command_pool_submit_command_buffer(&transient_resources->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
     for(i = 0; i< SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
-        atlas_scope_end_moment = sol_image_atlas_access_range_end(renderer->overlay_rendering_resources.atlases[i]);
-        /** this technically; unnecessarily imposes the VK_PIPELINE_STAGE_2_TRANSFER_BIT, but we also then unnecessarily impose a barrier before blitting into this texture on copy */
-        *sol_vk_semaphore_submit_list_append_ptr(&cb.signal_list) = sol_vk_timeline_semaphore_moment_submit_info(&atlas_scope_end_moment, VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+        sol_image_atlas_access_range_end(renderer->overlay_rendering_resources.atlases[i], &completion_moment);
     }
-
-    cvm_overlay_add_target_release_instructions(&cb, target);
-
-    completion_moment = sol_vk_command_pool_submit_command_buffer(&transient_resources->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
     sol_overlay_render_step_completion(render_batch, completion_moment);
 

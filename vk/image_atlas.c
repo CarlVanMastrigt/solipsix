@@ -244,11 +244,9 @@ struct sol_image_atlas
 	struct sol_vk_supervised_image image;
 	VkImageView image_view;
 
-	/** this is the management semaphore for accesses in the image atlas, it will signal availability and write completion
-	 * users of the image atlas must signal moments vended to them to indicate reads and writes have completed
-	 * users must also wait on the moment vended upon acquisition in order to ensure all prior modifications are visible */
-	struct sol_vk_timeline_semaphore timeline_semaphore;
-	struct sol_vk_timeline_semaphore_moment current_moment;
+	/** this is the moment that the most recent set of resources was used, its held onto by image atlas purely for convenience
+	 * the single queue device access requirement of an image atlas means that generally external synchronization will be enough */
+	struct sol_vk_timeline_semaphore_moment most_recent_usage_moment;
 
 
 	/** all entry indices reference indices in this array, contains the actual information regarding vended tiles */
@@ -276,6 +274,8 @@ struct sol_image_atlas
 
 	#warning using an accessor mask (instead of single accessor), while maintaining single threaded requirement, might be good for coordinating different sources of writes
 	bool accessor_active;
+
+	bool most_recent_usage_moment_set;
 };
 
 static inline bool sol_image_atlas_identifier_entry_compare_equal(uint64_t key, uint32_t* entry_index, struct sol_image_atlas* atlas)
@@ -1058,8 +1058,8 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 
 	atlas->description = *description;
 
-	sol_vk_timeline_semaphore_initialise(&atlas->timeline_semaphore, device);
-	atlas->current_moment = sol_vk_timeline_semaphore_get_current_moment(&atlas->timeline_semaphore);
+	atlas->most_recent_usage_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+	atlas->most_recent_usage_moment_set = false;
 
 	const VkImageCreateInfo image_create_info =
 	{
@@ -1204,9 +1204,9 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	assert(!atlas->accessor_active);
 
 	/** wait on and then release most recent access */
-	if(atlas->current_moment.semaphore != VK_NULL_HANDLE)
+	if(atlas->most_recent_usage_moment_set)
 	{
-		sol_vk_timeline_semaphore_moment_wait(&atlas->current_moment, device);
+		sol_vk_timeline_semaphore_moment_wait(&atlas->most_recent_usage_moment, device);
 	}
 
 	threshold_entry = sol_image_atlas_entry_array_remove_ptr(&atlas->entry_array, atlas->threshold_entry_index);
@@ -1268,26 +1268,22 @@ void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device
 	sol_image_atlas_map_terminate(&atlas->itentifier_entry_map);
 	sol_image_atlas_entry_array_terminate(&atlas->entry_array);
 
-	sol_vk_timeline_semaphore_terminate(&atlas->timeline_semaphore, device);
-
 	vkDestroyImageView(device->device, atlas->image_view, device->host_allocator);
 	sol_vk_supervised_image_terminate(&atlas->image, device);
 
 	free(atlas);
 }
 
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_begin(struct sol_image_atlas* atlas)
+void sol_image_atlas_access_range_begin(struct sol_image_atlas* atlas)
 {
 	assert(!atlas->accessor_active);
 	atlas->accessor_active = true;
 
 	/** place the threshold to the front of the queue */
 	sol_image_atlas_entry_add_to_queue_before(atlas, atlas->threshold_entry_index, atlas->header_entry_index);
-
-	return atlas->current_moment;
 }
 
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_end(struct sol_image_atlas* atlas)
+void sol_image_atlas_access_range_end(struct sol_image_atlas* atlas, const struct sol_vk_timeline_semaphore_moment* last_use_moment)
 {
 	struct sol_image_atlas_entry* threshold_entry;
 
@@ -1306,9 +1302,16 @@ struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_end(struct 
 	/** remove the threshold from the queue */
 	sol_image_atlas_entry_remove_from_queue(atlas, threshold_entry);
 
-	atlas->current_moment = sol_vk_timeline_semaphore_generate_new_moment(&atlas->timeline_semaphore);
+	assert(last_use_moment);
 
-	return atlas->current_moment;
+	atlas->most_recent_usage_moment = *last_use_moment;
+	atlas->most_recent_usage_moment_set = true;
+}
+
+bool sol_image_atlas_get_wait_moment(const struct sol_image_atlas* atlas, struct sol_vk_timeline_semaphore_moment* wait_moment)
+{
+	*wait_moment = atlas->most_recent_usage_moment;
+	return atlas->most_recent_usage_moment_set;
 }
 
 bool sol_image_atlas_access_range_is_active(struct sol_image_atlas* atlas)

@@ -75,16 +75,20 @@ struct sol_image_atlas_location
 struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_description* description, struct cvm_vk_device* device);
 void sol_image_atlas_destroy(struct sol_image_atlas* atlas, struct cvm_vk_device* device);
 
-/** returned moment must be waited on before performing any reads or writes to the texture, this ensures;
- * all prior reads have completed (avoiding errant read after write)
- * all prior writes have completed (avoiding errant read before write) */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_begin(struct sol_image_atlas* atlas);
+/** begin of range where reads and writes are able to be recorded for this image atlas (i.e. allowing access to its contents) 
+ * must be paired with a call to `sol_image_atlas_access_range_end` */
+void sol_image_atlas_access_range_begin(struct sol_image_atlas* atlas);
 
-/** returned moment must be signalled after all writes and reads of resources accessed in this access range have completed, this permits;
- * subsequent reads to wait on writes performed in this access range
- * subsequent writes to happen after all reads in this access range have completed
- * (basically pairing with `sol_image_atlas_access_range_begin`) */
-struct sol_vk_timeline_semaphore_moment sol_image_atlas_access_range_end(struct sol_image_atlas* atlas);
+/** must pass in the moment where all reads and writes for this access range are known to have completed
+ * must be paired with a call to `sol_image_atlas_access_range_begin` */
+void sol_image_atlas_access_range_end(struct sol_image_atlas* atlas, const struct sol_vk_timeline_semaphore_moment* last_use_moment);
+
+/** this can be used to access the moment where the most recent set of read and writes are known to have completed
+ * note: will return false on first use
+ * TODO: could make this return a sequence by requiring it be called in a while loop 
+ * this isn't strictly necessary if access begin-end ranges can guarantee ordering externally 
+ * (i.e. all work done in a range must be synchronised to preceed subsequent begin) */
+bool sol_image_atlas_get_wait_moment(const struct sol_image_atlas* atlas, struct sol_vk_timeline_semaphore_moment* wait_moment);
 
 /** should ONLY be used for validation, not for decision making */
 bool sol_image_atlas_access_range_is_active(struct sol_image_atlas* atlas);
