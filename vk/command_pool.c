@@ -48,7 +48,7 @@ void sol_vk_command_pool_terminate(struct sol_vk_command_pool* pool, struct cvm_
     assert(pool->acquired_buffer_count == pool->submitted_buffer_count);///not all acquired command buffers were submitted
     struct sol_vk_command_buffer* command_buffer;
 
-    while(sol_vk_command_buffer_stack_remove_ptr(&pool->buffer_stack, &command_buffer))
+    while(sol_vk_command_buffer_stack_withdraw_ptr(&pool->buffer_stack, &command_buffer))
     {
         vkFreeCommandBuffers(device->device, pool->pool, 1, &command_buffer->buffer);
         sol_vk_semaphore_submit_list_terminate(&command_buffer->signal_list);
@@ -80,7 +80,7 @@ void sol_vk_command_pool_acquire_command_buffer(struct sol_vk_command_pool* pool
     struct sol_vk_command_buffer* new_command_buffers;
     bool acquired;
 
-    if( ! sol_vk_command_buffer_stack_remove(&pool->buffer_stack, command_buffer))
+    if( ! sol_vk_command_buffer_stack_withdraw(&pool->buffer_stack, command_buffer))
     {
         VkCommandBufferAllocateInfo allocate_info=
         {
@@ -103,7 +103,7 @@ void sol_vk_command_pool_acquire_command_buffer(struct sol_vk_command_pool* pool
             sol_vk_semaphore_submit_list_initialise(&new_command_buffers[i].wait_list  , 8);
         }
 
-        acquired = sol_vk_command_buffer_stack_remove(&pool->buffer_stack, command_buffer);
+        acquired = sol_vk_command_buffer_stack_withdraw(&pool->buffer_stack, command_buffer);
         assert(acquired);
     }
 

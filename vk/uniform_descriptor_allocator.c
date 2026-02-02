@@ -135,7 +135,7 @@ void sol_vk_uniform_descriptor_allocator_upload(struct sol_vk_uniform_descriptor
     i = 0;
     do
     {
-        removed_entry = sol_vk_uniform_descriptor_entry_list_remove(&uniform_allocator->descriptor_list, &entry);
+        removed_entry = sol_vk_uniform_descriptor_entry_list_withdraw(&uniform_allocator->descriptor_list, &entry);
         if(removed_entry)
         {
             buffer_infos[i].offset = absolute_offset + entry.offset;

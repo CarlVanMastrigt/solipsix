@@ -150,9 +150,9 @@ static inline const SOL_BINARY_HEAP_ENTRY_TYPE* SOL_CONCATENATE(SOL_BINARY_HEAP_
 }
 
 #ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
-static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
+static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_withdraw)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
 #else
-static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
+static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_withdraw)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
 #endif
 {
     uint32_t index, next_index, count;
@@ -197,9 +197,9 @@ static inline bool SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove)(stru
 }
 
 #ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove_index)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, uint32_t index, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_withdraw_index)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, uint32_t index, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
 #else
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_remove_index)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, uint32_t index, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_withdraw_index)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, uint32_t index, SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
 #endif
 {
     uint32_t next_index, count;

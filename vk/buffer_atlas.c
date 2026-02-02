@@ -33,9 +33,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "data_structures/buddy_tree.h"
 
 
-/** the top bit, set as the identifier is generated */
-#define SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT (((uint64_t)1llu) << 63)
-
 #define SOL_BUFFER_TABLE_RETAIN_BIT_COUNT 20
 #define SOL_BUFFER_TABLE_MAX_RETAIN_COUNT (((uint32_t)1u << SOL_BUFFER_TABLE_RETAIN_BIT_COUNT) - 1u)
 
@@ -89,6 +86,11 @@ struct sol_vk_buffer_atlas_region
 	 * note secondary access precludes writing and writing precludes secondary access 
 	 * as such mutable content should be completely inaccessible from secondary accessors as that could effectively make it immutable */
 	uint32_t visible_from_read_accessors : 1;
+
+	/** if an entry is transient it will be inacceible through the map, 
+	 * only the initially returned offset can be used to access this entry 
+	 * and it only lives as long as the access range where it was created */
+	uint32_t is_transient : 1;
 };
 
 
@@ -273,6 +275,45 @@ struct sol_vk_buffer_atlas* sol_vk_buffer_atlas_create(struct cvm_vk_device* dev
 	return table;
 }
 
+/** returns false if there are no more available regions to evict */
+static inline bool sol_vk_buffer_atlas_evict_oldest_available_allocation(struct sol_vk_buffer_atlas* table)
+{
+	struct sol_vk_buffer_atlas_region* header_region;
+	struct sol_vk_buffer_atlas_region* evicted_region;
+	uint32_t evicted_region_index;
+	uint32_t next_index, prev_index;
+
+	header_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+
+	/** 0 is header region index */
+	if(header_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX)
+	{
+		/** the available ring buffer/linked list is empty, there is nothing left to free */
+		assert(header_region->next == SOL_BUFFER_TABLE_HEADER_INDEX);
+		return false;
+	}
+
+	/** front of the queue/ oldest entry is one to evict */
+	evicted_region_index = header_region->next;
+	/** note: nothing else in this function can modify the arrays backing memory so this pointer will remain valid for as long as its used despite having been "removed" here */
+	evicted_region = sol_vk_buffer_atlas_region_array_withdraw_ptr(&table->region_array, evicted_region_index);
+	assert(evicted_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX);
+	assert(evicted_region->retain_count == 0);
+	assert( ! evicted_region->is_transient);
+
+	/** remove evicted from the linked list */
+	sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, evicted_region->next)->prev = SOL_BUFFER_TABLE_HEADER_INDEX;
+	header_region->next = evicted_region->next;
+
+	/** remove from the identifier hash map */
+	sol_vk_buffer_atlas_region_map_remove(table->region_map, evicted_region->identifier, NULL);
+
+	/** actually make the memory available in the buddy allocator */
+	sol_buddy_tree_release(&table->region_tree, evicted_region->offset);
+
+	return true;
+}
+
 void sol_vk_buffer_atlas_destroy(struct sol_vk_buffer_atlas* table, struct cvm_vk_device* device)
 {
 	struct sol_vk_buffer_atlas_region* header_region_entry;
@@ -281,7 +322,7 @@ void sol_vk_buffer_atlas_destroy(struct sol_vk_buffer_atlas* table, struct cvm_v
 	#warning clean up regions including header
 
 	/** is assumed the header entry gets index 0 */
-	header_region_entry = sol_vk_buffer_atlas_region_array_remove_ptr(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+	header_region_entry = sol_vk_buffer_atlas_region_array_withdraw_ptr(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
 	/** the available ring linked list (header_region_entry) should be empty */
 	assert(header_region_entry->identifier == 0 && header_region_entry->prev == SOL_BUFFER_TABLE_HEADER_INDEX && header_region_entry->next == SOL_BUFFER_TABLE_HEADER_INDEX);
 
@@ -326,14 +367,7 @@ uint64_t sol_vk_buffer_atlas_generate_entry_identifier(struct sol_vk_buffer_atla
 	}
 	while(atomic_compare_exchange_weak_explicit(&table->current_entry_identifier, &old_entry_identifier, new_entry_identifier, memory_order_relaxed, memory_order_relaxed));
 
-	if(mutable)
-	{
-		return new_entry_identifier | SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT;
-	}
-	else
-	{
-		return new_entry_identifier & (~SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT);
-	}
+	return new_entry_identifier;
 }
 
 
@@ -352,36 +386,49 @@ static inline void sol_vk_buffer_atlas_access_range_terminate(struct sol_vk_buff
 }
 
 /** note: this is a slight hack, as it operates on the array directly and assumes the base region is also the header and the whole array is a single contiguous array of memory */
-static inline void sol_vk_buffer_atlas_release_region_reference(struct sol_vk_buffer_atlas* table, uint32_t region_index)
+static inline void sol_vk_buffer_atlas_release_access_range_references(struct sol_vk_buffer_atlas* table, struct sol_vk_buffer_atlas_access_range* access_range)
 {
 	struct sol_vk_buffer_atlas_region* region;
 	struct sol_vk_buffer_atlas_region* header_region;
 	struct sol_vk_buffer_atlas_region* newest_region;
+	uint32_t region_index;
 
-	region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, region_index);
-
-	assert(region->next == SOL_BUFFER_TABLE_INVALID_INDEX && region->prev == SOL_BUFFER_TABLE_INVALID_INDEX);
-
-	/** if it was not yet visible it is now */
-	region->visible_from_read_accessors = true;
-
-	assert(region->retain_count > 0);
-	region->retain_count--;
-
-
-	if(region->retain_count == 0)
+	/** note: this also empties the stack */
+	while(sol_indices_stack_withdraw(&access_range->retained_region_indices, &region_index))
 	{
-		/** put this entry in the availability linked list, replacing the newest entry 
-		 * note: this still works if the available region linked list is empty (header.prev == header && header.next == header) */
+		region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, region_index);
 
-		header_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
-		newest_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, header_region->prev);
+		assert(region->next == SOL_BUFFER_TABLE_INVALID_INDEX && region->prev == SOL_BUFFER_TABLE_INVALID_INDEX);
 
-		region->prev = header_region->prev;
-		region->next = SOL_BUFFER_TABLE_HEADER_INDEX;
-		
-		newest_region->next = region_index;
-		header_region->prev = region_index;
+		/** if it was not yet visible it is now */
+		region->visible_from_read_accessors = true;
+
+		assert(region->retain_count > 0);
+		region->retain_count--;
+
+		if(region->is_transient)
+		{
+			/** transient allocations should only have one reference */
+			assert(region->retain_count == 0);
+
+			/** transients can be made avaialable immediately */
+			sol_buddy_tree_release(&table->region_tree, region->offset);
+			sol_vk_buffer_atlas_region_array_withdraw(&table->region_array, region_index);
+		}
+		else if(region->retain_count == 0)
+		{
+			/** put this entry in the availability linked list, replacing the newest entry 
+			 * note: this still works if the available region linked list is empty (header.prev == header && header.next == header) */
+
+			header_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+			newest_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, header_region->prev);
+
+			region->prev = header_region->prev;
+			region->next = SOL_BUFFER_TABLE_HEADER_INDEX;
+			
+			newest_region->next = region_index;
+			header_region->prev = region_index;
+		}
 	}
 }
 
@@ -403,15 +450,10 @@ static inline void sol_vk_buffer_atlas_try_releasing_retained_access_ranges(stru
 		if(sol_vk_timeline_semaphore_moment_query(&access_range->last_use_moment, device))
 		{
 			/** accessors work has completed, i.e. it has been released */
-
-			/** note: this also empties the stack */
-			while(sol_indices_stack_remove(&access_range->retained_region_indices, &region_index))
-			{
-				sol_vk_buffer_atlas_release_region_reference(table, region_index);
-			}
+			sol_vk_buffer_atlas_release_access_range_references(table, access_range);
 
 			/** move this range from the retained list to the available list */
-			sol_indices_list_remove_entry(&table->retained_access_range_indices, range_list_index);
+			sol_indices_list_evict_index(&table->retained_access_range_indices, range_list_index);
 			sol_indices_list_append(&table->available_access_range_indices, range_index);
 			/** by removing this range from the list we have replaced the entry at this index in the list and reduced the lists count
 			 * as a result the `range_list_index` should not be incremented and instead this list index should be checked again with its replacement */
@@ -442,7 +484,7 @@ void sol_vk_buffer_atlas_access_range_begin(struct sol_vk_buffer_atlas* table, u
 	accessor = table->accessors + accessor_slot;
 	assert( ! accessor->active);
 
-	if(!sol_indices_list_remove(&table->available_access_range_indices, &access_range_index))
+	if(!sol_indices_list_withdraw(&table->available_access_range_indices, &access_range_index))
 	{
 		if(table->access_range_count == table->access_range_space)
 		{
@@ -500,7 +542,7 @@ void sol_vk_buffer_atlas_access_range_end(struct sol_vk_buffer_atlas* table, uin
 
 
 /** this shouldn't need the mutex lock as accessor management/setup is required to be single threaded */
-bool sol_vk_buffer_atlas_accessor_get_wait_moment(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, struct sol_vk_timeline_semaphore_moment* wait_moment)
+bool sol_vk_buffer_atlas_access_range_wait_moment(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, struct sol_vk_timeline_semaphore_moment* wait_moment)
 {
 	struct sol_vk_buffer_atlas_accessor* accessor;
 
@@ -523,9 +565,6 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_retain(str
 	uint32_t next_index, prev_index;
 
 	region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, region_index);
-
-	/** regions must either be immutable, or accessed via the same slot every time */
-	assert( !(region->identifier & SOL_BUFFER_TABLE_IDENTIFIER_MUTABLE_BIT) || accessor_slot == region->write_accessor_slot);
 
 	if(region->write_accessor_slot == accessor_slot || region->visible_from_read_accessors)
 	{
@@ -570,45 +609,41 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_retain(str
 	}
 }
 
-/** returns false if there are no more available regions to evict */
-static inline bool sol_vk_buffer_atlas_evict_oldest_available_allocation(struct sol_vk_buffer_atlas* table)
+
+enum sol_buffer_atlas_result sol_vk_buffer_atlas_find_identified_region(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size)
 {
-	struct sol_vk_buffer_atlas_region* header_region;
-	struct sol_vk_buffer_atlas_region* evicted_region;
-	uint32_t evicted_region_index;
-	uint32_t next_index, prev_index;
+	enum sol_buffer_atlas_result result;
+	enum sol_map_operation_result map_find_result;
+	uint32_t* region_index_ptr;
 
-	header_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+	assert(entry_offset != NULL);
 
-	/** 0 is header region index */
-	if(header_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX)
+	if(table->multithreaded)
 	{
-		/** the available ring buffer/linked list is empty, there is nothing left to free */
-		assert(header_region->next == SOL_BUFFER_TABLE_HEADER_INDEX);
-		return false;
+		mtx_lock(&table->mutex);
 	}
 
-	/** front of the queue/ oldest entry is one to evict */
-	evicted_region_index = header_region->next;
-	/** note: nothing else in this function can modify the arrays backing memory so this pointer will remain valid for as long as its used despite having been "removed" here */
-	evicted_region = sol_vk_buffer_atlas_region_array_remove_ptr(&table->region_array, evicted_region_index);
-	assert(evicted_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX);
-	assert(evicted_region->retain_count == 0);
+	map_find_result = sol_vk_buffer_atlas_region_map_find(table->region_map, region_identifier, &region_index_ptr);
+	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
+	{
+		result = sol_vk_buffer_atlas_region_retain(table, accessor_slot, *region_index_ptr, entry_offset, size);
+	}
+	else
+	{
+		/** if not found the only valid alternative should be absent */
+		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
+		result = SOL_BUFFER_TABLE_FAIL_ABSENT;
+	}
 
-	/** remove evicted from the linked list */
-	sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, evicted_region->next)->prev = SOL_BUFFER_TABLE_HEADER_INDEX;
-	header_region->next = evicted_region->next;
+	if(table->multithreaded)
+	{
+		mtx_unlock(&table->mutex);
+	}
 
-	/** remove from the identifier hash map */
-	sol_vk_buffer_atlas_region_map_remove(table->region_map, evicted_region->identifier, NULL);
-
-	/** actually make the memory available in the buddy allocator */
-	sol_buddy_tree_release(&table->region_tree, evicted_region->offset);
-
-	return true;
+	return result;
 }
 
-static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
+static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate_identified(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
 {
 	struct sol_vk_buffer_atlas_access_range* access_range;
 	uint32_t* region_index_ptr;
@@ -652,6 +687,7 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate(s
 				.retain_count = 1,/** this, the write access retains the allocation */
 				.write_accessor_slot = accessor_slot,
 				.visible_from_read_accessors = false,
+				.is_transient = false,
 			};
 
 			*entry_offset = table->base_allocation_size * buffer_offset;
@@ -669,18 +705,18 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate(s
 	}
 }
 
-enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_obtain(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset)
+enum sol_buffer_atlas_result sol_vk_buffer_atlas_obtain_identified_region(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset)
 {
 	enum sol_buffer_atlas_result result;
-	enum sol_map_operation_result map_find_result, map_obtain_result;
-	struct sol_vk_buffer_atlas_region* region;
+	enum sol_map_operation_result map_find_result;
 	uint32_t* region_index_ptr;
 	VkDeviceSize located_size;
-	bool found_allocation;
+
 	/** when calculating size exponent need to round up base allocation sizes */
 	const uint32_t size_exponent = sol_u64_exp_ge((size + table->base_allocation_size - 1) / table->base_allocation_size);
 
 	assert(size > 0);
+	assert(entry_offset);
 
 	if(table->multithreaded)
 	{
@@ -698,7 +734,7 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_obtain(struct sol_vk_buf
 	{
 		/** if not found the only valid alternative should be absent */
 		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
-		result = sol_vk_buffer_atlas_region_allocate(table, region_identifier, accessor_slot, size_exponent, entry_offset);
+		result = sol_vk_buffer_atlas_region_allocate_identified(table, region_identifier, accessor_slot, size_exponent, entry_offset);
 	}
 
 	if(table->multithreaded)
@@ -709,30 +745,61 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_obtain(struct sol_vk_buf
 	return result;
 }
 
-enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_find(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, VkDeviceSize* entry_offset, VkDeviceSize* size)
+
+static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate_transient(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
+{
+	struct sol_vk_buffer_atlas_access_range* access_range;
+	uint32_t* region_index_ptr;
+	uint32_t buffer_offset;
+
+	while( ! sol_buddy_tree_acquire(&table->region_tree, size_exponent, &buffer_offset))
+	{
+		if( ! sol_vk_buffer_atlas_evict_oldest_available_allocation(table))
+		{
+			/** no more entries to free, have run out of space */
+			return SOL_BUFFER_TABLE_FAIL_FULL;
+		}
+	}
+
+	/** create and initialise the region metadata */
+	*sol_vk_buffer_atlas_region_array_append_ptr(&table->region_array, region_index_ptr) = (struct sol_vk_buffer_atlas_region)
+	{
+		.identifier = 0,
+		/** not in available list so links are invalid */
+		.prev = SOL_BUFFER_TABLE_INVALID_INDEX,
+		.next = SOL_BUFFER_TABLE_INVALID_INDEX,
+		.offset = buffer_offset,
+		.retain_count = 1,/** this, the write access retains the allocation */
+		.write_accessor_slot = accessor_slot,
+		.visible_from_read_accessors = false,
+		.is_transient = true,
+	};
+
+	*entry_offset = table->base_allocation_size * buffer_offset;
+
+	/** add the newly created region (its index) to the retained list for this access range */
+	access_range = table->access_ranges + table->accessors[accessor_slot].active_range_index;
+	sol_indices_stack_append(&access_range->retained_region_indices, *region_index_ptr);
+
+	return SOL_BUFFER_TABLE_SUCCESS_INSERTED;
+}
+
+enum sol_buffer_atlas_result sol_vk_buffer_atlas_obtain_transient_region(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, VkDeviceSize size, VkDeviceSize* entry_offset)
 {
 	enum sol_buffer_atlas_result result;
-	enum sol_map_operation_result map_find_result;
-	uint32_t* region_index_ptr;
 
-	assert(entry_offset != NULL);
+	/** when calculating size exponent need to round up base allocation sizes */
+	const uint32_t size_exponent = sol_u64_exp_ge((size + table->base_allocation_size - 1) / table->base_allocation_size);
+
+	assert(size > 0);
+	assert(entry_offset);
 
 	if(table->multithreaded)
 	{
 		mtx_lock(&table->mutex);
 	}
 
-	map_find_result = sol_vk_buffer_atlas_region_map_find(table->region_map, region_identifier, &region_index_ptr);
-	if(map_find_result == SOL_MAP_SUCCESS_FOUND)
-	{
-		result = sol_vk_buffer_atlas_region_retain(table, accessor_slot, *region_index_ptr, entry_offset, size);
-	}
-	else
-	{
-		/** if not found the only valid alternative should be absent */
-		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
-		result = SOL_BUFFER_TABLE_FAIL_ABSENT;
-	}
+	result = sol_vk_buffer_atlas_region_allocate_transient(table, accessor_slot, size_exponent, entry_offset);
 
 	if(table->multithreaded)
 	{
@@ -743,3 +810,7 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_find(struct sol_vk_buffe
 }
 
 
+struct sol_vk_buffer* sol_vk_buffer_atlas_access_buffer(struct sol_vk_buffer_atlas* table)
+{
+	return &table->backing;
+}

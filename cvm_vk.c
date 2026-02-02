@@ -1121,7 +1121,7 @@ static inline void sol_vk_object_pools_destroy(struct sol_vk_object_pools* objec
 {
     VkSemaphore semaphore;
 
-    while(sol_vk_semaphore_stack_remove(&object_pools->semaphores, &semaphore))
+    while(sol_vk_semaphore_stack_withdraw(&object_pools->semaphores, &semaphore))
     {
         vkDestroySemaphore(device->device, semaphore, device->host_allocator);
     }
@@ -1140,7 +1140,7 @@ VkSemaphore sol_vk_device_object_pool_semaphore_acquire(const struct cvm_vk_devi
     struct sol_vk_object_pools* object_pools = device->object_pools;
 
     mtx_lock(&object_pools->semaphore_mutex);
-    acquired = sol_vk_semaphore_stack_remove(&object_pools->semaphores, &semaphore);
+    acquired = sol_vk_semaphore_stack_withdraw(&object_pools->semaphores, &semaphore);
     mtx_unlock(&object_pools->semaphore_mutex);
 
     if(!acquired)

@@ -71,7 +71,7 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_terminate)(struct 
 static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
     uint32_t i;
-    if(!sol_indices_stack_remove(&a->available_indices, &i))
+    if(!sol_indices_stack_withdraw(&a->available_indices, &i))
     {
         if(a->count == a->space)
         {
@@ -103,14 +103,14 @@ static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append)(struct
 }
 
 /** returned pointer cannot be used after any other operation has occurred*/
-static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline SOL_ARRAY_ENTRY_TYPE* SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_withdraw_ptr)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     assert(index < a->count);
     sol_indices_stack_append(&a->available_indices, index);
     return a->array + index;
 }
 
-static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_remove)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
+static inline SOL_ARRAY_ENTRY_TYPE SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_withdraw)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t index)
 {
     assert(index < a->count);
     sol_indices_stack_append(&a->available_indices, index);

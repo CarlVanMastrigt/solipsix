@@ -799,7 +799,7 @@ void cvm_vk_managed_buffer_dismissal_list_release_frame(cvm_vk_managed_buffer_di
 
     stack=dismissal_list->allocation_indices+frame_index;
 
-    while(u32_stack_remove(stack,&allocation_index))
+    while(u32_stack_withdraw(stack,&allocation_index))
     {
         cvm_vk_managed_buffer_release_temporary_allocation(managed_buffer,allocation_index);
     }

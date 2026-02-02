@@ -95,7 +95,7 @@ bool sol_image_atlas_access_range_is_active(struct sol_image_atlas* atlas);
 
 /** acquire a unique identifier for accessing/indexing entries in the atlas in the setup phase
  * `transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used */
-uint64_t sol_image_atlas_generate_entry_identifier(struct sol_image_atlas* atlas, bool transient);
+uint64_t sol_image_atlas_generate_entry_identifier(struct sol_image_atlas* atlas);
 
 /** if the entry didnt exist, create a slot for it, prefer this if entry will be created regardless (over calling find first)
  * this must be used with write if its contents will be modified in any way

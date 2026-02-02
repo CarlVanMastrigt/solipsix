@@ -126,7 +126,7 @@ static inline SOL_LIMITED_CACHE_ENTRY_TYPE* SOL_CONCATENATE(SOL_LIMITED_CACHE_FU
     return cache->entries + oldest_index;
 }
 
-static inline void SOL_CONCATENATE(SOL_LIMITED_CACHE_FUNCTION_PREFIX,_remove)(struct SOL_LIMITED_CACHE_STRUCT_NAME* cache, SOL_LIMITED_CACHE_ENTRY_TYPE* entry)
+static inline void SOL_CONCATENATE(SOL_LIMITED_CACHE_FUNCTION_PREFIX,_withdraw)(struct SOL_LIMITED_CACHE_STRUCT_NAME* cache, SOL_LIMITED_CACHE_ENTRY_TYPE* entry)
 {
     assert(cache->count > 0);
 	assert(entry >= cache->entries);

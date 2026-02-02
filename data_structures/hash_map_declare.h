@@ -100,7 +100,7 @@ SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUN
 
 /** if key found copies it into entry (if entry nonnull) then returns true
  *  effectively: find() and delete() with (conditional) memcpy() in between */
-SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUNCTION_PREFIX,_remove)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE* entry);
+SOL_HASH_MAP_FUNCTION_KEYWORDS enum sol_map_operation_result SOL_CONCATENATE(FUNCTION_PREFIX,_withdraw)(struct SOL_HASH_MAP_STRUCT_NAME* map, SOL_HASH_MAP_KEY_TYPE key, SOL_HASH_MAP_ENTRY_TYPE* entry);
 
 /** entry MUST be EXACTLY the result of a prior successful `find()` or `obtain()` with no other map functions called in between
  *  will directly remove an entry from the map if it exists */

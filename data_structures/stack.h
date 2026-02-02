@@ -96,21 +96,25 @@ static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_many)(struc
     s->count += count;
 }
 
-/** removes the top `count` of the stack, will copy their contents into `values` is the callers responsibility to ensure values is a valid pointer
+/** withdraws the top `count` of the stack, will copy their contents into `values` is the callers responsibility to ensure values is a valid pointer
     can be provided a count higher than present in the stack; in which case the remaining count will be copied, as such the returned count should be respected */
-static inline uint32_t SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove_many)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE* values, uint32_t count)
+static inline uint32_t SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_withdraw_many)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE* values, uint32_t count)
 {
     if(s->count < count)
     {
         count = s->count;
     }
-    if(values)
+
+    s->count -= count;
+
+    if(values && count)
     {
-        memcpy(values, s->data + s->count - count, sizeof(SOL_STACK_ENTRY_TYPE) * count);
+        memcpy(values, s->data + s->count, sizeof(SOL_STACK_ENTRY_TYPE) * count);
     }
     return count;
 }
 
+/** same as `append_many` but avoids a copy if entries can be used "in place" without altering the stack until they're done with (the pointer remains valid until another operation is done to the stack) */
 static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_many_ptr)(struct SOL_STACK_STRUCT_NAME* s, uint32_t count)
 {
     SOL_STACK_ENTRY_TYPE* result;
@@ -136,6 +140,24 @@ static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_a
     return result;
 }
 
+/** same as `withdraw_many` but avoids a copy if entries can be used "in place" without altering the stack until they're done with (the pointer remains valid until another operation is done to the stack)
+ * as with the regular withdraw many the returned count must be respected */
+static inline uint32_t SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_withdraw_many_ptr)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE** values, uint32_t count)
+{
+    if(s->count < count)
+    {
+        count = s->count;
+    }
+
+    s->count -= count;
+
+    if(values && count)
+    {
+        *values = s->data + s->count;
+    }
+    return count;
+}
+
 static inline SOL_STACK_ENTRY_TYPE* SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_ptr)(struct SOL_STACK_STRUCT_NAME* s)
 {
     return SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_many_ptr)(s, 1);
@@ -146,8 +168,8 @@ static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append)(struct SOL
     *(SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_append_ptr)(s)) = value;
 }
 
-/** removes the top of the stack, same as regular remove, but avoids a potential copy, the data pointed to remains valid until another operation is done to the stack */
-static inline bool SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove_ptr)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE** entry_ptr)
+/** withdraws the top of the stack, same as regular `withdraw`, but avoids a potential copy, (the pointer remains valid until another operation is done to the stack) */
+static inline bool SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_withdraw_ptr)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE** entry_ptr)
 {
     if(s->count == 0)
     {
@@ -158,7 +180,7 @@ static inline bool SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove_ptr)(struct
     return true;
 }
 
-static inline bool SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE* value)
+static inline bool SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_withdraw)(struct SOL_STACK_STRUCT_NAME* s, SOL_STACK_ENTRY_TYPE* value)
 {
     if(s->count == 0)
     {
@@ -206,7 +228,7 @@ static inline SOL_STACK_ENTRY_TYPE SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_ge
     assert(index < s->count);
     return s->data[index];
 }
-static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_remove_entry)(struct SOL_STACK_STRUCT_NAME* s, uint32_t index)
+static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_evict_index)(struct SOL_STACK_STRUCT_NAME* s, uint32_t index)
 {
     assert(index < s->count);
     s->data[index] = s->data[--s->count];

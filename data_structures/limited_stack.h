@@ -70,9 +70,9 @@ static inline void SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_append_man
     s->count += count;
 }
 
-/** removes the top `count` of the stack, will copy their contents into `values` is the callers responsibility to ensure values is a valid pointer
+/** withdraws the top `count` of the stack, will copy their contents into `values` is the callers responsibility to ensure values is a valid pointer
     can be provided a count higher than present in the stack; in which case the remaining count will be copied, as such the returned count should be respected */
-static inline uint32_t SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_remove_many)(struct SOL_LIMITED_STACK_STRUCT_NAME* s, SOL_LIMITED_STACK_ENTRY_TYPE* values, uint32_t count)
+static inline uint32_t SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_withdraw_many)(struct SOL_LIMITED_STACK_STRUCT_NAME* s, SOL_LIMITED_STACK_ENTRY_TYPE* values, uint32_t count)
 {
     if(s->count < count)
     {
@@ -126,8 +126,8 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_append)(st
     }
 }
 
-/** removes the top of the stack, same as regular remove, but avoids a potential copy, the data pointed to remains valid until another operation is done to the stack */
-static inline bool SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_remove_ptr)(struct SOL_LIMITED_STACK_STRUCT_NAME* s, SOL_LIMITED_STACK_ENTRY_TYPE** entry_ptr)
+/** withdraws the top of the stack, same as regular withdraw, but avoids a potential copy, the data pointed to remains valid until another operation is done to the stack */
+static inline bool SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_withdraw_ptr)(struct SOL_LIMITED_STACK_STRUCT_NAME* s, SOL_LIMITED_STACK_ENTRY_TYPE** entry_ptr)
 {
     if(s->count == 0)
     {
@@ -138,7 +138,7 @@ static inline bool SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_remove_ptr
     return true;
 }
 
-static inline bool SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_remove)(struct SOL_LIMITED_STACK_STRUCT_NAME* s, SOL_LIMITED_STACK_ENTRY_TYPE* value)
+static inline bool SOL_CONCATENATE(SOL_LIMITED_STACK_FUNCTION_PREFIX,_withdraw)(struct SOL_LIMITED_STACK_STRUCT_NAME* s, SOL_LIMITED_STACK_ENTRY_TYPE* value)
 {
     if(s->count == 0)
     {
