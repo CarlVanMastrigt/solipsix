@@ -37,7 +37,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_BUFFER_TABLE_MAX_RETAIN_COUNT (((uint32_t)1u << SOL_BUFFER_TABLE_RETAIN_BIT_COUNT) - 1u)
 
 #define SOL_BUFFER_TABLE_INVALID_INDEX 0xFFFFFFFFu
-#define SOL_BUFFER_TABLE_HEADER_INDEX 0xFFFFFFFFu
+#define SOL_BUFFER_TABLE_HEADER_INDEX 0
 
 
 /** the map takes a unique identifier and gets the index in the array of entries
@@ -98,6 +98,7 @@ struct sol_vk_buffer_atlas_region
 #define SOL_ARRAY_STRUCT_NAME sol_vk_buffer_atlas_region_array
 #include "data_structures/array.h"
 
+
 /** represents the range of accesses performed between an accessor acquire and release pair */
 struct sol_vk_buffer_atlas_access_range
 {
@@ -108,13 +109,31 @@ struct sol_vk_buffer_atlas_access_range
 	uint32_t accessor_slot;
 };
 
+#define SOL_STACK_ENTRY_TYPE struct sol_vk_buffer_atlas_access_range
+#define SOL_STACK_STRUCT_NAME sol_vk_buffer_atlas_access_range_stack
+#include "data_structures/stack.h"
+
+
+static inline void sol_vk_buffer_atlas_access_range_initialise(struct sol_vk_buffer_atlas_access_range* access_range)
+{
+	sol_indices_stack_initialise(&access_range->retained_region_indices, 64);
+	access_range->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+}
+
+static inline void sol_vk_buffer_atlas_access_range_terminate(struct sol_vk_buffer_atlas_access_range* access_range)
+{
+	// assert(access_range->last_use_moment.semaphore == VK_NULL_HANDLE);
+	sol_indices_stack_terminate(&access_range->retained_region_indices);
+}
+
 
 struct sol_vk_buffer_atlas_accessor
 {
 	struct sol_vk_timeline_semaphore_moment most_recent_usage_moment;
-	/** TODO: make above a sequence?? */
+	/** TODO: maybe make above a sequence?? */
 
-	uint32_t active_range_index;
+	/** NOTE: this is termporary holding of the struct, it is NOT a long lived initialised member */
+	struct sol_vk_buffer_atlas_access_range access_range;
 
 	bool active;
 	bool most_recent_usage_moment_set;
@@ -126,54 +145,31 @@ struct sol_vk_buffer_atlas
 {
 	struct sol_vk_buffer backing;
 
+
 	struct sol_buddy_tree region_tree;
+
 
 	struct sol_vk_buffer_atlas_region_map* region_map;
 
 
-
-	/** note: accessor storage here is very similar to array, but its necessary to know which elements have been initialised */
-	struct sol_vk_buffer_atlas_access_range* access_ranges;
-	uint32_t access_range_space;
-	uint32_t access_range_count;/** number that have been init */
-
-	/** these have already been init but can be used */
-	struct sol_indices_list available_access_range_indices;
-	/** these are waiting on their release moment to pass */
-	struct sol_indices_list retained_access_range_indices;
+	struct sol_vk_buffer_atlas_access_range_stack available_access_ranges;
+	struct sol_vk_buffer_atlas_access_range_stack in_flight_access_ranges;
+	uint32_t active_accessor_count;/* debug */
 
 
-
-
-
-
-
-	struct sol_vk_buffer_atlas_accessor* accessors;
 	uint32_t accessor_slot_count;
+	struct sol_vk_buffer_atlas_accessor* accessors;
 
 
-
+	/** an array of data associated with tracking each allocation/region (reference count, position in deallocation queue &c.)
+	 * index zero is an entry/region that doesnt actually reference any location in the buffer
+	 * this entry is the start & end of the linked list ring of available entries*/
 	struct sol_vk_buffer_atlas_region_array region_array;
-
-	/** this is the index of an entry/region that doesnt actually reference any location in the buffer
-	 * this entry is the start-end of the linked list ring of available entries (this will always be zero) */
-	// uint32_t header_region_entry_index;
 
 
 	VkDeviceSize base_allocation_size;
 
-	/** used to lock overarching structure (buddy tree and accessor use) - NYI 
-	 * not sure its possible to justify this being a truly multithreaded data structure without a dedicated/monotonic upload thread that accessors are required to wait on 
-	 * this is because one accessor may look it up first (and thus be responsible for uploading it) while another thinks its init but then actually reads it on GPU first (before it has been written by the other accessor) 
-	 * 	^ even this requires waiting on all active accessors... 
-	 * that being said... it is still possible as long as concurrent accessors can guarantee that they operate on non-overlapping sets of entries */
-	// mtx_t mutex;
-
-
-	#warning if accessors have "slots" that allow one to follow another AND regions/resources have state (created vs initialised vs dynamic) it should be possible to share resources between accesors (and accessor slots) in a multithreaded way - TODO
-	/** ^ would be: a slot is chosed (by caller) to be responsible for initialising a region; others may query it and get "uninit" (they must use find) 
-	 * could even encode the accessor slot that is permitted to create a resource in its identifier! */
-
+	/** atomic used to vend identifiers */
 	_Atomic uint64_t current_entry_identifier;
 
 	mtx_t mutex;
@@ -193,88 +189,6 @@ static inline uint64_t sol_vk_buffer_atlas_entry_identifier_get(const uint32_t* 
 	return region->identifier;
 }
 
-
-
-
-
-
-struct sol_vk_buffer_atlas* sol_vk_buffer_atlas_create(struct cvm_vk_device* device, const struct sol_vk_buffer_atlas_create_information* create_information)
-{
-	struct sol_vk_buffer_atlas_region* header_region_entry;
-	uint32_t header_region_entry_index, accessor_slot_index;
-	const uint32_t expected_range_count = sol_u32_exp_ge(create_information->accessor_slot_count * 2);
-
-	struct sol_vk_buffer_atlas* table = malloc(sizeof(struct sol_vk_buffer_atlas));
-
-	/** total buffer size should be a multiple of the base allocation size (i.e. the minumum allocation granularity) */
-	assert((create_information->buffer_create_info.size % create_information->base_allocation_size) == 0);
-
-	#warning make sure base allocation is a multiple of the required alignment for buffer usages
-
-
-	sol_vk_buffer_initialise(&table->backing, device, &create_information->buffer_create_info, create_information->required_properties, create_information->desired_properties);
-
-	sol_buddy_tree_initialise(&table->region_tree, create_information->buffer_create_info.size / create_information->base_allocation_size);
-
-	const struct sol_hash_map_descriptor map_descriptor = 
-	{
-		.entry_space_exponent_initial = 12,//4096
-		.entry_space_exponent_limit = 24,//16M
-		.resize_fill_factor = 160,// out of 256
-		.limit_fill_factor = 192,// out of 256
-	};
-	table->region_map = sol_vk_buffer_atlas_region_map_create(map_descriptor, table);
-
-	table->access_range_count = 0;
-	/** want a po2 number of them, but gte than the count */
-	table->access_range_space = expected_range_count;
-	table->access_ranges = malloc(sizeof(struct sol_vk_buffer_atlas_access_range) * table->access_range_space);
-
-	sol_indices_list_initialise(&table->available_access_range_indices, expected_range_count);
-	sol_indices_list_initialise(&table->retained_access_range_indices, expected_range_count);
-
-
-	table->accessors = malloc(sizeof(struct sol_vk_buffer_atlas_accessor) * create_information->accessor_slot_count);
-	table->accessor_slot_count = create_information->accessor_slot_count;
-	for(accessor_slot_index = 0; accessor_slot_index < create_information->accessor_slot_count; accessor_slot_index++)
-	{
-		table->accessors[accessor_slot_index] = (struct sol_vk_buffer_atlas_accessor)
-		{
-			#warning instead of null make this a device created dummy moment using a dummy semaphore
-			.most_recent_usage_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL,
-			.active = false,
-			.most_recent_usage_moment_set = false,
-		};
-	}
-
-
-	/** make this initial count larger? */
-	sol_vk_buffer_atlas_region_array_initialise(&table->region_array, 256);
-
-	header_region_entry = sol_vk_buffer_atlas_region_array_append_ptr(&table->region_array, &header_region_entry_index);
-	/** is assumed the header entry gets index 0 */
-	assert(header_region_entry_index == SOL_BUFFER_TABLE_HEADER_INDEX);
-	*header_region_entry = (struct sol_vk_buffer_atlas_region)
-	{
-		.identifier = 0,
-		.next = header_region_entry_index,
-		.prev = header_region_entry_index,
-	};
-
-
-	table->base_allocation_size = create_information->base_allocation_size;
-	atomic_init(&table->current_entry_identifier, 0);
-
-	table->multithreaded = create_information->multithreaded;
-	if(table->multithreaded)
-	{
-		mtx_init(&table->mutex, mtx_plain);
-	}
-
-
-	return table;
-}
-
 /** returns false if there are no more available regions to evict */
 static inline bool sol_vk_buffer_atlas_evict_oldest_available_allocation(struct sol_vk_buffer_atlas* table)
 {
@@ -285,7 +199,6 @@ static inline bool sol_vk_buffer_atlas_evict_oldest_available_allocation(struct 
 
 	header_region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
 
-	/** 0 is header region index */
 	if(header_region->prev == SOL_BUFFER_TABLE_HEADER_INDEX)
 	{
 		/** the available ring buffer/linked list is empty, there is nothing left to free */
@@ -314,79 +227,9 @@ static inline bool sol_vk_buffer_atlas_evict_oldest_available_allocation(struct 
 	return true;
 }
 
-void sol_vk_buffer_atlas_destroy(struct sol_vk_buffer_atlas* table, struct cvm_vk_device* device)
-{
-	struct sol_vk_buffer_atlas_region* header_region_entry;
-	#warning wait on accessors
-
-	#warning clean up regions including header
-
-	/** is assumed the header entry gets index 0 */
-	header_region_entry = sol_vk_buffer_atlas_region_array_withdraw_ptr(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
-	/** the available ring linked list (header_region_entry) should be empty */
-	assert(header_region_entry->identifier == 0 && header_region_entry->prev == SOL_BUFFER_TABLE_HEADER_INDEX && header_region_entry->next == SOL_BUFFER_TABLE_HEADER_INDEX);
-
-
-	/** all accessors must have been released before returning **/
-	assert(table->access_range_count == sol_indices_list_count(&table->available_access_range_indices));
-	assert(sol_vk_buffer_atlas_region_array_is_empty(&table->region_array));
-
-	sol_vk_buffer_atlas_region_array_terminate(&table->region_array);
-
-
-	/** free access ranges */
-	sol_indices_list_terminate(&table->available_access_range_indices);
-	sol_indices_list_terminate(&table->retained_access_range_indices);
-	free(table->access_ranges);
-
-	/** free accessor slot backing (i.e. the accessors) */
-	free(table->accessors);
-
-	sol_vk_buffer_atlas_region_map_destroy(table->region_map);
-	sol_buddy_tree_terminate(&table->region_tree);
-	sol_vk_buffer_terminate(&table->backing, device);
-
-	if(table->multithreaded)
-	{
-		mtx_destroy(&table->mutex);
-	}
-
-	free(table);
-}
-
-uint64_t sol_vk_buffer_atlas_generate_entry_identifier(struct sol_vk_buffer_atlas* table, bool mutable)
-{
-	uint64_t old_entry_identifier, new_entry_identifier;
-
-	old_entry_identifier = atomic_load_explicit(&table->current_entry_identifier, memory_order_relaxed);
-
-	do
-	{
-		/** this is using the same LCG as image atlas, perhaps one should be changed */
-		new_entry_identifier = old_entry_identifier * 0x5851F42D4C957F2Dlu + 0x7A4111AC0FFEE60Dlu;
-	}
-	while(atomic_compare_exchange_weak_explicit(&table->current_entry_identifier, &old_entry_identifier, new_entry_identifier, memory_order_relaxed, memory_order_relaxed));
-
-	return new_entry_identifier;
-}
-
-
-
-
-static inline void sol_vk_buffer_atlas_access_range_initialise(struct sol_vk_buffer_atlas_access_range* access_range)
-{
-	sol_indices_stack_initialise(&access_range->retained_region_indices, 64);
-	access_range->last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
-}
-
-static inline void sol_vk_buffer_atlas_access_range_terminate(struct sol_vk_buffer_atlas_access_range* access_range)
-{
-	// assert(access_range->last_use_moment.semaphore == VK_NULL_HANDLE);
-	sol_indices_stack_terminate(&access_range->retained_region_indices);
-}
 
 /** note: this is a slight hack, as it operates on the array directly and assumes the base region is also the header and the whole array is a single contiguous array of memory */
-static inline void sol_vk_buffer_atlas_release_access_range_references(struct sol_vk_buffer_atlas* table, struct sol_vk_buffer_atlas_access_range* access_range)
+static inline void sol_vk_buffer_atlas_release_access_range(struct sol_vk_buffer_atlas* table, struct sol_vk_buffer_atlas_access_range access_range)
 {
 	struct sol_vk_buffer_atlas_region* region;
 	struct sol_vk_buffer_atlas_region* header_region;
@@ -394,7 +237,7 @@ static inline void sol_vk_buffer_atlas_release_access_range_references(struct so
 	uint32_t region_index;
 
 	/** note: this also empties the stack */
-	while(sol_indices_stack_withdraw(&access_range->retained_region_indices, &region_index))
+	while(sol_indices_stack_withdraw(&access_range.retained_region_indices, &region_index))
 	{
 		region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, region_index);
 
@@ -430,37 +273,178 @@ static inline void sol_vk_buffer_atlas_release_access_range_references(struct so
 			header_region->prev = region_index;
 		}
 	}
+
+	access_range.last_use_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
+
+	sol_vk_buffer_atlas_access_range_stack_append(&table->available_access_ranges, access_range);
 }
 
 
-#warning to prevent regions being constantly moved in and out of the available linked list; accessors should have SOME mechanism to delay their release a little longer if they are frequently used (must be balanced against wanting to make entries available ASAP)
-#warning perhaps when under memory stress (below 25% available?) clear all, otherwise only clear until one access range is left in the clear queue per accessor AND attempt to clear queue when out of memory during a run 
-static inline void sol_vk_buffer_atlas_try_releasing_retained_access_ranges(struct sol_vk_buffer_atlas* table, struct cvm_vk_device *device)
+struct sol_vk_buffer_atlas* sol_vk_buffer_atlas_create(struct cvm_vk_device* device, const struct sol_vk_buffer_atlas_create_information* create_information)
 {
-	uint32_t range_list_index, range_index, region_list_index, region_index;
-	struct sol_vk_buffer_atlas_access_range* access_range;
+	struct sol_vk_buffer_atlas_region* header_region_entry;
+	uint32_t header_region_entry_index, accessor_slot_index;
+	const uint32_t expected_range_count = sol_u32_exp_ge(create_information->accessor_slot_count * 2);
 
-	range_list_index = 0;
+	struct sol_vk_buffer_atlas* table = malloc(sizeof(struct sol_vk_buffer_atlas));
 
-	while(range_list_index < sol_indices_list_count(&table->retained_access_range_indices))
+	/** total buffer size should be a multiple of the base allocation size (i.e. the minumum allocation granularity) */
+	assert((create_information->buffer_create_info.size % create_information->base_allocation_size) == 0);
+
+	#warning make sure base allocation is a multiple of the required alignment for buffer usages
+
+
+	sol_vk_buffer_initialise(&table->backing, device, &create_information->buffer_create_info, create_information->required_properties, create_information->desired_properties);
+
+	sol_buddy_tree_initialise(&table->region_tree, create_information->buffer_create_info.size / create_information->base_allocation_size);
+
+	const struct sol_hash_map_descriptor map_descriptor = 
 	{
-		range_index = sol_indices_list_get_entry(&table->retained_access_range_indices, range_list_index);
-		access_range = table->access_ranges + range_index;
+		.entry_space_exponent_initial = 12,//4096
+		.entry_space_exponent_limit = 24,//16M
+		.resize_fill_factor = 160,// out of 256
+		.limit_fill_factor = 192,// out of 256
+	};
+	table->region_map = sol_vk_buffer_atlas_region_map_create(map_descriptor, table);
 
-		if(sol_vk_timeline_semaphore_moment_query(&access_range->last_use_moment, device))
+	sol_vk_buffer_atlas_access_range_stack_initialise(&table->available_access_ranges, 16);
+	sol_vk_buffer_atlas_access_range_stack_initialise(&table->in_flight_access_ranges, 16);
+	table->active_accessor_count = 0;
+
+
+	table->accessors = malloc(sizeof(struct sol_vk_buffer_atlas_accessor) * create_information->accessor_slot_count);
+	table->accessor_slot_count = create_information->accessor_slot_count;
+
+	for(accessor_slot_index = 0; accessor_slot_index < create_information->accessor_slot_count; accessor_slot_index++)
+	{
+		table->accessors[accessor_slot_index] = (struct sol_vk_buffer_atlas_accessor)
 		{
+			#warning instead of null make this a device created dummy moment using a dummy semaphore
+			.most_recent_usage_moment = SOL_VK_TIMELINE_SEMAPHORE_MOMENT_NULL,
+			.active = false,
+			.most_recent_usage_moment_set = false,
+		};
+	}
+
+
+	sol_vk_buffer_atlas_region_array_initialise(&table->region_array, 256);
+
+	header_region_entry = sol_vk_buffer_atlas_region_array_append_ptr(&table->region_array, &header_region_entry_index);
+	/** is assumed the header entry gets index 0 (SOL_BUFFER_TABLE_HEADER_INDEX) */
+	assert(header_region_entry_index == SOL_BUFFER_TABLE_HEADER_INDEX);
+	*header_region_entry = (struct sol_vk_buffer_atlas_region)
+	{
+		.identifier = 0,
+		.next = SOL_BUFFER_TABLE_HEADER_INDEX,
+		.prev = SOL_BUFFER_TABLE_HEADER_INDEX,
+	};
+
+
+	table->base_allocation_size = create_information->base_allocation_size;
+	atomic_init(&table->current_entry_identifier, 0);
+
+	table->multithreaded = create_information->multithreaded;
+	if(table->multithreaded)
+	{
+		mtx_init(&table->mutex, mtx_plain);
+	}
+
+
+	return table;
+}
+
+void sol_vk_buffer_atlas_destroy(struct sol_vk_buffer_atlas* table, struct cvm_vk_device* device)
+{
+	struct sol_vk_buffer_atlas_region* header_region_entry;
+	struct sol_vk_buffer_atlas_access_range access_range;
+
+	/** wait on then release all in flight access ranges */
+	while(sol_vk_buffer_atlas_access_range_stack_withdraw(&table->in_flight_access_ranges, &access_range))
+	{
+		sol_vk_timeline_semaphore_moment_wait(&access_range.last_use_moment, device);
+		sol_vk_buffer_atlas_release_access_range(table, access_range);
+	}
+
+	/** while there are available allocations; evict them */
+	while(sol_vk_buffer_atlas_evict_oldest_available_allocation(table));
+
+	/** is assumed the header entry gets index 0 */
+	header_region_entry = sol_vk_buffer_atlas_region_array_withdraw_ptr(&table->region_array, SOL_BUFFER_TABLE_HEADER_INDEX);
+	/** the available ring linked list (header_region_entry) should be empty */
+	assert(header_region_entry->identifier == 0 && header_region_entry->prev == SOL_BUFFER_TABLE_HEADER_INDEX && header_region_entry->next == SOL_BUFFER_TABLE_HEADER_INDEX);
+
+
+	/** all accessors must have been released before this point of termination **/
+	assert(table->active_accessor_count == 0);
+	assert(sol_vk_buffer_atlas_access_range_stack_is_empty(&table->in_flight_access_ranges));
+	assert(sol_vk_buffer_atlas_region_array_is_empty(&table->region_array));
+
+	sol_vk_buffer_atlas_region_array_terminate(&table->region_array);
+
+	while(sol_vk_buffer_atlas_access_range_stack_withdraw(&table->available_access_ranges, &access_range))
+	{
+		/** clean up access ranges */
+		sol_vk_buffer_atlas_access_range_terminate(&access_range);
+	}
+
+
+	/** free access ranges */
+	sol_vk_buffer_atlas_access_range_stack_terminate(&table->available_access_ranges);
+	sol_vk_buffer_atlas_access_range_stack_terminate(&table->in_flight_access_ranges);
+
+	/** free accessor slot backing (i.e. the accessors) */
+	free(table->accessors);
+
+	sol_vk_buffer_atlas_region_map_destroy(table->region_map);
+	sol_buddy_tree_terminate(&table->region_tree);
+	sol_vk_buffer_terminate(&table->backing, device);
+
+	if(table->multithreaded)
+	{
+		mtx_destroy(&table->mutex);
+	}
+
+	free(table);
+}
+
+uint64_t sol_vk_buffer_atlas_generate_entry_identifier(struct sol_vk_buffer_atlas* table, bool mutable)
+{
+	uint64_t old_entry_identifier, new_entry_identifier;
+
+	old_entry_identifier = atomic_load_explicit(&table->current_entry_identifier, memory_order_relaxed);
+
+	do
+	{
+		/** this is using the same LCG as image atlas, perhaps one should be changed */
+		new_entry_identifier = old_entry_identifier * 0x5851F42D4C957F2Dlu + 0x7A4111AC0FFEE60Dlu;
+	}
+	while(atomic_compare_exchange_weak_explicit(&table->current_entry_identifier, &old_entry_identifier, new_entry_identifier, memory_order_relaxed, memory_order_relaxed));
+
+	return new_entry_identifier;
+}
+
+
+
+#warning TODO: to prevent regions being constantly moved in and out of the available linked list; accessors should have SOME mechanism to delay their release a little longer if they are frequently used (must be balanced against wanting to make entries available ASAP)
+#warning perhaps when under memory stress (below 25% available?) clear all, otherwise only clear until one access range is left in the clear queue per accessor AND attempt to clear queue when out of memory during a run 
+#warning potentially clear old range after a range gets completed?
+static inline void sol_vk_buffer_atlas_release_completed_access_ranges(struct sol_vk_buffer_atlas* table, struct cvm_vk_device *device)
+{
+	uint32_t in_flight_range_index;
+	struct sol_vk_buffer_atlas_access_range access_range;
+
+	in_flight_range_index = sol_vk_buffer_atlas_access_range_stack_count(&table->in_flight_access_ranges);
+
+	while(in_flight_range_index--)
+	{
+		access_range = sol_vk_buffer_atlas_access_range_stack_get_entry(&table->in_flight_access_ranges, in_flight_range_index);
+
+		if(sol_vk_timeline_semaphore_moment_query(&access_range.last_use_moment, device))
+		{
+			sol_vk_buffer_atlas_access_range_stack_evict_index(&table->in_flight_access_ranges, in_flight_range_index);
+
 			/** accessors work has completed, i.e. it has been released */
-			sol_vk_buffer_atlas_release_access_range_references(table, access_range);
-
-			/** move this range from the retained list to the available list */
-			sol_indices_list_evict_index(&table->retained_access_range_indices, range_list_index);
-			sol_indices_list_append(&table->available_access_range_indices, range_index);
-			/** by removing this range from the list we have replaced the entry at this index in the list and reduced the lists count
-			 * as a result the `range_list_index` should not be incremented and instead this list index should be checked again with its replacement */
-		}
-		else
-		{
-			range_list_index++;
+			sol_vk_buffer_atlas_release_access_range(table, access_range);
 		}
 	}
 }
@@ -470,55 +454,49 @@ static inline void sol_vk_buffer_atlas_try_releasing_retained_access_ranges(stru
 void sol_vk_buffer_atlas_access_range_begin(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, struct cvm_vk_device *device)
 {
 	struct sol_vk_buffer_atlas_accessor* accessor;
-	struct sol_vk_buffer_atlas_access_range* access_range;
-	uint32_t access_range_index;
 
 	if(table->multithreaded)
 	{
 		mtx_lock(&table->mutex);
 	}
 
-	sol_vk_buffer_atlas_try_releasing_retained_access_ranges(table, device);
+	assert(table->active_accessor_count < table->accessor_slot_count);
+	table->active_accessor_count++;
+
+	sol_vk_buffer_atlas_release_completed_access_ranges(table, device);
 
 	assert(accessor_slot < table->accessor_slot_count);
 	accessor = table->accessors + accessor_slot;
 	assert( ! accessor->active);
+	accessor->active = true;
 
-	if(!sol_indices_list_withdraw(&table->available_access_range_indices, &access_range_index))
+	if( ! sol_vk_buffer_atlas_access_range_stack_withdraw(&table->available_access_ranges, &accessor->access_range))
 	{
-		if(table->access_range_count == table->access_range_space)
-		{
-			table->access_range_space *= 2;
-			table->access_ranges = realloc(table->access_ranges, sizeof(struct sol_vk_buffer_atlas_access_range) * table->access_range_space);
-		}
-
-		access_range_index = table->access_range_count++;
-		sol_vk_buffer_atlas_access_range_initialise(table->access_ranges + access_range_index);
+		/** if there isn't an available access range: initialise a new one */
+		sol_vk_buffer_atlas_access_range_initialise(&accessor->access_range);
 	}
 
-	access_range = table->access_ranges + access_range_index;
-	assert(sol_indices_stack_is_empty(&access_range->retained_region_indices));
+	assert(sol_indices_stack_is_empty(&accessor->access_range.retained_region_indices));
 
-	access_range->accessor_slot = accessor_slot;
+	/** associate this range with the intended slot */
+	accessor->access_range.accessor_slot = accessor_slot;
 
 	if(table->multithreaded)
 	{
 		mtx_unlock(&table->mutex);
 	}
-
-	accessor->active_range_index = access_range_index;
-	accessor->active = true;
 }
 
 void sol_vk_buffer_atlas_access_range_end(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, const struct sol_vk_timeline_semaphore_moment* last_use_moment)
 {
 	struct sol_vk_buffer_atlas_accessor* accessor;
-	struct sol_vk_buffer_atlas_access_range* access_range;
+
 
 	assert(accessor_slot < table->accessor_slot_count);
 	accessor = table->accessors + accessor_slot;
 	assert(accessor->active);
 	assert(last_use_moment);
+
 
 	accessor->most_recent_usage_moment = *last_use_moment;
 	accessor->most_recent_usage_moment_set = true;
@@ -529,10 +507,14 @@ void sol_vk_buffer_atlas_access_range_end(struct sol_vk_buffer_atlas* table, uin
 		mtx_lock(&table->mutex);
 	}
 
-	access_range = table->access_ranges + accessor->active_range_index;
-	access_range->last_use_moment = *last_use_moment;
+	assert(table->active_accessor_count > 0);
+	table->active_accessor_count--;
 
-	sol_indices_list_append(&table->retained_access_range_indices, accessor->active_range_index);
+	accessor->access_range.last_use_moment = *last_use_moment;
+
+	/** move ownership of this access range to the "in flight" list */
+	sol_vk_buffer_atlas_access_range_stack_append(&table->in_flight_access_ranges, accessor->access_range);
+	accessor->access_range = (struct sol_vk_buffer_atlas_access_range){};
 
 	if(table->multithreaded)
 	{
@@ -548,6 +530,8 @@ bool sol_vk_buffer_atlas_access_range_wait_moment(struct sol_vk_buffer_atlas* ta
 
 	assert(accessor_slot < table->accessor_slot_count);
 	accessor = table->accessors + accessor_slot;
+
+	/** must only call this function between begin and end range */
 	assert(accessor->active);
 
 	*wait_moment = accessor->most_recent_usage_moment;
@@ -561,16 +545,12 @@ bool sol_vk_buffer_atlas_access_range_wait_moment(struct sol_vk_buffer_atlas* ta
 static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_retain(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, uint32_t region_index, VkDeviceSize* entry_offset, VkDeviceSize* size)
 {
 	struct sol_vk_buffer_atlas_region* region;
-	struct sol_vk_buffer_atlas_access_range* access_range;
 	uint32_t next_index, prev_index;
 
 	region = sol_vk_buffer_atlas_region_array_access_entry(&table->region_array, region_index);
 
 	if(region->write_accessor_slot == accessor_slot || region->visible_from_read_accessors)
 	{
-		access_range = table->access_ranges + table->accessors[accessor_slot].active_range_index;
-		assert(access_range->accessor_slot == accessor_slot);
-
 		/** retain count of zero is indicator that this entry is available, move it out of the available list when encountered */
 		if(region->retain_count == 0)
 		{
@@ -588,7 +568,8 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_retain(str
 		/** region not in the available linked list should not have valid next/prev links */
 		assert(region->next == SOL_BUFFER_TABLE_INVALID_INDEX && region->prev == SOL_BUFFER_TABLE_INVALID_INDEX);
 
-		sol_indices_stack_append(&access_range->retained_region_indices, region_index);
+		/** add (the index of) the region to the retained list for the accessors active access range */
+		sol_indices_stack_append(&table->accessors[accessor_slot].access_range.retained_region_indices, region_index);
 
 		/** make sure not to exceed retain count type */
 		assert(region->retain_count < SOL_BUFFER_TABLE_MAX_RETAIN_COUNT);
@@ -643,9 +624,8 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_find_identified_region(struct s
 	return result;
 }
 
-static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate_identified(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
+static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_allocate_identified_region(struct sol_vk_buffer_atlas* table, uint64_t region_identifier, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
 {
-	struct sol_vk_buffer_atlas_access_range* access_range;
 	uint32_t* region_index_ptr;
 	uint32_t buffer_offset;
 	bool allocated_buddy_entry;
@@ -692,9 +672,8 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate_i
 
 			*entry_offset = table->base_allocation_size * buffer_offset;
 
-			/** add the newly created region (its index) to the retained list for this access range */
-			access_range = table->access_ranges + table->accessors[accessor_slot].active_range_index;
-			sol_indices_stack_append(&access_range->retained_region_indices, *region_index_ptr);
+			/** add (the index of) the region to the retained list for the accessors active access range */
+			sol_indices_stack_append(&table->accessors[accessor_slot].access_range.retained_region_indices, *region_index_ptr);
 
 			return SOL_BUFFER_TABLE_SUCCESS_INSERTED;
 		default:
@@ -734,7 +713,7 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_obtain_identified_region(struct
 	{
 		/** if not found the only valid alternative should be absent */
 		assert(map_find_result == SOL_MAP_FAIL_ABSENT);
-		result = sol_vk_buffer_atlas_region_allocate_identified(table, region_identifier, accessor_slot, size_exponent, entry_offset);
+		result = sol_vk_buffer_atlas_allocate_identified_region(table, region_identifier, accessor_slot, size_exponent, entry_offset);
 	}
 
 	if(table->multithreaded)
@@ -745,10 +724,8 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_obtain_identified_region(struct
 	return result;
 }
 
-
-static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate_transient(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
+static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_allocate_transient_region(struct sol_vk_buffer_atlas* table, uint32_t accessor_slot, uint32_t size_exponent, VkDeviceSize* entry_offset)
 {
-	struct sol_vk_buffer_atlas_access_range* access_range;
 	uint32_t* region_index_ptr;
 	uint32_t buffer_offset;
 
@@ -778,8 +755,7 @@ static inline enum sol_buffer_atlas_result sol_vk_buffer_atlas_region_allocate_t
 	*entry_offset = table->base_allocation_size * buffer_offset;
 
 	/** add the newly created region (its index) to the retained list for this access range */
-	access_range = table->access_ranges + table->accessors[accessor_slot].active_range_index;
-	sol_indices_stack_append(&access_range->retained_region_indices, *region_index_ptr);
+	sol_indices_stack_append(&table->accessors[accessor_slot].access_range.retained_region_indices, *region_index_ptr);
 
 	return SOL_BUFFER_TABLE_SUCCESS_INSERTED;
 }
@@ -799,7 +775,7 @@ enum sol_buffer_atlas_result sol_vk_buffer_atlas_obtain_transient_region(struct 
 		mtx_lock(&table->mutex);
 	}
 
-	result = sol_vk_buffer_atlas_region_allocate_transient(table, accessor_slot, size_exponent, entry_offset);
+	result = sol_vk_buffer_atlas_allocate_transient_region(table, accessor_slot, size_exponent, entry_offset);
 
 	if(table->multithreaded)
 	{
