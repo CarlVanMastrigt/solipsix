@@ -356,7 +356,7 @@ void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping)
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
-VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage);
+VkDeviceSize sol_vk_buffer_alignment_requirements(const struct cvm_vk_device * device, VkBufferUsageFlags usage);
 
 
 

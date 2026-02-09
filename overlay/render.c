@@ -563,7 +563,7 @@ VkPipeline sol_overlay_render_pipeline_create_dynamic(struct cvm_vk_device* devi
 void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, VkDeviceSize upload_buffer_size)
 {
     uint32_t i;
-    VkDeviceSize upload_buffer_alignment = cvm_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    VkDeviceSize upload_buffer_alignment = sol_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     sol_overlay_render_element_list_initialise(&batch->elements, 64);
 

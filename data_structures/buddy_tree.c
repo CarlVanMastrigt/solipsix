@@ -70,6 +70,8 @@ void sol_buddy_tree_initialise(struct sol_buddy_tree* tree, uint32_t size)
 		offset <<= 1;
 		current_size_bit >>= 1;
 	}
+
+	assert(tree->availablity_masks[1] == size);
 }
 
 void sol_buddy_tree_terminate(struct sol_buddy_tree* tree)

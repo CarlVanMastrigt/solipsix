@@ -47,7 +47,20 @@ static inline bool sol_buddy_tree_has_space(struct sol_buddy_tree* tree, uint32_
 	return tree->availablity_masks[1] >= (1u << desired_size_exponent);
 }
 
+/** tree has NO allocations */
+static inline bool sol_buddy_tree_empty(struct sol_buddy_tree* tree)
+{
+	return tree->availablity_masks[1] == tree->size;
+}
+
 
 /** allowing dynamic resizing of total space, while possible, is a bad idea.
  * the slots opened up by any such resizing will be preferentially used/split
  * thus any subsequent resizing is very unlikely to work as the space it would try to take is the most likely region to have been allocated by any appropriately sized allocations */ 
+
+/** possible to have a multilevel buddy allocator that uses u16 basis allocations at both (?) levels - puts some onus on caller
+ * 
+ * possible to allow non- Po2 allocations that provide space for smaller allocations to fill the gap (put "real size", in high bits with effective size class in lowe bits as is done now)
+ * 
+ * */
+

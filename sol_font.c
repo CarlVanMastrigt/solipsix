@@ -527,7 +527,7 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 
 	image_atlas = render_batch->rendering_resources->atlases[glyph_map_entry->atlas_type];
 
-	find_result = sol_image_atlas_entry_find(image_atlas, glyph_map_entry->id_in_atlas, glyph_atlas_location_result);
+	find_result = sol_image_atlas_find_identified_entry(image_atlas, glyph_map_entry->id_in_atlas, glyph_atlas_location_result);
 
 	switch (find_result)
 	{
@@ -546,7 +546,7 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 			return false;
 		}
 
-		obtain_result = sol_image_atlas_entry_obtain(image_atlas, glyph_map_entry->id_in_atlas, glyph_size, 0, glyph_atlas_location_result);
+		obtain_result = sol_image_atlas_obtain_identified_entry(image_atlas, glyph_map_entry->id_in_atlas, glyph_size, glyph_atlas_location_result);
 
 		if(obtain_result != SOL_IMAGE_ATLAS_SUCCESS_INSERTED)
 		{
@@ -602,10 +602,11 @@ static inline bool sol_font_obtain_glyph_atlas_location(struct sol_font* font, c
 			pixels_dst += glyph_size.x;
 			pixels_src += src_pitch;
 		}
-		return true;		
-	case SOL_IMAGE_ATLAS_SUCCESS_FOUND:
-
 		return true;
+
+	case SOL_IMAGE_ATLAS_SUCCESS_FOUND:
+		return true;
+		
 	default:
 		return false;
 	}

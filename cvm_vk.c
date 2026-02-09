@@ -1748,7 +1748,7 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
     return alignment;
 }
 
-VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage)
+VkDeviceSize sol_vk_buffer_alignment_requirements(const struct cvm_vk_device * device, VkBufferUsageFlags usage)
 {
     VkDeviceSize alignment=device->properties.limits.nonCoherentAtomSize;
 

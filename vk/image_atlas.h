@@ -48,8 +48,6 @@ enum sol_image_atlas_result
     SOL_IMAGE_ATLAS_SUCCESS_INSERTED, /** existing entry not found; space was made but contents must be initialised */
 };
 
-#define SOL_IMAGE_ATLAS_OBTAIN_FLAG_WRITE  0x00000001u
-
 struct sol_image_atlas_description
 {
 	/** image details */
@@ -97,14 +95,18 @@ bool sol_image_atlas_access_range_is_active(struct sol_image_atlas* atlas);
  * `transient` entries may be released the moment they are no longer retained by an accessor and must be written every time they are used */
 uint64_t sol_image_atlas_generate_entry_identifier(struct sol_image_atlas* atlas);
 
+/** find an existing, initialised entry with the specified identifier */
+enum sol_image_atlas_result sol_image_atlas_find_identified_entry(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
+
 /** if the entry didnt exist, create a slot for it, prefer this if entry will be created regardless (over calling find first)
  * this must be used with write if its contents will be modified in any way
  * if the same resource will be written and used over and over it is the callers responsibility to ensure any read-write-read chain is properly synchonised
  * NOTE: transient resources obtained will be made available immediately when access is released */
-enum sol_image_atlas_result sol_image_atlas_entry_obtain(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, uint32_t flags, struct sol_image_atlas_location* entry_location);
+enum sol_image_atlas_result sol_image_atlas_obtain_identified_entry(struct sol_image_atlas* atlas, uint64_t entry_identifier, u16_vec2 size, struct sol_image_atlas_location* entry_location);
 
-/** same as above but shortcuts returning its present location, useful when other stored detals aren't required (cannot be used when write is intended) */
-enum sol_image_atlas_result sol_image_atlas_entry_find(struct sol_image_atlas* atlas, uint64_t entry_identifier, struct sol_image_atlas_location* entry_location);
+
+/** create a tile that will be released at the end of the active access range */
+enum sol_image_atlas_result sol_image_atlas_obtain_transient_entry(struct sol_image_atlas* atlas, u16_vec2 size, struct sol_image_atlas_location* entry_location);
 
 
 

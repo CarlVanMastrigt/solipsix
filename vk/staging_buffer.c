@@ -26,7 +26,7 @@ VkResult sol_vk_staging_buffer_initialise(struct sol_vk_staging_buffer* staging_
     VkResult result;
     struct sol_vk_buffer backing_buffer;
 
-    const VkDeviceSize alignment = cvm_vk_buffer_alignment_requirements(device, usage);
+    const VkDeviceSize alignment = sol_vk_buffer_alignment_requirements(device, usage);
 
     buffer_size = cvm_vk_align(buffer_size, alignment);/// round to multiple of alignment
 

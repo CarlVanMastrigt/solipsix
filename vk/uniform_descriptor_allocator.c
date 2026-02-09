@@ -42,7 +42,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 void sol_vk_uniform_descriptor_allocator_initialise(struct sol_vk_uniform_descriptor_allocator* uniform_allocator, struct cvm_vk_device* device, size_t max_size)
 {
     #warning not 100% certain the below alignment is correct/enough in all cases
-    VkDeviceSize alignment = cvm_vk_buffer_alignment_requirements(device, device->properties.limits.minUniformBufferOffsetAlignment);//minUniformBufferOffsetAlignment
+    VkDeviceSize alignment = sol_vk_buffer_alignment_requirements(device, device->properties.limits.minUniformBufferOffsetAlignment);//minUniformBufferOffsetAlignment
 
     uniform_allocator->staging_buffer = NULL;
     sol_vk_uniform_descriptor_entry_list_initialise(&uniform_allocator->descriptor_list, 16);
