@@ -40,6 +40,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_BINARY_HEAP_FUNCTION_PREFIX SOL_BINARY_HEAP_STRUCT_NAME
 #endif
 
+#ifndef SOL_BINARY_HEAP_DEFAULT_STARTING_SIZE
+#define SOL_BINARY_HEAP_DEFAULT_STARTING_SIZE 64
+#endif
+
 #ifndef SOL_BINARY_HEAP_ENTRY_CMP_LT
 #error must define bool SOL_BINARY_HEAP_ENTRY_CMP_LT(const SOL_BINARY_HEAP_ENTRY_TYPE* A, const SOL_BINARY_HEAP_ENTRY_TYPE* B) returning (A < B) with context as param if provided
 #define SOL_BINARY_HEAP_ENTRY_CMP_LT(A,B) ((*A)<(*B))
@@ -70,7 +74,7 @@ struct SOL_BINARY_HEAP_STRUCT_NAME
 
 static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_initialise)(struct SOL_BINARY_HEAP_STRUCT_NAME* heap, uint32_t initial_space)
 {
-    heap->heap = malloc(sizeof(SOL_BINARY_HEAP_ENTRY_TYPE) * initial_space);
+    heap->heap = initial_space ? malloc(sizeof(SOL_BINARY_HEAP_ENTRY_TYPE) * initial_space) : NULL;
     heap->space = initial_space;
     heap->count = 0;
 }
@@ -81,9 +85,9 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_terminate)(s
 }
 
 #ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
 #else
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, const SOL_BINARY_HEAP_ENTRY_TYPE* restrict entry)
+static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE entry)
 #endif
 {
     uint32_t next_index, index;
@@ -96,7 +100,7 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(
         }
         else
         {
-            heap->space = 64;
+            heap->space = SOL_BINARY_HEAP_DEFAULT_STARTING_SIZE;
         }
         heap->heap = realloc(heap->heap, sizeof(SOL_BINARY_HEAP_ENTRY_TYPE) * heap->space);
     }
@@ -107,7 +111,7 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(
     {
         next_index = (index - 1) >> 1;
 
-        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index), (entry)))
+        if(SOL_BINARY_HEAP_ENTRY_CMP_LT_CONTEXT((heap->heap + next_index), (&entry)))
         {
             break;
         }
@@ -117,21 +121,9 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(
         index = next_index;
     }
 
-    heap->heap[index] = *entry;
+    heap->heap[index] = entry;
     SOL_BINARY_HEAP_SET_ENTRY_INDEX_CONTEXT((heap->heap + index), index);
 }
-
-#ifdef SOL_BINARY_HEAP_CONTEXT_TYPE
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE entry, SOL_BINARY_HEAP_CONTEXT_TYPE context)
-{
-    SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(heap, &entry, context);
-}
-#else
-static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append)(struct SOL_BINARY_HEAP_STRUCT_NAME* restrict heap, SOL_BINARY_HEAP_ENTRY_TYPE entry)
-{
-    SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_append_ptr)(heap, &entry);
-}
-#endif
 
 static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_clear)(struct SOL_BINARY_HEAP_STRUCT_NAME* heap)
 {
@@ -257,6 +249,7 @@ static inline void SOL_CONCATENATE(SOL_BINARY_HEAP_FUNCTION_PREFIX,_withdraw_ind
 #undef SOL_BINARY_HEAP_ENTRY_TYPE
 #undef SOL_BINARY_HEAP_STRUCT_NAME
 #undef SOL_BINARY_HEAP_FUNCTION_PREFIX
+#undef SOL_BINARY_HEAP_DEFAULT_STARTING_SIZE
 #undef SOL_BINARY_HEAP_ENTRY_CMP_LT
 #undef SOL_BINARY_HEAP_SET_ENTRY_INDEX
 

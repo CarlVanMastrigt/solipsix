@@ -290,11 +290,12 @@ static inline bool sol_image_atlas_entry_packed_location_cmp_lt(const uint32_t* 
 
 static inline void sol_image_atlas_entry_set_heap_index(const uint32_t* entry_index_ptr, uint32_t new_index_in_heap, struct sol_image_atlas* atlas)
 {
+	/** check heap index capacity hasn't been exceeded (index in heap can still be stored) */
+	assert(new_index_in_heap < SOL_IA_INVALID_IDX);
+
 	struct sol_image_atlas_entry* entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
 	entry->heap_index = new_index_in_heap;
 
-	/** check heap index capacity hasn't been exceeded (index in heap can still be stored) */
-	assert(entry->heap_index == new_index_in_heap);
 }
 
 
