@@ -104,6 +104,10 @@ struct sol_image_atlas_entry
 #define SOL_IA_P_LOC_Y_MASK     0x00AAAAAAu
 #define SOL_IA_P_LOC_LAYER_MASK 0xFF000000u
 
+/** x on even bits, y on odd bits */
+#define SOL_IA_P_LOC_X_BASE     0x00000001u
+#define SOL_IA_P_LOC_Y_BASE     0x00000002u
+
 /** note this gets location in pixels, REQUIRES that SOL_IA_MIN_TILE_SIZE_EXPONENT is 2*/
 static inline uint32_t sol_ia_p_loc_get_x(uint32_t packed_location)
 {
@@ -141,7 +145,7 @@ static inline bool sol_ia_p_loc_start_in_range_x(uint32_t packed_location, uint3
 	/** set all y bits to force carry when adding x value*/
 	packed_location |= SOL_IA_P_LOC_Y_MASK;
 	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
-	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_x_size_class * 2 + 0))) | SOL_IA_P_LOC_Y_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (SOL_IA_P_LOC_X_BASE << (adjacent_x_size_class * 2))) | SOL_IA_P_LOC_Y_MASK;
 
 	return packed_location >= adjacent_packed_location && packed_location < adjacent_packed_location_end;
 }
@@ -153,7 +157,7 @@ static inline bool sol_ia_p_loc_start_in_range_y(uint32_t packed_location, uint3
 	/** set all x bits to force carry when adding y value*/
 	packed_location |= SOL_IA_P_LOC_X_MASK;
 	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
-	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_y_size_class * 2 + 1))) | SOL_IA_P_LOC_X_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (SOL_IA_P_LOC_Y_BASE << (adjacent_y_size_class * 2))) | SOL_IA_P_LOC_X_MASK;
 
 	return packed_location >= adjacent_packed_location && packed_location < adjacent_packed_location_end;
 }
@@ -167,8 +171,8 @@ static inline bool sol_ia_p_loc_end_in_range_x(uint32_t packed_location, uint32_
 	adjacent_packed_location |= SOL_IA_P_LOC_Y_MASK;
 
 	/** get end packed location */
-	packed_location = (packed_location + (1u << (x_size_class * 2 + 0))) | SOL_IA_P_LOC_Y_MASK;
-	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_x_size_class * 2 + 0))) | SOL_IA_P_LOC_Y_MASK;
+	packed_location = (packed_location + (SOL_IA_P_LOC_X_BASE << (x_size_class * 2))) | SOL_IA_P_LOC_Y_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (SOL_IA_P_LOC_X_BASE << (adjacent_x_size_class * 2))) | SOL_IA_P_LOC_Y_MASK;
 
 	return packed_location > adjacent_packed_location && packed_location <= adjacent_packed_location_end;
 }
@@ -182,8 +186,8 @@ static inline bool sol_ia_p_loc_end_in_range_y(uint32_t packed_location, uint32_
 	adjacent_packed_location |= SOL_IA_P_LOC_X_MASK;
 
 	/** get end packed location */
-	packed_location = (packed_location + (1u << (y_size_class * 2 + 1))) | SOL_IA_P_LOC_X_MASK;
-	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (1u << (adjacent_y_size_class * 2 + 1))) | SOL_IA_P_LOC_X_MASK;
+	packed_location = (packed_location + (SOL_IA_P_LOC_Y_BASE << (y_size_class * 2))) | SOL_IA_P_LOC_X_MASK;
+	const uint32_t adjacent_packed_location_end = (adjacent_packed_location + (SOL_IA_P_LOC_Y_BASE << (adjacent_y_size_class * 2))) | SOL_IA_P_LOC_X_MASK;
 
 	return packed_location > adjacent_packed_location && packed_location <= adjacent_packed_location_end;
 }
@@ -403,7 +407,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_horizontal(struct sol_imag
 	coalesce_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
 
 	/** check for coalescable buddy */
-	odd_offset = coalesce_entry->packed_location & (1u << (coalesce_entry->x_size_class * 2u + 0u));
+	odd_offset = coalesce_entry->packed_location & (SOL_IA_P_LOC_X_BASE << (coalesce_entry->x_size_class * 2));
 	buddy_index = odd_offset ? coalesce_entry->adj_start_left : coalesce_entry->adj_end_right;
 	if(buddy_index == 0)
 	{
@@ -519,7 +523,7 @@ static inline bool sol_image_atlas_entry_try_coalesce_vertical(struct sol_image_
 	coalesce_entry = sol_image_atlas_entry_array_access_entry(&atlas->entry_array, *entry_index_ptr);
 
 	/** check for coalescable buddy */
-	odd_offset = coalesce_entry->packed_location & (1u << (coalesce_entry->y_size_class * 2u + 1u));
+	odd_offset = coalesce_entry->packed_location & (SOL_IA_P_LOC_Y_BASE << (coalesce_entry->y_size_class * 2));
 	buddy_index = odd_offset ? coalesce_entry->adj_start_up : coalesce_entry->adj_end_down;
 	if(buddy_index == 0)
 	{
@@ -737,7 +741,7 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 	split_entry->x_size_class--;
 
 	/** check the split entries offset is valid for it's size class */
-	assert((split_entry->packed_location & (1u << (split_entry->x_size_class * 2u + 0u))) == 0u);
+	assert((split_entry->packed_location & (SOL_IA_P_LOC_X_BASE << (split_entry->x_size_class * 2))) == 0);
 
 	*buddy_entry = (struct sol_image_atlas_entry)
 	{
@@ -748,7 +752,7 @@ static inline void sol_image_atlas_entry_split_horizontally(struct sol_image_atl
 		.adj_start_up = 0,/** must be set */
 		.adj_end_right = split_entry->adj_end_right,
 		.adj_end_down  = split_entry->adj_end_down,
-		.packed_location = split_entry->packed_location | (1u << (split_entry->x_size_class * 2u + 0u)),
+		.packed_location = split_entry->packed_location | (SOL_IA_P_LOC_X_BASE << (split_entry->x_size_class * 2)),
 		.x_size_class = split_entry->x_size_class,
 		.y_size_class = split_entry->y_size_class,
 		// .heap_index
@@ -858,7 +862,7 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 	split_entry->y_size_class--;
 
 	/** check the split entries offset is valid for it's size class */
-	assert((split_entry->packed_location & (1u << (split_entry->y_size_class * 2u + 1u))) == 0u);
+	assert((split_entry->packed_location & (SOL_IA_P_LOC_Y_BASE << (split_entry->y_size_class * 2))) == 0);
 
 	*buddy_entry = (struct sol_image_atlas_entry)
 	{
@@ -869,7 +873,7 @@ static inline void sol_image_atlas_entry_split_vertically(struct sol_image_atlas
 		.adj_start_up = split_index,
 		.adj_end_right = split_entry->adj_end_right,
 		.adj_end_down  = split_entry->adj_end_down,
-		.packed_location = split_entry->packed_location | (1u << (split_entry->y_size_class * 2u + 1u)),
+		.packed_location = split_entry->packed_location | (SOL_IA_P_LOC_Y_BASE << (split_entry->y_size_class * 2)),
 		.x_size_class = split_entry->x_size_class,
 		.y_size_class = split_entry->y_size_class,
 		// .heap_index

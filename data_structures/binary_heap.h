@@ -37,8 +37,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifndef SOL_BINARY_HEAP_FUNCTION_PREFIX
-#error must define SOL_BINARY_HEAP_FUNCTION_PREFIX
-#define SOL_BINARY_HEAP_FUNCTION_PREFIX placeholder_binary_heap
+#define SOL_BINARY_HEAP_FUNCTION_PREFIX SOL_BINARY_HEAP_STRUCT_NAME
 #endif
 
 #ifndef SOL_BINARY_HEAP_ENTRY_CMP_LT
