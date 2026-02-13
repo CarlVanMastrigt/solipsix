@@ -20,7 +20,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 /** note derived/extracted from image grid algorithm */
 
 #include <assert.h>
-#include <stdio.h>
 
 #include "data_structures/buddy_grid.h"
 
@@ -462,13 +461,10 @@ static inline void sol_buddy_grid_entry_split_horizontally(struct sol_buddy_grid
 	struct sol_buddy_grid_entry* buddy_entry;
 	struct sol_buddy_grid_entry* adjacent_entry;
 	uint32_t buddy_index, adjacent_index;
-	uint16_t adjacent_end_x, buddy_end_x;
 
 	/** split entry must be accessed after buddy as append alters the array (may relocate in memory) */
 	buddy_entry = sol_buddy_grid_entry_array_append_ptr(&grid->entry_array, &buddy_index);
 	split_entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, split_index);
-
-	buddy_end_x = split_entry->xy_offset.x + (1u << split_entry->x_size_class);
 
 	/** validate entry to split really does look available */
 	assert(split_entry == sol_buddy_grid_entry_array_access_entry(&grid->entry_array, split_index));
@@ -500,7 +496,6 @@ static inline void sol_buddy_grid_entry_split_horizontally(struct sol_buddy_grid
 	assert(sol_buddy_grid_packed_loc_get_x(buddy_entry->packed_location) == buddy_entry->xy_offset.x);
 	assert(sol_buddy_grid_packed_loc_get_y(buddy_entry->packed_location) == buddy_entry->xy_offset.y);
 	assert(sol_buddy_grid_packed_loc_get_layer(buddy_entry->packed_location) == buddy_entry->array_layer);
-	assert(buddy_end_x == buddy_entry->xy_offset.x + (1u << buddy_entry->x_size_class));
 
 	split_entry->adj_end_right = buddy_index;
 	split_entry->adj_end_down = 0;/** must be set */
@@ -554,15 +549,13 @@ static inline void sol_buddy_grid_entry_split_horizontally(struct sol_buddy_grid
 		if(adjacent_entry->adj_end_down != split_index)
 		{
 			/** adjacent entry that fails index check must not have ended in the x range that would have referenced the entry before it was split */
-			assert(adjacent_entry->xy_offset.x + (1u << adjacent_entry->x_size_class) > buddy_end_x);
+			assert(adjacent_entry->xy_offset.x + (1u << adjacent_entry->x_size_class) > buddy_entry->xy_offset.x + (1u << buddy_entry->x_size_class));
 			break;
 		}
 
 		/** does the adjacents end fall before or at the end of the buddy but after its start, if so the buddy should replace the adjacent "down of end" link */
 		/** NOTE: if adjacent would exceed the x range where it should set end_right to the buddy index, it would have hit break above */
-		adjacent_end_x = adjacent_entry->xy_offset.x + (1u << adjacent_entry->x_size_class);
-		//assert(adjacent_end_x <= buddy_end_x);// i think this is always true...
-		if(adjacent_end_x > buddy_entry->xy_offset.x && adjacent_end_x <= buddy_end_x)
+		if(adjacent_entry->xy_offset.x + (1u << adjacent_entry->x_size_class) > buddy_entry->xy_offset.x)
 		{
 			adjacent_entry->adj_end_down = buddy_index;
 		}
@@ -592,13 +585,10 @@ static inline void sol_buddy_grid_entry_split_vertically(struct sol_buddy_grid* 
 	struct sol_buddy_grid_entry* buddy_entry;
 	struct sol_buddy_grid_entry* adjacent_entry;
 	uint32_t buddy_index, adjacent_index;
-	uint16_t adjacent_end_y, buddy_end_y;
 
 	/** split entry must be accessed after buddy as append alters the array (may relocate in memory) */
 	buddy_entry = sol_buddy_grid_entry_array_append_ptr(&grid->entry_array, &buddy_index);
 	split_entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, split_index);
-
-	buddy_end_y = split_entry->xy_offset.y + (1u << split_entry->y_size_class);
 
 	/** validate entry to split really does look available */
 	assert(split_entry->is_available);
@@ -629,7 +619,6 @@ static inline void sol_buddy_grid_entry_split_vertically(struct sol_buddy_grid* 
 	assert(sol_buddy_grid_packed_loc_get_x(buddy_entry->packed_location) == buddy_entry->xy_offset.x);
 	assert(sol_buddy_grid_packed_loc_get_y(buddy_entry->packed_location) == buddy_entry->xy_offset.y);
 	assert(sol_buddy_grid_packed_loc_get_layer(buddy_entry->packed_location) == buddy_entry->array_layer);
-	assert(buddy_end_y == buddy_entry->xy_offset.y + (1u << buddy_entry->y_size_class));
 
 	split_entry->adj_end_right = 0;/** must be set */
 	split_entry->adj_end_down = buddy_index;
@@ -682,15 +671,13 @@ static inline void sol_buddy_grid_entry_split_vertically(struct sol_buddy_grid* 
 		if(adjacent_entry->adj_end_right != split_index)
 		{
 			/** adjacent entry that fails index check must not have ended in the y range that would have referenced the entry before it was split */
-			assert(adjacent_entry->xy_offset.y + (1u << adjacent_entry->y_size_class) >= buddy_end_y);
+			assert(adjacent_entry->xy_offset.y + (1u << adjacent_entry->y_size_class) > buddy_entry->xy_offset.y + (1u << buddy_entry->y_size_class));
 			break;
 		}
 
 		/** does the adjacents end fall before or at the end of the buddy but after its start, if so the buddy should replace the adjacent "right of end" link */
 		/** NOTE: if adjacent would exceed the y range where it should set end_right to the buddy index, it would have hit break above */
-		adjacent_end_y = adjacent_entry->xy_offset.y + (1u << adjacent_entry->y_size_class);
-		//assert(adjacent_end_y <= buddy_end_y);// i think this is always true...
-		if(adjacent_end_y > buddy_entry->xy_offset.y && adjacent_end_y <= buddy_end_y)
+		if(adjacent_entry->xy_offset.y + (1u << adjacent_entry->y_size_class) > buddy_entry->xy_offset.y)
 		{
 			adjacent_entry->adj_end_right = buddy_index;
 		}
@@ -793,6 +780,7 @@ struct sol_buddy_grid* sol_buddy_grid_create(struct sol_buddy_grid_description d
 
 	assert(description.image_x_dimension_exponent < SOL_BUDDY_GRID_SIZE_CLASS_COUNT);
 	assert(description.image_y_dimension_exponent < SOL_BUDDY_GRID_SIZE_CLASS_COUNT);
+	assert(description.image_array_dimension > 0);
 
 	grid->description = description;
 

@@ -40,6 +40,9 @@ struct sol_buddy_grid;
 struct sol_buddy_grid* sol_buddy_grid_create(struct sol_buddy_grid_description description);
 void sol_buddy_grid_destroy(struct sol_buddy_grid* grid);
 
+/** the acquired index must be released before destroying the buddy grid 
+ * the index can be used as an index into an externally managed array 
+ * (indices returned from an acquire call are guaranteed to not exceed the number of allocations at that time) */
 bool sol_buddy_grid_acquire(struct sol_buddy_grid* grid, u16_vec2 size, uint32_t* index);
 void sol_buddy_grid_release(struct sol_buddy_grid* grid, uint32_t index);
 
