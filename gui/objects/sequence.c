@@ -18,7 +18,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 
 #include "gui/objects/container.h"

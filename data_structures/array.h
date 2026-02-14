@@ -43,6 +43,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_ARRAY_FUNCTION_PREFIX SOL_ARRAY_STRUCT_NAME
 #endif
 
+#ifndef SOL_ARRAY_DEFAULT_STARTING_SIZE
+#define SOL_ARRAY_DEFAULT_STARTING_SIZE 64
+#endif
+
 
 
 struct SOL_ARRAY_STRUCT_NAME
@@ -57,7 +61,7 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_initialise)(struct
 {
     assert((initial_size & (initial_size - 1)) == 0);
     sol_indices_stack_initialise(&a->available_indices, initial_size);
-    a->array = malloc(sizeof(SOL_ARRAY_ENTRY_TYPE) * initial_size);
+    a->array = initial_size ? malloc(sizeof(SOL_ARRAY_ENTRY_TYPE) * initial_size) : NULL;
     a->space = initial_size;
     a->count = 0;
 }
@@ -75,7 +79,14 @@ static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(
     {
         if(a->count == a->space)
         {
-            a->space *= 2;
+            if(a->space == 0)
+            {
+                a->space = SOL_ARRAY_DEFAULT_STARTING_SIZE;
+            }
+            else
+            {
+                a->space *= 2;
+            }
             a->array = realloc(a->array, sizeof(SOL_ARRAY_ENTRY_TYPE) * a->space);
         }
         i = a->count++;

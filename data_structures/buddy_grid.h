@@ -50,3 +50,5 @@ struct sol_buddy_grid_location sol_buddy_grid_get_location(struct sol_buddy_grid
 
 bool sol_buddy_grid_has_space(struct sol_buddy_grid* grid, u16_vec2 size);
 
+
+/** TODO: look into permitting allocating with some kind of bias towards the end, preferable for very short lived allocations to be separated from long lived ones */

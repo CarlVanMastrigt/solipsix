@@ -288,6 +288,7 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 	error = FT_New_Face(font_library->freetype_library, ttf_filename, 0, &font->ft.face);
 	if(error)
 	{
+		fprintf(stderr, "error: unable to load font file (%s)", ttf_filename);
 		free(font);
 		return NULL;
 	}
@@ -296,6 +297,7 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 	error = FT_Set_Char_Size(font->ft.face, 0, pixel_size, 0, 0);
 	if(error)
 	{
+		fprintf(stderr, "error: font file seems to be empty (%s)", ttf_filename);
 		sol_font_destroy(font);
 		return NULL;
 	}
@@ -322,6 +324,7 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 		font->kb.state = kbts_CreateShapeState(&font->kb.font);
 		if(font->kb.state == NULL)
 		{
+			fprintf(stderr, "error: unable to create (kb) shape state for font file (%s)", ttf_filename);
 			sol_font_destroy(font);
 			return NULL;
 		}
@@ -346,6 +349,7 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 		font->hb.font = hb_ft_font_create_referenced(font->ft.face);
 		if(font->hb.font == NULL)
 		{
+			fprintf(stderr, "error: unable to create hb font for font file (%s)", ttf_filename);
 			sol_font_destroy(font);
 			return NULL;
 		}

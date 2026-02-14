@@ -131,8 +131,9 @@ void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rende
         .format = VK_FORMAT_BC4_UNORM_BLOCK,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .image_array_dimension = 1,
-        .image_x_dimension_exponent = 11,
-        .image_y_dimension_exponent = 11,
+        .image_x_dimension_exponent = 9,
+        .image_y_dimension_exponent = 9,
+        .grid_tile_size = u16_vec2_set(4, 4),
     };
 
     const struct sol_image_atlas_description r8_atlas_description =
@@ -140,8 +141,9 @@ void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rende
         .format = VK_FORMAT_R8_UNORM,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .image_array_dimension = 1,
-        .image_x_dimension_exponent = 11,
-        .image_y_dimension_exponent = 11,
+        .image_x_dimension_exponent = 9,
+        .image_y_dimension_exponent = 9,
+        .grid_tile_size = u16_vec2_set(4, 4),
     };
 
     const struct sol_image_atlas_description rgba8_atlas_description =
@@ -149,8 +151,9 @@ void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rende
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .image_array_dimension = 1,
-        .image_x_dimension_exponent = 11,
-        .image_y_dimension_exponent = 11,
+        .image_x_dimension_exponent = 9,
+        .image_y_dimension_exponent = 9,
+        .grid_tile_size = u16_vec2_set(4, 4),
     };
 
     *overlay_rendering_resources = (struct sol_overlay_rendering_resources)
