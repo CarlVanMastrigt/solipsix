@@ -55,15 +55,19 @@ struct sol_buddy_grid_entry
 	u16_vec2 xy_offset;
 	uint8_t array_layer;
 
-
 	/** size class is power of 2 times minimum entry pixel dimension (4)
 	 * so: 4 * 2 ^ (0:15) is more than enough (4 << 15 = 128k, is larger than max texture size)
 	 * maximum expected size class is 12 */
 	uint8_t x_size_class : 4;
 	uint8_t y_size_class : 4;
 
-
 	uint8_t is_available : 1;
+
+	uint8_t left_deeper : 1;
+	uint8_t right_deeper : 1;
+
+	uint32_t left_child;
+	uint32_t right_child;
 };
 
 #define SOL_ARRAY_ENTRY_TYPE struct sol_buddy_grid_entry
@@ -80,6 +84,13 @@ static inline void sol_buddy_grid_entry_set_heap_index(const uint32_t* entry_ind
 #define SOL_BINARY_HEAP_ENTRY_CMP_LT(A, B, CTX) sol_buddy_grid_entry_packed_location_cmp_lt(A, B, CTX)
 #define SOL_BINARY_HEAP_SET_ENTRY_INDEX(E, IDX, CTX) sol_buddy_grid_entry_set_heap_index(E, IDX, CTX)
 #include "data_structures/binary_heap.h"
+
+
+struct sol_buddy_grid_availabilty_head
+{
+	uint32_t head_entry_index;
+	uint32_t count; /** is this even useful? - to be determined */
+};
 
 struct sol_buddy_grid
 {
@@ -113,6 +124,95 @@ static inline void sol_buddy_grid_entry_set_heap_index(const uint32_t* entry_ind
 }
 
 
+/** having to traverse tree to perform removal feels really bad 
+ * but then again that is how the smallest is found (which is the primary */
+// static inline void sol_buddy_grid_availability_tree_append(struct sol_buddy_grid* grid, struct sol_buddy_grid_availabilty_head* head, uint32_t inserted_index)
+// {
+// 	struct sol_buddy_grid_entry* current_entry;
+// 	struct sol_buddy_grid_entry* inserted_entry;
+// 	uint32_t current_entry_index, adjusted_entry_index;
+// 	uint64_t compared_less;
+// 	uint64_t traversal_side_mask = 0;
+// 	uint32_t traversal_depth = 0;
+// 	uint32_t traversal_stack[48];/** 46 is required for worst case u32 index (noting child layer needn't be accessed) */
+
+// 	inserted_entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, inserted_index);
+// 	inserted_entry->left_child   = 0;
+// 	inserted_entry->right_child  = 0;
+// 	inserted_entry->left_deeper  = false;
+// 	inserted_entry->right_deeper = false;
+
+// 	current_entry_index = head->head_entry_index;
+
+// 	if(current_entry_index == 0)
+// 	{
+// 		head->head_entry_index = inserted_index;
+// 		return;
+// 	}
+
+// 	do
+// 	{
+// 		current_entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, current_entry_index);
+
+// 		assert(inserted_entry->packed_location != current_entry->packed_location);
+
+// 		traversal_stack[traversal_depth] = current_entry_index;
+// 		compared_less = inserted_entry->packed_location < current_entry->packed_location;
+// 		traversal_side_mask |= compared_less << traversal_depth;
+
+// 		traversal_depth++;
+
+// 		if(compared_less)
+// 		{
+// 			/** goes in lhs */
+// 			current_entry_index = current_entry->left_child;
+// 		}
+// 		else
+// 		{
+// 			/** goes in rhs */
+// 			current_entry_index = current_entry->right_child;
+// 		}
+// 	}
+// 	while(current_entry_index);
+
+// 	/** only 1 rotation should be necessary, could/should track that location! */
+
+// 	/** used values will still track most recent insertion here */
+// 	if(compared_less)
+// 	{
+// 		if(current_entry->left_deeper)
+// 		{
+// 			// rotate
+// 		}
+// 		else if(current_entry->right_deeper)
+// 		{
+			
+// 		}
+// 	}
+
+
+// 	while(traversal_depth)
+// 	{
+// 		traversal_depth--;
+// 		current_entry_index = traversal_stack[traversal_depth];
+// 		/** new_entry and current_entry still set appropriately on first run */
+
+// 		if((traversal_side_mask >> traversal_depth) & 1)
+// 		{
+// 			/** left child */
+// 			current_entry->left_child
+// 		}
+// 		else
+// 		{
+// 			/** right child */
+// 		}
+// 	}
+
+// 	// head->head_entry_index =;
+// }
+
+
+
 
 #define SOL_BUDDY_GRID_PACKED_X_MASK     0x00555555u
 #define SOL_BUDDY_GRID_PACKED_Y_MASK     0x00AAAAAAu
@@ -121,6 +221,8 @@ static inline void sol_buddy_grid_entry_set_heap_index(const uint32_t* entry_ind
 /** x on even bits, y on odd bits */
 #define SOL_BUDDY_GRID_PACKED_X_BASE     0x00000001u
 #define SOL_BUDDY_GRID_PACKED_Y_BASE     0x00000002u
+
+/** following functions (undo z-tiling of location) are only utilised for validation presently */ 
 
 /** note this gets location in pixels, REQUIRES that SOL_IA_MIN_TILE_SIZE_EXPONENT is 2*/
 static inline uint32_t sol_buddy_grid_packed_loc_get_x(uint32_t packed_location)
