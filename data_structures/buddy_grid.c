@@ -19,6 +19,17 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 /** note derived/extracted from image grid algorithm */
 
+
+/** TODO: massive (potential) improvement:
+ * store all available tiles/regions in a z-tile/packed-location ordered tree
+ * this eliminates the need for heaps (and thus extra memory allocations) to store sorted available locations
+ * this way the coalescable neighbour can be directly queried without needing to store/maintain adjacency links
+ * which also reduces the size of the `sol_buddy_grid_entry` struct 
+ * 
+ * it also may in future ain defragmentation by storing allocated locations in a tree using the same structure
+ * allowing the highest ordered locations to be placed somewhere else efficiently 
+ * and for the total count above some z-tile threshold to be determined quickly for mass defragmentation*/
+
 #include <assert.h>
 
 #include "data_structures/buddy_grid.h"
