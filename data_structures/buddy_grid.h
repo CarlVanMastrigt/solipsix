@@ -51,4 +51,24 @@ struct sol_buddy_grid_location sol_buddy_grid_get_location(struct sol_buddy_grid
 bool sol_buddy_grid_has_space(struct sol_buddy_grid* grid, u16_vec2 size);
 
 
+
+
+/** underlying type sufficiently complex as to not expose its internals here (so reqire allocation of struct) */
+struct sol_buddy_grid_2;
+
+struct sol_buddy_grid_2* sol_buddy_grid_2_create(struct sol_buddy_grid_description description);
+void sol_buddy_2_grid_destroy(struct sol_buddy_grid_2* grid);
+
+/** the acquired index must be released before destroying the buddy grid 
+ * the index can be used as an index into an externally managed array 
+ * (indices returned from an acquire call are guaranteed to not exceed the number of allocations at that time) */
+bool sol_buddy_grid_2_acquire(struct sol_buddy_grid_2* grid, u16_vec2 size, uint32_t* index);
+void sol_buddy_grid_2_release(struct sol_buddy_grid_2* grid, uint32_t index);
+
+struct sol_buddy_grid_location sol_buddy_grid_2_get_location(struct sol_buddy_grid_2* grid, uint32_t index);
+
+bool sol_buddy_2_grid_has_space(struct sol_buddy_grid_2* grid, u16_vec2 size);
+
+
+
 /** TODO: look into permitting allocating with some kind of bias towards the end, preferable for very short lived allocations to be separated from long lived ones */

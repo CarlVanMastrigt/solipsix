@@ -72,6 +72,23 @@ static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_terminate)(struct 
     free(a->array);
 }
 
+/** useful when wanting to later append some number of elements without altering/invalidating pointers into the array acquired after this is called */
+static inline void SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_ensure_available_capacity)(struct SOL_ARRAY_STRUCT_NAME* a, uint32_t desired_available_capacity)
+{
+    while(sol_indices_stack_count(&a->available_indices) + a->space - a->count < desired_available_capacity)
+    {
+        if(a->space == 0)
+        {
+            a->space = SOL_ARRAY_DEFAULT_STARTING_SIZE;
+        }
+        else
+        {
+            a->space *= 2;
+        }
+        a->array = realloc(a->array, sizeof(SOL_ARRAY_ENTRY_TYPE) * a->space);
+    }
+}
+
 static inline uint32_t SOL_CONCATENATE(SOL_ARRAY_FUNCTION_PREFIX,_append_index)(struct SOL_ARRAY_STRUCT_NAME* a)
 {
     uint32_t i;
