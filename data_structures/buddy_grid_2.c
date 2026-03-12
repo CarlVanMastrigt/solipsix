@@ -18,6 +18,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 
+#include "stdio.h"
+#warning remove above
+
 #include <assert.h>
 
 #include "data_structures/buddy_grid.h"
@@ -37,9 +40,8 @@ struct sol_buddy_grid_entry
 	uint8_t x_size_class;// : 4;
 	uint8_t y_size_class;// : 4;
 
-	// u16_vec2 xy_offset;
-	/** uint8_t array_layer; 
-	 * instead get array layer from packed location for a good space-perf efficiency balance */
+	u16_vec2 xy_offset;
+	uint8_t array_layer;
 
 	/** z-tile location of the tile within its size class, with array layer in top 8 bits */
 	uint32_t packed_location;
@@ -81,8 +83,32 @@ struct sol_buddy_grid_2
 
 
 
+static inline uint32_t sol_buddy_grid_packed_loc_get_x(uint32_t packed_location)
+{
+	/** 0x00555555 */
+	packed_location = ((packed_location & 0x00444444u) >> 1) | ((packed_location & 0x00111111u)     );
+	/** 0x00333333 */
+	packed_location = ((packed_location & 0x00303030u) >> 2) | ((packed_location & 0x00030303u)     );
+	/** 0x000F0F0F */
+	return ((packed_location & 0x000F0000u) >> 8) | ((packed_location & 0x00000F00u) >> 4) | (packed_location & 0x0000000Fu);
+	/** 0x00000FFF */
+}
 
+static inline uint32_t sol_buddy_grid_packed_loc_get_y(uint32_t packed_location)
+{
+	/** 0x00AAAAAA */
+	packed_location = ((packed_location & 0x00888888u) >> 2) | ((packed_location & 0x00222222u) >> 1);
+	/** 0x00333333 */
+	packed_location = ((packed_location & 0x00303030u) >> 2) | ((packed_location & 0x00030303u)     );
+	/** 0x000F0F0F */
+	return ((packed_location & 0x000F0000u) >> 8) | ((packed_location & 0x00000F00u) >> 4) | (packed_location & 0x0000000Fu);
+	/** 0x00000FFF */
+}
 
+static inline uint32_t sol_buddy_grid_packed_loc_get_layer(uint32_t packed_location)
+{
+	return packed_location >> 24;
+}
 
 static inline uint32_t sol_buddy_grid_packed_loc_right_shift_x(uint32_t packed_location)
 {
@@ -92,6 +118,16 @@ static inline uint32_t sol_buddy_grid_packed_loc_right_shift_x(uint32_t packed_l
 static inline uint32_t sol_buddy_grid_packed_loc_right_shift_y(uint32_t packed_location)
 {
 	return (packed_location & SOL_BUDDY_GRID_PACKED_NOT_Y_MASK) | (packed_location & SOL_BUDDY_GRID_PACKED_Y_MASK) >> 2;
+}
+
+static inline uint32_t sol_buddy_grid_packed_loc_left_shift_x(uint32_t packed_location)
+{
+	return (packed_location & SOL_BUDDY_GRID_PACKED_NOT_X_MASK) | (packed_location & SOL_BUDDY_GRID_PACKED_X_MASK) << 2;
+}
+
+static inline uint32_t sol_buddy_grid_packed_loc_left_shift_y(uint32_t packed_location)
+{
+	return (packed_location & SOL_BUDDY_GRID_PACKED_NOT_Y_MASK) | (packed_location & SOL_BUDDY_GRID_PACKED_Y_MASK) << 2;
 }
 
 
@@ -474,6 +510,10 @@ static inline bool sol_buddy_grid_append_available(struct sol_buddy_grid_2* grid
 	x_size_class = append_entry->x_size_class;
 	y_size_class = append_entry->y_size_class;
 
+	assert(append_entry->array_layer == sol_buddy_grid_packed_loc_get_layer(append_entry->packed_location));
+	assert(append_entry->xy_offset.x == sol_buddy_grid_packed_loc_get_x(append_entry->packed_location) << append_entry->x_size_class);
+	assert(append_entry->xy_offset.y == sol_buddy_grid_packed_loc_get_y(append_entry->packed_location) << append_entry->y_size_class);
+
 	depth = 0;
 	traversal_mask = 0;
 
@@ -485,19 +525,22 @@ static inline bool sol_buddy_grid_append_available(struct sol_buddy_grid_2* grid
 	{
 		entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, entry_index);
 		assert(append_entry->packed_location != entry->packed_location);
+		assert(entry->x_size_class == x_size_class && entry->y_size_class == y_size_class);
 
 		/** note: while traversing the tree, it is guaranteed that the "read head" will pass through adjacent ordered numbers
 		 * this is where potential coalescion candidates exist (`packed_location ^ 1` && `packed location ^ 2`, either of which will suffice) 
-		 * unfortunately there is no simple way to find the other candidate coalescionentry here... */
+		 * unfortunately there is no simple way to be guaranteed to find BOTH the candidate coalescion entries here... */
 		if(entry->packed_location == h_coalescion_packed_location)
 		{
 			append_entry->x_size_class++;
+			append_entry->xy_offset.x &= -((uint16_t)2 << x_size_class);
 			append_entry->packed_location = sol_buddy_grid_packed_loc_right_shift_x(append_entry->packed_location);
 			goto WITHDRAW_COALESCABLE;
 		}
 		else if(entry->packed_location == v_coalescion_packed_location)
 		{
 			append_entry->y_size_class++;
+			append_entry->xy_offset.y &= -((uint16_t)2 << y_size_class);
 			append_entry->packed_location = sol_buddy_grid_packed_loc_right_shift_y(append_entry->packed_location);
 			goto WITHDRAW_COALESCABLE;
 		}
@@ -578,10 +621,15 @@ static inline void sol_buddy_grid_withdraw_available(struct sol_buddy_grid_2* gr
 
 	assert(*traversal_references[depth] == entry_index);
 	sol_buddy_grid_withdraw(grid, traversal_references, ~(uint64_t)0, depth);
+	assert(*traversal_references[depth] == entry->right_child);
 	if(*traversal_references[0] == 0)
 	{
 		grid->availability_masks[x_size_class] &= ~((uint16_t)1 << y_size_class);
 	}
+
+	assert(entry->array_layer == sol_buddy_grid_packed_loc_get_layer(entry->packed_location));
+	assert(entry->xy_offset.x == sol_buddy_grid_packed_loc_get_x(entry->packed_location) << entry->x_size_class);
+	assert(entry->xy_offset.y == sol_buddy_grid_packed_loc_get_y(entry->packed_location) << entry->y_size_class);
 }
 
 
@@ -628,6 +676,8 @@ struct sol_buddy_grid_2* sol_buddy_grid_2_create(struct sol_buddy_grid_descripti
 		/** for every array layer make an entry filling the slive available */
 		*sol_buddy_grid_entry_array_append_ptr(&grid->entry_array, &entry_index) = (struct sol_buddy_grid_entry)
 		{
+			.xy_offset = u16_vec2_set(0, 0),
+			.array_layer = array_layer,
 			.packed_location = array_layer << 24,
 			.x_size_class = description.image_x_dimension_exponent,
 			.y_size_class = description.image_y_dimension_exponent,
@@ -644,7 +694,7 @@ struct sol_buddy_grid_2* sol_buddy_grid_2_create(struct sol_buddy_grid_descripti
 }
 
 
-void sol_buddy_2_grid_destroy(struct sol_buddy_grid_2* grid)
+void sol_buddy_grid_2_destroy(struct sol_buddy_grid_2* grid)
 {
 	uint8_t x_size_class, y_size_class;
 	uint32_t entry_index, array_layer_count;
@@ -686,8 +736,91 @@ void sol_buddy_2_grid_destroy(struct sol_buddy_grid_2* grid)
 /** the acquired index must be released before destroying the buddy grid 
  * the index can be used as an index into an externally managed array 
  * (indices returned from an acquire call are guaranteed to not exceed the number of allocations at that time) */
-bool sol_buddy_grid_2_acquire(struct sol_buddy_grid_2* grid, u16_vec2 size, uint32_t* index)
+bool sol_buddy_grid_2_acquire(struct sol_buddy_grid_2* grid, u16_vec2 size, uint32_t* entry_index)
 {
+	uint32_t x_min, y_min, min_split_count, x, y, split_count, buddy_entry_index;
+	uint8_t x_size_class, y_size_class;
+	uint16_t y_mask, availiability_mask;
+	bool appended;
+	struct sol_buddy_grid_entry* entry;
+	struct sol_buddy_grid_entry* buddy_entry;
+
+	x_size_class = sol_u32_exp_ge(size.x);
+	y_size_class = sol_u32_exp_ge(size.y);
+
+	min_split_count = UINT32_MAX;
+	y_mask = -((uint16_t)1 << y_size_class);
+
+	for(x = x_size_class; x <= grid->description.image_x_dimension_exponent; x++)
+	{
+		availiability_mask = grid->availability_masks[x] & y_mask;
+		if(availiability_mask)
+		{
+			y = sol_u32_ctz(availiability_mask);
+			split_count = y + x;
+			if(split_count <= min_split_count)
+			{
+				min_split_count = split_count;
+				x_min = x;
+				y_min = y;
+			}
+		}
+	}
+
+	if(min_split_count == UINT32_MAX)
+	{
+		return false;
+	}
+
+	sol_buddy_grid_withdraw_available(grid, entry_index, x_min, y_min);
+
+	assert(x_min >= x_size_class && y_min >= y_size_class);
+
+	while(x_min != x_size_class || y_min != y_size_class)
+	{
+		/** get new entry */
+		buddy_entry = sol_buddy_grid_entry_array_append_ptr(&grid->entry_array, &buddy_entry_index);
+		/** note: must reacquire pointer in case array was resized */
+		entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, *entry_index);
+
+		assert(entry->x_size_class == x_min && entry->y_size_class == y_min);
+
+		if(x_min == x_size_class || (y_min >= x_min && y_min != y_size_class))
+		{
+			/** split vertically */
+			y_min--;
+
+			entry->packed_location = sol_buddy_grid_packed_loc_left_shift_y(entry->packed_location);
+			entry->y_size_class = y_min;
+
+			buddy_entry->array_layer = entry->array_layer;
+			buddy_entry->xy_offset = entry->xy_offset;
+			buddy_entry->xy_offset.y += (uint16_t)1 << y_min;
+			buddy_entry->packed_location = entry->packed_location | SOL_BUDDY_GRID_PACKED_Y_BASE;
+			buddy_entry->x_size_class = x_min; 
+			buddy_entry->y_size_class = y_min; 
+		}
+		else
+		{
+			/** split hrizontally */
+			x_min--;
+
+			entry->packed_location = sol_buddy_grid_packed_loc_left_shift_x(entry->packed_location);
+			entry->x_size_class = x_min;
+
+			buddy_entry->array_layer = entry->array_layer;
+			buddy_entry->xy_offset = entry->xy_offset;
+			buddy_entry->xy_offset.x += (uint16_t)1 << x_min;
+			buddy_entry->packed_location = entry->packed_location | SOL_BUDDY_GRID_PACKED_X_BASE;
+			buddy_entry->x_size_class = x_min;
+			buddy_entry->y_size_class = y_min;
+		}
+
+		appended = sol_buddy_grid_append_available(grid, buddy_entry_index);
+		assert(appended);
+	}
+
+	return true;
 }
 
 void sol_buddy_grid_2_release(struct sol_buddy_grid_2* grid, uint32_t index)
@@ -700,6 +833,38 @@ void sol_buddy_grid_2_release(struct sol_buddy_grid_2* grid, uint32_t index)
 	while(!appended);
 }
 
-// struct sol_buddy_grid_location sol_buddy_grid_2_get_location(struct sol_buddy_grid_2* grid, uint32_t index);
+struct sol_buddy_grid_location sol_buddy_grid_2_get_location(struct sol_buddy_grid_2* grid, uint32_t index)
+{
+	struct sol_buddy_grid_entry* entry;
 
-bool sol_buddy_2_grid_has_space(struct sol_buddy_grid_2* grid, u16_vec2 size);
+	entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, index);
+
+	assert(entry->array_layer == sol_buddy_grid_packed_loc_get_layer(entry->packed_location));
+	assert(entry->xy_offset.x == sol_buddy_grid_packed_loc_get_x(entry->packed_location) << entry->x_size_class);
+	assert(entry->xy_offset.y == sol_buddy_grid_packed_loc_get_y(entry->packed_location) << entry->y_size_class);
+
+	return (struct sol_buddy_grid_location)
+	{
+		.array_layer = entry->array_layer,
+		.xy_offset = entry->xy_offset,
+	};
+}
+
+bool sol_buddy_grid_2_has_space(struct sol_buddy_grid_2* grid, u16_vec2 size)
+{
+	uint32_t x;
+
+	const uint32_t x_size_class = sol_u32_exp_ge(size.x);
+	const uint32_t y_size_class = sol_u32_exp_ge(size.y);
+	const uint32_t y_mask = -(1u << y_size_class);
+
+	for(x = x_size_class; x <= grid->description.image_x_dimension_exponent; x++)
+	{
+		if(grid->availability_masks[x] & y_mask)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}

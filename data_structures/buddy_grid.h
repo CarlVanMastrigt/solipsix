@@ -57,7 +57,7 @@ bool sol_buddy_grid_has_space(struct sol_buddy_grid* grid, u16_vec2 size);
 struct sol_buddy_grid_2;
 
 struct sol_buddy_grid_2* sol_buddy_grid_2_create(struct sol_buddy_grid_description description);
-void sol_buddy_2_grid_destroy(struct sol_buddy_grid_2* grid);
+void sol_buddy_grid_2_destroy(struct sol_buddy_grid_2* grid);
 
 /** the acquired index must be released before destroying the buddy grid 
  * the index can be used as an index into an externally managed array 
@@ -67,7 +67,7 @@ void sol_buddy_grid_2_release(struct sol_buddy_grid_2* grid, uint32_t index);
 
 struct sol_buddy_grid_location sol_buddy_grid_2_get_location(struct sol_buddy_grid_2* grid, uint32_t index);
 
-bool sol_buddy_2_grid_has_space(struct sol_buddy_grid_2* grid, u16_vec2 size);
+bool sol_buddy_grid_2_has_space(struct sol_buddy_grid_2* grid, u16_vec2 size);
 
 
 
