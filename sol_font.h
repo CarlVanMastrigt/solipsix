@@ -47,6 +47,8 @@ struct sol_overlay_render_batch;
 /** this just renders the text in a line with the default properties of the font library */
 void sol_font_render_text_simple(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch);
 s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font);
+int16_t sol_font_size_text_x_simple(const char* text, struct sol_font* font);
+int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font);
 
 
 /** variants that function for single glyphs, the first found in the string, it will be extremely wasteful to provide a string that converts to more than 1 glyph

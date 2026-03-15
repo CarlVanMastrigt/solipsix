@@ -22,6 +22,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/objects/container.h"
 
+#include "sol_utils.h"
+
 #warning container should only perform actions on enabled children
 #warning is it better to remove the concept of enabled/disabled entirely? would require altering structure to add/remove elements (add in random locations)
 
@@ -35,7 +37,7 @@ void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, str
 	{
 		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 		{
-			sol_gui_object_render(child, position.start, batch);
+			sol_gui_object_render(child, s16_rect_start(position), batch);
 		}
 	}
 }
@@ -50,7 +52,7 @@ struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s1
 	{
 		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 		{
-			result = sol_gui_object_hit_scan(child, position.start, location);
+			result = sol_gui_object_hit_scan(child, s16_rect_start(position), location);
 			if(result)
 			{
 				return result;
@@ -59,39 +61,91 @@ struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s1
 	}
 	return NULL;
 }
-static s16_vec2 sol_gui_container_min_size(struct sol_gui_object* obj)
+
+void sol_gui_container_distribute_position_flags(struct sol_gui_object* obj, uint32_t position_flags)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
-	s16_vec2 min_size = {0,0};
-	s16_vec2 child_min_size;
-	uint32_t position_flags;
-
-	position_flags = obj->flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
 
 	for(child = container->first_child; child; child = child->next)
 	{
 		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 		{
-			child_min_size = sol_gui_object_min_size(child, position_flags);
-			min_size = s16_vec2_max(min_size, child_min_size);
+			sol_gui_object_set_position_flags(child, position_flags);
+		}
+	}
+}
+
+int16_t sol_gui_container_min_size_x(struct sol_gui_object* obj)
+{
+	struct sol_gui_container* container = (struct sol_gui_container*)obj;
+	struct sol_gui_object* child;
+	int16_t min_size_x, child_min_size_x;
+
+	min_size_x = 0;
+
+	for(child = container->first_child; child; child = child->next)
+	{
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			child_min_size_x = sol_gui_object_min_size_x(child);
+			min_size_x = SOL_MAX(min_size_x, child_min_size_x);
 		}
 	}
 
-	return min_size;
+	return min_size_x;
 }
-static void sol_gui_container_place_content(struct sol_gui_object* obj, s16_vec2 dimensions)
+
+int16_t sol_gui_container_min_size_y(struct sol_gui_object* obj)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
+	int16_t min_size_y, child_min_size_y;
 
-	s16_rect child_rect = s16_rect_at_origin_with_size(dimensions);
+	min_size_y = 0;
 
 	for(child = container->first_child; child; child = child->next)
 	{
 		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 		{
-			sol_gui_object_place_content(child, child_rect);
+			child_min_size_y = sol_gui_object_min_size_y(child);
+			min_size_y = SOL_MAX(min_size_y, child_min_size_y);
+		}
+	}
+
+	return min_size_y;
+}
+
+void sol_gui_container_set_extent_x(struct sol_gui_object* obj, s16_extent extent_x)
+{
+	struct sol_gui_container* container = (struct sol_gui_container*)obj;
+	struct sol_gui_object* child;
+	s16_extent child_extent;
+
+	child_extent = s16_extent_set(0, s16_extent_size(extent_x));
+
+	for(child = container->first_child; child; child = child->next)
+	{
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			sol_gui_object_set_extent_x(child, child_extent);
+		}
+	}
+}
+
+void sol_gui_container_set_extent_y(struct sol_gui_object* obj, s16_extent extent_y)
+{
+	struct sol_gui_container* container = (struct sol_gui_container*)obj;
+	struct sol_gui_object* child;
+	s16_extent child_extent;
+
+	child_extent = s16_extent_set(0, s16_extent_size(extent_y));
+
+	for(child = container->first_child; child; child = child->next)
+	{
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		{
+			sol_gui_object_set_extent_y(child, child_extent);
 		}
 	}
 }
@@ -163,13 +217,16 @@ void sol_gui_container_destroy(struct sol_gui_object* obj)
 }
 static const struct sol_gui_object_structure_functions sol_gui_container_structure_functions =
 {
-	.render        = &sol_gui_container_render,
-	.hit_scan      = &sol_gui_container_hit_scan,
-	.min_size      = &sol_gui_container_min_size,
-	.place_content = &sol_gui_container_place_content,
-	.add_child     = &sol_gui_container_add_child,
-	.remove_child  = &sol_gui_container_remove_child,
-	.destroy       = &sol_gui_container_destroy,
+	.render                       = &sol_gui_container_render,
+	.hit_scan                     = &sol_gui_container_hit_scan,
+	.distribute_position_flags    = &sol_gui_container_distribute_position_flags,
+	.min_size_x                   = &sol_gui_container_min_size_x,
+	.min_size_y                   = &sol_gui_container_min_size_y,
+	.set_extent_x                 = &sol_gui_container_set_extent_x,
+	.set_extent_y                 = &sol_gui_container_set_extent_y,
+	.add_child                    = &sol_gui_container_add_child,
+	.remove_child                 = &sol_gui_container_remove_child,
+	.destroy                      = &sol_gui_container_destroy,
 };
 
 

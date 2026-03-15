@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "math/s16_vec2.h"
 #include "math/s16_rect.h"
+#include "math/s16_extent.h"
 
 #include "gui/enums.h"
 #include "gui/context.h"
@@ -49,7 +50,7 @@ struct sol_gui_object_structure_functions
 	#warning should obj be const for most of these?
 
 	// put in the batch to be passed into overlay rendererer
-    void (*const render) (struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch);
+    void (*const render) (struct sol_gui_object* obj, s16_rect offset, struct sol_overlay_render_batch* batch);
     // position is in target space, determined from the object
     #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
     // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)
@@ -57,19 +58,24 @@ struct sol_gui_object_structure_functions
     // may also want generic bounding struct to apply to rendering, can impose box and panel clipping, fade, hard bounds &c.
     // inherited struct *could* incorporate offset, but then the contents would basically be copied at every stage of the stack
 
-    // used to recursively find the gui_object under the pixel location provided
-    struct sol_gui_object* (*const hit_scan) (struct sol_gui_object* obj, s16_rect position, const s16_vec2 location);// hit_scan, scan
-    // this structure is suboptimal but more easily understood, it operates in absolute screen space, with location never changing
+    /** used to recursively find the gui_object under the pixel location provided */
+    struct sol_gui_object* (*const hit_scan) (struct sol_gui_object* obj, s16_rect extent, const s16_vec2 location);// hit_scan, scan
+    /** the above scan structure is suboptimal compared to offsetting by the checked location but more easily understood, as it operates in absolute screen space, with location never changing **/
 
-    // sets the min_size of the gui_object to inform parents of their minimum size
-    s16_vec2 (*const min_size) (struct sol_gui_object* obj);
+    /** applies position flags to children_appropriately **/
+    void (*const distribute_position_flags) (struct sol_gui_object* obj, uint32_t position_flags);
 
-    // fills out any data affected by the position(size and location) of this object (which must have been set by the gui_object's parent) and decides how to distribute that space amongst its children if it has them
-    // note: as all contents are relative, this should only take the dimensions of its rect into account (though its position will have been updated by the time this is called)
-    void (*const place_content) (struct sol_gui_object* obj, s16_vec2 dimensions);
+    // sets the min_size of the gui_object to inform parents of their minimum size **/
+    int16_t (*const min_size_x) (struct sol_gui_object* obj);
+    int16_t (*const min_size_y) (struct sol_gui_object* obj);
 
-    // adds a child to this widget, will error if widget cannot accept children
-    void (*const add_child) (struct sol_gui_object* obj, struct sol_gui_object* child);
+    /** fills out any data affected by the position(size and location) of this object (which must have been set by the gui_object's parent) and decides how to distribute that space amongst its children if it has them
+     * note: as all contents are relative, this should only take the dimensions of its rect into account (though its position will have been updated by the time this is called) **/
+    void (*const set_extent_x) (struct sol_gui_object* obj, s16_extent extent_x);
+    void (*const set_extent_y) (struct sol_gui_object* obj, s16_extent extent_y);
+
+    /** adds a child to this widget, will error if widget cannot accept children **/
+    void (*const add_child)    (struct sol_gui_object* obj, struct sol_gui_object* child);
     void (*const remove_child) (struct sol_gui_object* obj, struct sol_gui_object* child);
 
     void (*const destroy) (struct sol_gui_object* obj);
@@ -81,7 +87,7 @@ struct sol_gui_object
 
 	const struct sol_gui_object_structure_functions* structure_functions;
 
-	// may need enumerator for return type?
+	/** may need enumerator for return type? **/
 	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input);
 
 	#warning combine status and position flags; pass into rendering and allow them to inform nature of rendering (e.g. if colour passed is DEFAULT then pick correct one from status)
@@ -89,9 +95,10 @@ struct sol_gui_object
 	uint32_t flags           : SOL_GUI_OBJECT_FLAGS_BIT_COUNT;
 
 	s16_vec2 min_size;
-	s16_rect position;/// this is relative to parent
+	/** rect is positioned relative to parent **/
+	s16_rect rect;
 
-	// other widgets in structure
+	/** other widgets in structure **/
 	struct sol_gui_object* parent;
 	struct sol_gui_object* next;
 	struct sol_gui_object* prev;
@@ -113,13 +120,16 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 
 
 
-// these perform any meta operations on objects and call their internal functions if present
-void                   sol_gui_object_render       (struct sol_gui_object* obj, s16_vec2 offset, struct sol_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_object_hit_scan     (struct sol_gui_object* obj, s16_vec2 offset, const s16_vec2 location);
-s16_vec2               sol_gui_object_min_size     (struct sol_gui_object* obj, uint32_t position_flags);
-void                   sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_rect);
-void                   sol_gui_object_add_child    (struct sol_gui_object* obj, struct sol_gui_object* child);
-void                   sol_gui_object_remove_child (struct sol_gui_object* obj, struct sol_gui_object* child);
+/** these perform any meta operations on objects and call their internal functions if present */
+void                   sol_gui_object_render             (struct sol_gui_object* obj, s16_vec2 cumulative_offset, struct sol_overlay_render_batch* batch);
+struct sol_gui_object* sol_gui_object_hit_scan           (struct sol_gui_object* obj, s16_vec2 cumulative_offset, const s16_vec2 location);
+void                   sol_gui_object_set_position_flags (struct sol_gui_object* obj, uint32_t position_flags);
+int16_t                sol_gui_object_min_size_x         (struct sol_gui_object* obj);
+int16_t                sol_gui_object_min_size_y         (struct sol_gui_object* obj);
+void                   sol_gui_object_set_extent_x       (struct sol_gui_object* obj, s16_extent extent);
+void                   sol_gui_object_set_extent_y       (struct sol_gui_object* obj, s16_extent extent);
+void                   sol_gui_object_add_child          (struct sol_gui_object* obj, struct sol_gui_object* child);
+void                   sol_gui_object_remove_child       (struct sol_gui_object* obj, struct sol_gui_object* child);
 
 
 

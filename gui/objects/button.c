@@ -28,7 +28,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sol_font.h"
 
-#include <stdio.h>
 
 
 
@@ -126,7 +125,9 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect posi
 
 	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 
-	text_rect = theme->box_place_content(theme, obj->flags, position);
+	text_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);
+	text_rect.y = theme->box_content_extent_y(theme, obj->flags, position.y);
+
 	sol_font_render_text_simple(text, theme->text_font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, text_rect, batch);
 }
 static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
@@ -140,22 +141,34 @@ static struct sol_gui_object* sol_gui_text_button_hit_scan(struct sol_gui_object
 	}
 	return NULL;
 }
-static s16_vec2 sol_gui_text_button_min_size(struct sol_gui_object* obj)
+static int16_t sol_gui_text_button_min_size_x(struct sol_gui_object* obj)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
-	s16_vec2 content_min_size;
+	int16_t text_size_x;
 
-	content_min_size = sol_font_size_text_simple(text, theme->text_font);
+	text_size_x = sol_font_size_text_x_simple(text, theme->text_font);
 
-	return theme->box_size(theme, obj->flags, content_min_size);
+	return theme->box_size_x(theme, obj->flags, text_size_x);
+}
+static int16_t sol_gui_text_button_min_size_y(struct sol_gui_object* obj)
+{
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_theme* theme = obj->context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+	int16_t text_size_y;
+
+	text_size_y = sol_font_size_text_y_simple(text, theme->text_font);
+
+	return theme->box_size_y(theme, obj->flags, text_size_y);
 }
 static const struct sol_gui_object_structure_functions sol_gui_text_button_structure_functions =
 {
-	.render   = &sol_gui_text_button_render,
-	.hit_scan = &sol_gui_text_button_hit_scan,
-	.min_size = &sol_gui_text_button_min_size,
+	.render     = &sol_gui_text_button_render,
+	.hit_scan   = &sol_gui_text_button_hit_scan,
+	.min_size_x = &sol_gui_text_button_min_size_x,
+	.min_size_y = &sol_gui_text_button_min_size_y,
 };
 struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
 {
@@ -189,7 +202,9 @@ static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect
 	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
 
 
-	icon_rect = theme->box_place_content(theme, obj->flags, position);
+	icon_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);
+	icon_rect.y = theme->box_content_extent_y(theme, obj->flags, position.y);
+
 	sol_font_render_glyph_simple(text, theme->text_font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, icon_rect, batch);
 }
 static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
@@ -203,22 +218,37 @@ static struct sol_gui_object* sol_gui_utf8_icon_button_hit_scan(struct sol_gui_o
 	}
 	return NULL;
 }
-static s16_vec2 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
+static int16_t sol_gui_utf8_icon_button_min_size_x(struct sol_gui_object* obj)
 {
 	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
 	const char* text = sol_gui_button_get_buffer_const(button);
+	int16_t glyph_size_x;
 
 	#warning should have a good/better way to create square boxes for icons and similar... read font directly to get an "icon square" ??
-	s16_vec2 content_size = s16_vec2_set(0,0);
+	glyph_size_x = 0;
 
-	return theme->box_size(theme, obj->flags, content_size);
+	return theme->box_size_x(theme, obj->flags, glyph_size_x);
 }
+static int16_t sol_gui_utf8_icon_button_min_size_y(struct sol_gui_object* obj)
+{
+	const struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_theme* theme = obj->context->theme;
+	const char* text = sol_gui_button_get_buffer_const(button);
+	int16_t glyph_size_y;
+
+	#warning should have a good/better way to create square boxes for icons and similar... read font directly to get an "icon square" ??
+	glyph_size_y = 0;
+
+	return theme->box_size_y(theme, obj->flags, glyph_size_y);
+}
+
 static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_structure_functions =
 {
-	.render   = &sol_gui_utf8_icon_button_render,
-	.hit_scan = &sol_gui_utf8_icon_button_hit_scan,
-	.min_size = &sol_gui_utf8_icon_button_min_size,
+	.render     = &sol_gui_utf8_icon_button_render,
+	.hit_scan   = &sol_gui_utf8_icon_button_hit_scan,
+	.min_size_x = &sol_gui_utf8_icon_button_min_size_x,
+	.min_size_y = &sol_gui_utf8_icon_button_min_size_y,
 };
 struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
 {

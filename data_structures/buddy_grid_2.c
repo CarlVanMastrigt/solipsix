@@ -29,19 +29,30 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 /** maximum xy dimension classes; the maximum number of sizes a tile can be (0-12 inclusive) */
 #define SOL_BUDDY_GRID_SIZE_CLASS_COUNT 13
 
+// #define USE_LINKED_LIST
+#define USE_RB_TREE
 
 struct sol_buddy_grid_entry
 {
+	#ifdef USE_RB_TREE
 	uint32_t left_child;
 	uint32_t right_child;
-
 	bool is_marked;
+	#endif
+
+	#ifdef USE_LINKED_LIST
+	uint32_t next;
+	uint32_t dummy_a;
+	uint8_t dummy_b;
+	#endif
+	
+
 
 	uint8_t x_size_class;// : 4;
 	uint8_t y_size_class;// : 4;
 
-	u16_vec2 xy_offset;
 	uint8_t array_layer;
+	u16_vec2 xy_offset;
 
 	/** z-tile location of the tile within its size class, with array layer in top 8 bits */
 	uint32_t packed_location;
@@ -134,6 +145,8 @@ static inline uint32_t sol_buddy_grid_packed_loc_left_shift_y(uint32_t packed_lo
 
 #warning better to recycle the extracted withdraw code, even when guarantees can be made for one branch?
 
+
+#ifdef USE_RB_TREE
 /** caller must decide what to do with the index 
  * note: this function should ONLY affect tree structure */
 static inline void sol_buddy_grid_withdraw(struct sol_buddy_grid_2* grid, uint32_t** traversal_references, uint64_t traversal_mask, uint32_t withdrawn_depth)
@@ -493,6 +506,8 @@ static inline void sol_buddy_grid_append(struct sol_buddy_grid_2* grid, uint32_t
 	d2->is_marked = true;
 }
 
+
+
 /** will automatically coalesce entries 
  * returns true in append, false on coalesce (failed to insert for this size class because it had to coalesce) */
 static inline bool sol_buddy_grid_append_available(struct sol_buddy_grid_2* grid, uint32_t appended_index)
@@ -632,6 +647,151 @@ static inline void sol_buddy_grid_withdraw_available(struct sol_buddy_grid_2* gr
 	assert(entry->xy_offset.y == sol_buddy_grid_packed_loc_get_y(entry->packed_location) << entry->y_size_class);
 }
 
+#endif
+
+#ifdef USE_LINKED_LIST
+/** will automatically coalesce entries 
+ * returns true in append, false on coalesce (failed to insert for this size class because it had to coalesce) */
+static inline bool sol_buddy_grid_append_available(struct sol_buddy_grid_2* grid, uint32_t appended_index)
+{
+	struct sol_buddy_grid_entry* append_entry;
+	struct sol_buddy_grid_entry* entry;
+	uint32_t entry_index, h_coalescion_packed_location, v_coalescion_packed_location, scan_packed_location_limit;
+	uint8_t x_size_class, y_size_class;
+	uint32_t* append_reference;
+	uint32_t* h_coalesce_reference;
+	uint32_t* v_coalesce_reference;
+	uint32_t* current_reference;
+	uint32_t* base_reference;
+
+	append_entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, appended_index);
+	h_coalescion_packed_location = append_entry->packed_location ^ SOL_BUDDY_GRID_PACKED_X_BASE;
+	v_coalescion_packed_location = append_entry->packed_location ^ SOL_BUDDY_GRID_PACKED_Y_BASE;
+	x_size_class = append_entry->x_size_class;
+	y_size_class = append_entry->y_size_class;
+
+	scan_packed_location_limit = append_entry->packed_location | 3;
+
+	assert(append_entry->array_layer == sol_buddy_grid_packed_loc_get_layer(append_entry->packed_location));
+	assert(append_entry->xy_offset.x == sol_buddy_grid_packed_loc_get_x(append_entry->packed_location) << append_entry->x_size_class);
+	assert(append_entry->xy_offset.y == sol_buddy_grid_packed_loc_get_y(append_entry->packed_location) << append_entry->y_size_class);
+
+	base_reference = &grid->available_tree_heads[x_size_class][y_size_class];
+	current_reference = base_reference;
+	entry_index = *current_reference;
+
+	// append_reference = current_reference;
+	append_reference = NULL;
+	h_coalesce_reference = NULL;
+	v_coalesce_reference = NULL;
+
+	while(entry_index)
+	{
+		entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, entry_index);
+		assert(append_entry->packed_location != entry->packed_location);
+		assert(entry->x_size_class == x_size_class && entry->y_size_class == y_size_class);
+
+		if(entry->packed_location > scan_packed_location_limit)
+		{
+			break;
+		}
+		else if(entry->packed_location == h_coalescion_packed_location)
+		{
+			h_coalesce_reference = current_reference;
+		}
+		else if(entry->packed_location == v_coalescion_packed_location)
+		{
+			v_coalesce_reference = current_reference;
+		}
+
+		if(append_entry->packed_location < entry->packed_location)
+		{
+			append_reference = current_reference;
+		}
+
+		current_reference = &entry->next;
+		entry_index = *current_reference;
+	}
+
+	if(h_coalesce_reference && (x_size_class > y_size_class || v_coalesce_reference == NULL))
+	{
+		entry_index = *h_coalesce_reference;
+		entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, entry_index);
+		*h_coalesce_reference = entry->next;
+
+		sol_buddy_grid_entry_array_withdraw_ptr(&grid->entry_array, entry_index);
+
+		append_entry->x_size_class++;
+		append_entry->xy_offset.x &= -((uint16_t)2 << x_size_class);
+		append_entry->packed_location = sol_buddy_grid_packed_loc_right_shift_x(append_entry->packed_location);
+
+		if(*base_reference == 0)
+		{
+			grid->availability_masks[x_size_class] &= ~((uint16_t)1 << y_size_class);
+		}
+
+		return false;
+	}
+	else if(v_coalesce_reference)
+	{
+		entry_index = *v_coalesce_reference;
+		entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, entry_index);
+		*v_coalesce_reference = entry->next;
+
+		sol_buddy_grid_entry_array_withdraw_ptr(&grid->entry_array, entry_index);
+
+		append_entry->y_size_class++;
+		append_entry->xy_offset.y &= -((uint16_t)2 << y_size_class);
+		append_entry->packed_location = sol_buddy_grid_packed_loc_right_shift_y(append_entry->packed_location);
+
+		if(*base_reference == 0)
+		{
+			grid->availability_masks[x_size_class] &= ~((uint16_t)1 << y_size_class);
+		}
+
+		return false;
+	}
+	
+
+	if(append_reference == NULL)
+	{
+		append_reference = current_reference;
+	}
+
+	append_entry->next = *append_reference;
+	*append_reference = appended_index;
+
+	grid->availability_masks[x_size_class] |= (uint16_t)1 << y_size_class;
+
+	return true;
+}
+
+static inline void sol_buddy_grid_withdraw_available(struct sol_buddy_grid_2* grid, uint32_t* withdrawn_index, uint8_t x_size_class, uint8_t y_size_class)
+{
+	struct sol_buddy_grid_entry* entry;
+	uint32_t entry_index;
+	uint32_t* base_reference;
+
+	base_reference = &grid->available_tree_heads[x_size_class][y_size_class];
+	entry_index = *base_reference;
+	assert(entry_index);
+
+	*withdrawn_index = entry_index;
+
+	entry = sol_buddy_grid_entry_array_access_entry(&grid->entry_array, entry_index);
+	*base_reference = entry->next;
+
+	assert(entry->array_layer == sol_buddy_grid_packed_loc_get_layer(entry->packed_location));
+	assert(entry->xy_offset.x == sol_buddy_grid_packed_loc_get_x(entry->packed_location) << entry->x_size_class);
+	assert(entry->xy_offset.y == sol_buddy_grid_packed_loc_get_y(entry->packed_location) << entry->y_size_class);
+
+	if(entry->next == 0)
+	{
+		grid->availability_masks[x_size_class] &= ~((uint16_t)1 << y_size_class);
+	}
+}
+
+#endif
 
 struct sol_buddy_grid_2* sol_buddy_grid_2_create(struct sol_buddy_grid_description description)
 {
@@ -654,8 +814,10 @@ struct sol_buddy_grid_2* sol_buddy_grid_2_create(struct sol_buddy_grid_descripti
 	assert(entry_index == 0);
 	*zero_entry = (struct sol_buddy_grid_entry)
 	{
+		#ifdef USE_RB_TREE
 		/** only variable of the zero entry that should ever be read, red-black tree algorithm treats null/leaf nodes as marked (black) */
 		.is_marked = true,
+		#endif
 	};
 
 	for(x_size_class = 0; x_size_class < SOL_BUDDY_GRID_SIZE_CLASS_COUNT; x_size_class++)

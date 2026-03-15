@@ -56,18 +56,29 @@ struct sol_gui_theme
      * size: given some content, how big does the box/panel need to be (paired with place_content)
     */
 
+    /** these should allow lining up custom widgets with the lines on boxes */ 
+    int16_t    (*normal_size_x)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    int16_t    (*normal_size_y)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    s16_extent (*normal_content_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent extent);
+    s16_extent (*normal_content_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent extent);
 
-    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
-    bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);/// box should be offset should be such that the origin is the selection point to be queried
-    s16_rect (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
-    s16_vec2 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
+    void       (*box_render)           (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
+    bool       (*box_select)           (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);/// box should be offset should be such that the origin is the selection point to be queried
+    int16_t    (*box_size_x)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    int16_t    (*box_size_y)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    s16_extent (*box_content_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent box_extent);
+    s16_extent (*box_content_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent box_extent);
+    /** above return extent in same space as the panel extent */
     // may need a function that subtracts borders for items that require clipping to be passed on, OR parent information can be passed down (bounds and flags that dictate borders)
 
     // box render with scroll information ?? (for localised scroll, can be extra)
-    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
-    bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);
-    s16_rect (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect);
-    s16_vec2 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size);
+    void       (*panel_render)            (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
+    bool       (*panel_select)            (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);
+    int16_t    (*panel_size_x)            (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    int16_t    (*panel_size_y)            (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    s16_extent (*panel_contents_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent panel_extent);
+    s16_extent (*panel_contents_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent panel_extent);
+    /** above return extent in same space as the panel extent */
 
     #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
     // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)

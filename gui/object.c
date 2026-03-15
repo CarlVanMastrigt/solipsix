@@ -87,62 +87,95 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj)
 
 
 
-void sol_gui_object_render(struct sol_gui_object* obj, s16_vec2 offset, struct sol_overlay_render_batch* batch)
+void sol_gui_object_render(struct sol_gui_object* obj, s16_vec2 cumulative_offset, struct sol_overlay_render_batch* batch)
 {
 	assert(obj);
 
 	if(obj->structure_functions && obj->structure_functions->render)
 	{
-		// offset = s16_vec2_add(offset, obj->position.start);
-		obj->structure_functions->render(obj, s16_rect_add_offset(obj->position, offset), batch);
+		obj->structure_functions->render(obj, s16_rect_add_offset(obj->rect, cumulative_offset), batch);
 	}
 }
 
-struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, s16_vec2 offset, const s16_vec2 location)
+struct sol_gui_object* sol_gui_object_hit_scan(struct sol_gui_object* obj, s16_vec2 cumulative_offset, const s16_vec2 location)
 {
 	assert(obj);
 
 	if(obj->structure_functions && obj->structure_functions->hit_scan)
 	{
-		// location = s16_vec2_sub(location, obj->position.start);
-		return obj->structure_functions->hit_scan(obj, s16_rect_add_offset(obj->position, offset), location);
+		return obj->structure_functions->hit_scan(obj, s16_rect_add_offset(obj->rect, cumulative_offset), location);
 	}
 
 	return NULL;
 }
-
-s16_vec2 sol_gui_object_min_size(struct sol_gui_object* obj, uint32_t position_flags)
+#warning could/should assert object non-null and handle it not being enabled? (or handle things being null ??)
+void sol_gui_object_set_position_flags(struct sol_gui_object* obj, uint32_t position_flags)
 {
 	assert(obj);
 	assert((position_flags & ~SOL_GUI_OBJECT_POSITION_FLAGS_ALL) == 0);// don't pass in non position flags
+	/** position_flags &= SOL_GUI_OBJECT_POSITION_FLAGS_ALL; // alternative to above, good debug tool */
 
-	obj->flags |= position_flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
+	/** remove setant flags and set new ones */
+	obj->flags = (obj->flags & ~SOL_GUI_OBJECT_POSITION_FLAGS_ALL) | position_flags;
 
-	if(obj->structure_functions && obj->structure_functions->min_size)
+	if(obj->structure_functions && obj->structure_functions->distribute_position_flags)
 	{
-		obj->min_size = obj->structure_functions->min_size(obj);
+		obj->structure_functions->distribute_position_flags(obj, position_flags);
 	}
-	else
-	{
-		obj->min_size = s16_vec2_set(0, 0);
-	}
-
-	return obj->min_size;
 }
-
-void sol_gui_object_place_content(struct sol_gui_object* obj, s16_rect content_rect)
+int16_t sol_gui_object_min_size_x(struct sol_gui_object* obj)
 {
 	assert(obj);
 
-	obj->position = content_rect;
-
-	if(obj->structure_functions && obj->structure_functions->place_content)
+	if(obj->structure_functions && obj->structure_functions->min_size_x)
 	{
-		obj->structure_functions->place_content(obj, s16_rect_size(content_rect));
+		obj->min_size.x = obj->structure_functions->min_size_x(obj);
 	}
 	else
 	{
-		obj->position = content_rect;
+		obj->min_size.x = 0;
+	}
+
+	return obj->min_size.x;
+}
+
+int16_t sol_gui_object_min_size_y(struct sol_gui_object* obj)
+{
+	assert(obj);
+
+	if(obj->structure_functions && obj->structure_functions->min_size_y)
+	{
+		obj->min_size.y = obj->structure_functions->min_size_y(obj);
+	}
+	else
+	{
+		obj->min_size.y = 0;
+	}
+
+	return obj->min_size.y;
+}
+
+void sol_gui_object_set_extent_x(struct sol_gui_object* obj, s16_extent extent_x)
+{
+	assert(obj);
+
+	obj->rect.x = extent_x;
+
+	if(obj->structure_functions && obj->structure_functions->set_extent_x)
+	{
+		obj->structure_functions->set_extent_x(obj, extent_x);
+	}
+}
+
+void sol_gui_object_set_extent_y(struct sol_gui_object* obj, s16_extent extent_y)
+{
+	assert(obj);
+
+	obj->rect.y = extent_y;
+
+	if(obj->structure_functions && obj->structure_functions->set_extent_y)
+	{
+		obj->structure_functions->set_extent_y(obj, extent_y);
 	}
 }
 
@@ -205,5 +238,8 @@ bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_in
 
 void sol_gui_object_reposition_contents(struct sol_gui_object* obj)
 {
-	sol_gui_object_place_content(obj, obj->position);
+	assert(false);
+	/** with the switch back to the old paradigm of min height dependent on actual width this function has become a foot gun */ 
+	sol_gui_object_set_extent_x(obj, obj->rect.x);
+	sol_gui_object_set_extent_x(obj, obj->rect.y);
 }

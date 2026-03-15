@@ -30,7 +30,7 @@ struct sol_gui_theme_simple_data
 {
 	s16_vec2 base_unit_size;
 
-	s16_vec2 box_border;
+	s16_vec2 normal_border;
 	s16_vec2 box_content_border;
 	s16_vec2 box_text_border;
 	s16_vec2 panel_border;
@@ -41,7 +41,58 @@ struct sol_gui_theme_simple_data
 	uint64_t test_checkerboard_id;
 };
 
+static int16_t sol_gui_theme_simple_normal_size_x(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
 
+	/** box must be at least base_unit_size */
+	size = SOL_MAX(content_size, simple_theme_data->base_unit_size.x);
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->normal_border.x * 2;
+	}
+
+	return size;
+}
+static int16_t sol_gui_theme_simple_normal_size_y(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	/** box must be at least base_unit_size */
+	size = SOL_MAX(content_size, simple_theme_data->base_unit_size.x);
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->normal_border.x * 2;
+	}
+
+	return size;
+}
+static s16_extent sol_gui_theme_simple_normal_content_extent_x(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.x);
+	}
+
+	return extent;
+}
+static s16_extent sol_gui_theme_simple_normal_content_extent_y(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.y);
+	}
+
+	return extent;
+}
 
 #warning put bounds and animatable properties on the batch, and have batch setup struct for this information,
 // mark sub components as mutable/inherited and pass them in as a const pointer that can be substituted?
@@ -72,7 +123,7 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
+		rect = s16_rect_sub_border(rect, simple_theme_data->normal_border);
 	}
 
 	rect = s16_rect_intersect(rect, batch->bounds);
@@ -83,7 +134,7 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 		#warning should also check rect is positive at this point
 		*render_data =(struct sol_overlay_render_element)
 	    {
-	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
+	        {rect.x.start, rect.y.start, rect.x.end, rect.y.end},
 	        {0, 0, 0, 0},
 	        {0, colour, 0, 0}
 	    };
@@ -96,54 +147,101 @@ static bool sol_gui_theme_simple_box_select(struct sol_gui_theme* theme, uint32_
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
+		rect = s16_rect_sub_border(rect, simple_theme_data->normal_border);
 	}
 
 	return s16_rect_contains_point(rect, location);
 }
 
-static s16_rect sol_gui_theme_simple_box_place_content(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
+static s16_extent sol_gui_theme_simple_box_content_extent_x(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->box_border);
+		extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.x);
 	}
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->box_text_border);
+		extent = s16_extent_dilate(extent, -simple_theme_data->box_text_border.x);
 	}
 	else
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->box_content_border);
+		extent = s16_extent_dilate(extent, -simple_theme_data->box_content_border.x);
 	}
 
-	return rect;
+	return extent;
 }
 
-static s16_vec2 sol_gui_theme_simple_box_size(struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size)
+static s16_extent sol_gui_theme_simple_box_content_extent_y(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
-	s16_vec2 size;
-
-	// min size is content with theme border
-	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
-	{
-		size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->box_text_border, 2));
-	}
-	else
-	{
-		size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->box_content_border, 2));
-	}
-
-	// box must be at least base_unit_size
-	size = s16_vec2_max(size, simple_theme_data->base_unit_size);
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		size = s16_vec2_add(size, s16_vec2_mul_scalar(simple_theme_data->box_border, 2));// added to either side
+		extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.y);
+	}
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
+	{
+		extent = s16_extent_dilate(extent, -simple_theme_data->box_text_border.y);
+	}
+	else
+	{
+		extent = s16_extent_dilate(extent, -simple_theme_data->box_content_border.y);
+	}
+
+	return extent;
+}
+
+static int16_t sol_gui_theme_simple_box_size_x(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	/** min size is content with theme border */
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
+	{
+		size = simple_theme_data->box_text_border.x * 2 + content_size;
+	}
+	else
+	{
+		size = simple_theme_data->box_content_border.x * 2 + content_size;
+	}
+
+	/** box must be at least base_unit_size */
+	size = SOL_MAX(size, simple_theme_data->base_unit_size.x);
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->normal_border.x * 2;
+	}
+
+	return size;
+}
+
+static int16_t sol_gui_theme_simple_box_size_y(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	/** min size is content with theme border */
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT)
+	{
+		size = simple_theme_data->box_text_border.y * 2 + content_size;
+	}
+	else
+	{
+		size = simple_theme_data->box_content_border.y * 2 + content_size;
+	}
+
+	/** box must be at least base_unit_size */
+	size = SOL_MAX(size, simple_theme_data->base_unit_size.y);
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->normal_border.y * 2;
 	}
 
 	return size;
@@ -176,7 +274,7 @@ static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint3
 		#warning should also check rect is positive at this point
 		*render_data =(struct sol_overlay_render_element)
 	    {
-	        {rect.start.x, rect.start.y, rect.end.x, rect.end.y},
+	        {rect.x.start, rect.y.start, rect.x.end, rect.y.end},
 	        {0, 0, 0, 0},
 	        {0, colour, 0, 0}
 	    };
@@ -192,38 +290,71 @@ static bool sol_gui_theme_simple_panel_select(struct sol_gui_theme* theme, uint3
 		rect = s16_rect_sub_border(rect, simple_theme_data->panel_border);
 	}
 
-	return s16_rect_contains_origin(rect);
+	return s16_rect_contains_point(rect, location);
 }
 
-static s16_rect sol_gui_theme_simple_panel_place_content(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect)
+#warning following could be generic theme functions ??
+static s16_extent sol_gui_theme_simple_panel_content_extent_x(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
 {
-	#warning needs review tbh, some way to tell if text offset is necessary &c.?
-
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		rect = s16_rect_sub_border(rect, simple_theme_data->panel_border);
+		extent = s16_extent_dilate(extent, -simple_theme_data->panel_border.x);
 	}
 
-	rect = s16_rect_sub_border(rect, simple_theme_data->panel_content_border);
+	extent = s16_extent_dilate(extent, -simple_theme_data->panel_content_border.x);
 
-	return rect;
+	return extent;
 }
 
-static s16_vec2 sol_gui_theme_simple_panel_size(struct sol_gui_theme* theme, uint32_t flags, s16_vec2 contents_size)
+static s16_extent sol_gui_theme_simple_panel_content_extent_y(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	// min size is content with theme border
-	s16_vec2 size = s16_vec2_add(contents_size, s16_vec2_mul_scalar(simple_theme_data->panel_content_border, 2));
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		extent = s16_extent_dilate(extent, -simple_theme_data->panel_border.y);
+	}
 
-	#warning minimul panel size?
+	extent = s16_extent_dilate(extent, -simple_theme_data->panel_content_border.y);
+
+	return extent;
+}
+
+static int16_t sol_gui_theme_simple_panel_size_x(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	// min size is content with theme border
+	size = simple_theme_data->panel_content_border.x * 2 + content_size;
+
+	#warning minimal panel size?
 	//size = s16_vec2_max(size, simple_theme_data->base_unit_size);
 
 	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
 	{
-		size = s16_vec2_add(size, s16_vec2_mul_scalar(simple_theme_data->panel_border, 2));// added to either side
+		size += simple_theme_data->panel_border.x * 2;
+	}
+
+	return size;
+}
+
+static int16_t sol_gui_theme_simple_panel_size_y(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	// min size is content with theme border
+	size = simple_theme_data->panel_content_border.y * 2 + content_size;
+
+	#warning minimal panel size?
+	//size = s16_vec2_max(size, simple_theme_data->base_unit_size);
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->panel_border.y * 2;
 	}
 
 	return size;
@@ -245,12 +376,12 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			font_size = 13;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = s16_vec2_set(16, 16),// min size
-				.box_border           = s16_vec2_set(1, 1),
-				.box_content_border   = s16_vec2_set(2, 2),
-				.box_text_border      = s16_vec2_set(6, 2),
-				.panel_content_border = s16_vec2_set(3, 3),
-				.panel_border         = s16_vec2_set(1, 1),
+				.base_unit_size        = s16_vec2_set(16, 16),// min size
+				.normal_border         = s16_vec2_set(1, 1),
+				.box_content_border = s16_vec2_set(2, 2),
+				.box_text_border    = s16_vec2_set(6, 2),
+				.panel_content_border  = s16_vec2_set(3, 3),
+				.panel_border          = s16_vec2_set(1, 1),
 			};
 			break;
 		default:
@@ -263,24 +394,24 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			// font_size = 13 * 64 + 32;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = s16_vec2_set(20, 20),// min size// test button A
-				.box_border           = s16_vec2_set(1, 1),
-				.box_content_border   = s16_vec2_set(2, 2),
-				.box_text_border      = s16_vec2_set(8, 2),
-				.panel_content_border = s16_vec2_set(4, 4),
-				.panel_border         = s16_vec2_set(1, 1),
+				.base_unit_size        = s16_vec2_set(20, 20),// min size// test button A
+				.normal_border         = s16_vec2_set(1, 1),
+				.box_content_border = s16_vec2_set(2, 2),
+				.box_text_border    = s16_vec2_set(8, 2),
+				.panel_content_border  = s16_vec2_set(4, 4),
+				.panel_border          = s16_vec2_set(1, 1),
 			};
 			break;
 		case 2: // large
 			font_size = 24;
 			*simple_theme_data = (struct sol_gui_theme_simple_data)
 			{
-				.base_unit_size       = s16_vec2_set(30, 30),// min size
-				.box_border           = s16_vec2_set(2, 2),
-				.box_content_border   = s16_vec2_set(3, 3),
-				.box_text_border      = s16_vec2_set(12, 3),
-				.panel_content_border = s16_vec2_set(6, 6),
-				.panel_border         = s16_vec2_set(2, 2),
+				.base_unit_size        = s16_vec2_set(30, 30),// min size
+				.normal_border         = s16_vec2_set(2, 2),
+				.box_content_border = s16_vec2_set(3, 3),
+				.box_text_border    = s16_vec2_set(12, 3),
+				.panel_content_border  = s16_vec2_set(6, 6),
+				.panel_border          = s16_vec2_set(2, 2),
 			};
 			break;//
 	}
@@ -304,15 +435,24 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.icon_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
 		.other_data = simple_theme_data,
 
-		.box_render          = &sol_gui_theme_simple_box_render,
-		.box_select          = &sol_gui_theme_simple_box_select,
-		.box_place_content   = &sol_gui_theme_simple_box_place_content,
-		.box_size            = &sol_gui_theme_simple_box_size,
+		.normal_size_x           = &sol_gui_theme_simple_normal_size_x,
+		.normal_size_y           = &sol_gui_theme_simple_normal_size_y,
+		.normal_content_extent_x = &sol_gui_theme_simple_normal_content_extent_x,
+		.normal_content_extent_y = &sol_gui_theme_simple_normal_content_extent_y,
 
-		.panel_render        = &sol_gui_theme_simple_panel_render,
-		.panel_select        = &sol_gui_theme_simple_panel_select,
-		.panel_place_content = &sol_gui_theme_simple_panel_place_content,
-		.panel_size          = &sol_gui_theme_simple_panel_size,
+		.box_render              = &sol_gui_theme_simple_box_render,
+		.box_select              = &sol_gui_theme_simple_box_select,
+		.box_size_x              = &sol_gui_theme_simple_box_size_x,
+		.box_size_y              = &sol_gui_theme_simple_box_size_y,
+		.box_content_extent_x    = &sol_gui_theme_simple_box_content_extent_x,
+		.box_content_extent_y    = &sol_gui_theme_simple_box_content_extent_y,
+
+		.panel_render            = &sol_gui_theme_simple_panel_render,
+		.panel_select            = &sol_gui_theme_simple_panel_select,
+		.panel_size_x            = &sol_gui_theme_simple_panel_size_x,
+		.panel_size_y            = &sol_gui_theme_simple_panel_size_y,
+		.panel_contents_extent_x = &sol_gui_theme_simple_panel_content_extent_x,
+		.panel_contents_extent_y = &sol_gui_theme_simple_panel_content_extent_y,
 	};
 
 	assert(theme->text_font);

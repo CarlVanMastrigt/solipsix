@@ -29,7 +29,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/context.h"
 #include "gui/objects/container.h"
 
-
+#include "sol_utils.h"
 
 
 
@@ -263,34 +263,33 @@ void sol_gui_context_update_screen_offset(struct sol_gui_context* context, s16_v
 	context->window_offset = window_offset;
 }
 
-/// this is different than reorganise root, this assumes min_sizes havent changed
 bool sol_gui_context_update_screen_size(struct sol_gui_context* context, s16_vec2 window_size)
 {
-	// puts("UPDATE SCREEN SIZE");
-	// if the sizes arent both equal, need to reorganise
 	if(!m16_vec2_all(s16_vec2_cmp_eq(window_size, context->window_size)))
 	{
-		// puts("DO UPDATE");
-		context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, window_size));
 		context->window_size = window_size;
-		s16_rect content_rect = {.start={0,0}, .end = s16_vec2_max(context->window_min_size, context->window_size)};
-		printf("CR: %d %d -> %d %d\n", content_rect.start.x, content_rect.start.y, content_rect.end.x, content_rect.end.y);
-		sol_gui_object_place_content(context->root_container, content_rect);
+		sol_gui_context_reorganise_root(context);
 	}
 
-	return context->content_fit;
+	return true;
 }
 
 // call this when contents of all widgets may have changed, e.g. at crteation time, after theme change, if a single "toplevel" object in root has changed, instead try to be more precise
 bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 {
-	context->window_min_size = sol_gui_object_min_size(context->root_container, SOL_GUI_OBJECT_POSITION_FLAGS_ALL);
+	s16_extent extent;
+
+	sol_gui_object_set_position_flags(context->root_container, SOL_GUI_OBJECT_POSITION_FLAGS_ALL);
+
+	context->window_min_size.x = sol_gui_object_min_size_x(context->root_container);
+	extent = s16_extent_set(0, SOL_MAX(context->window_min_size.x, context->window_size.x));
+	sol_gui_object_set_extent_x(context->root_container, extent);
+
+	context->window_min_size.y = sol_gui_object_min_size_y(context->root_container);
+	extent = s16_extent_set(0, SOL_MAX(context->window_min_size.y, context->window_size.y));
+	sol_gui_object_set_extent_y(context->root_container, extent);
 
 	context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, context->window_size));
-
-	s16_rect content_rect = {.start={0,0}, .end = s16_vec2_max(context->window_min_size, context->window_size)};
-	sol_gui_object_place_content(context->root_container, content_rect);
-
 	return context->content_fit;
 }
 
@@ -298,7 +297,7 @@ void sol_gui_context_render(struct sol_gui_context* context, struct sol_overlay_
 {
 	struct sol_gui_object* root_container = context->root_container;
 
-	if(!m16_vec2_all(s16_vec2_cmp_eq(root_container->position.start, s16_vec2_set(0, 0))))
+	if(root_container->rect.x.start != 0 || root_container->rect.y.start)
     {
         fprintf(stderr, "GUI rendering expects the root widget to start at 0,0\n");
     }
@@ -310,7 +309,7 @@ struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context,
 {
 	struct sol_gui_object* root_container = context->root_container;
 
-	if(!m16_vec2_all(s16_vec2_cmp_eq(root_container->position.start, s16_vec2_set(0, 0))))
+	if(root_container->rect.x.start != 0 || root_container->rect.y.start)
     {
         fprintf(stderr, "GUI hit scan expects the root widget to start at 0,0\n");
     }

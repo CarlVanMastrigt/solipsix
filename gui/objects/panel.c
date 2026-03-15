@@ -32,7 +32,7 @@ struct sol_gui_panel
 	uint32_t inset_content: 1;
 };
 
-void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
+static void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
@@ -42,11 +42,11 @@ void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct 
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
-		sol_gui_object_render(child, position.start, batch);
+		sol_gui_object_render(child, s16_rect_start(position), batch);
 	}
 }
 
-struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
+static struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
@@ -56,7 +56,7 @@ struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_re
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		// child location is relative to parent
-		result = sol_gui_object_hit_scan(child, position.start, location);
+		result = sol_gui_object_hit_scan(child, s16_rect_start(position), location);
 		if(result)
 		{
 			return result;
@@ -71,38 +71,83 @@ struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj, s16_re
 
 	return NULL;
 }
-static s16_vec2 sol_gui_panel_min_size(struct sol_gui_object* obj)
+static void sol_gui_panel_distribute_position_flags(struct sol_gui_object* obj, uint32_t position_flags)
+{
+	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
+	struct sol_gui_object* child = panel->child;
+
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	{
+		#warning might be good to have panels apply implicit spacing to their children based on flags ?
+		sol_gui_object_set_position_flags(child, position_flags);
+	}
+}
+static int16_t sol_gui_panel_min_size_x(struct sol_gui_object* obj)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
-	s16_vec2 content_min_size;
-	uint32_t position_flags;
-
-	position_flags = panel->inset_content ? 0 : obj->flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
+	int16_t content_min_size;
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
-		content_min_size = sol_gui_object_min_size(child, position_flags);
+		content_min_size = sol_gui_object_min_size_x(child);
 	}
 	else
 	{
-		content_min_size = s16_vec2_set(0, 0);
+		content_min_size = 0;
 	}
 
-	return theme->panel_size(theme, obj->flags, content_min_size);
+	return theme->panel_size_x(theme, obj->flags, content_min_size);
 }
-static void sol_gui_panel_place_content(struct sol_gui_object* obj, s16_vec2 dimensions)
+static int16_t sol_gui_panel_min_size_y(struct sol_gui_object* obj)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
-
-	s16_rect content_rect = theme->panel_place_content(theme, obj->flags, s16_rect_at_origin_with_size(dimensions));
+	int16_t content_min_size;
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
-		sol_gui_object_place_content(child, content_rect);
+		content_min_size = sol_gui_object_min_size_y(child);
+	}
+	else
+	{
+		content_min_size = 0;
+	}
+
+	return theme->panel_size_y(theme, obj->flags, content_min_size);
+}
+static void sol_gui_panel_set_extent_x(struct sol_gui_object* obj, s16_extent extent)
+{
+	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
+	struct sol_gui_theme* theme = obj->context->theme;
+	struct sol_gui_object* child = panel->child;
+	s16_extent content_extent;
+
+	/** make extent relative */
+	content_extent = s16_extent_from_start(extent);
+
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	{
+		content_extent = theme->panel_contents_extent_x(theme, obj->flags, content_extent);
+		sol_gui_object_set_extent_x(child, content_extent);
+	}
+}
+static void sol_gui_panel_set_extent_y(struct sol_gui_object* obj, s16_extent extent)
+{
+	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
+	struct sol_gui_theme* theme = obj->context->theme;
+	struct sol_gui_object* child = panel->child;
+	s16_extent content_extent;
+
+	/** make extent relative */
+	content_extent = s16_extent_from_start(extent);
+
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	{
+		content_extent = theme->panel_contents_extent_y(theme, obj->flags, content_extent);
+		sol_gui_object_set_extent_y(child, content_extent);
 	}
 }
 void sol_gui_panel_add_child(struct sol_gui_object* obj, struct sol_gui_object* child)
@@ -142,13 +187,16 @@ void sol_gui_panel_destroy(struct sol_gui_object* obj)
 
 static const struct sol_gui_object_structure_functions sol_gui_panel_functions =
 {
-	.render        = &sol_gui_panel_render,
-	.hit_scan      = &sol_gui_panel_hit_scan,
-	.min_size      = &sol_gui_panel_min_size,
-	.place_content = &sol_gui_panel_place_content,
-	.add_child     = &sol_gui_panel_add_child,
-	.remove_child  = &sol_gui_panel_remove_child,
-	.destroy       = &sol_gui_panel_destroy,
+	.render                    = &sol_gui_panel_render,
+	.hit_scan                  = &sol_gui_panel_hit_scan,
+	.distribute_position_flags = NULL,
+	.min_size_x                = &sol_gui_panel_min_size_x,
+	.min_size_y                = &sol_gui_panel_min_size_y,
+	.set_extent_x              = &sol_gui_panel_set_extent_x,
+	.set_extent_y              = &sol_gui_panel_set_extent_y,
+	.add_child                 = &sol_gui_panel_add_child,
+	.remove_child              = &sol_gui_panel_remove_child,
+	.destroy                   = &sol_gui_panel_destroy,
 };
 
 void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered, bool inset_content)

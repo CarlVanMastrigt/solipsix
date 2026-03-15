@@ -36,13 +36,18 @@ struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* c
 
 struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container);
 
-// min_size and place content should be varied by anything that would use this, the following however may be shared
+/** generic functions */
 void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location);
 void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_destroy(struct sol_gui_object* obj);
 
+void sol_gui_container_distribute_position_flags(struct sol_gui_object* obj, uint32_t position_flags);
+int16_t sol_gui_container_min_size_x(struct sol_gui_object* obj);
+int16_t sol_gui_container_min_size_y(struct sol_gui_object* obj);
+void sol_gui_container_set_extent_x(struct sol_gui_object* obj, s16_extent extent_x);
+void sol_gui_container_set_extent_y(struct sol_gui_object* obj, s16_extent extent_y);
 
 /** moves a child (potentioaly) relative to a sibling
  * if placement is start/end sibling will be ignored (may be NULL)

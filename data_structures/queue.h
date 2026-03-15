@@ -291,6 +291,16 @@ static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_access_index)(stru
     return true;
 }
 
+static inline uint32_t SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_count)(struct SOL_QUEUE_STRUCT_NAME* q)
+{
+    return q->count;
+}
+
+static inline bool SOL_CONCATENATE(SOL_QUEUE_FUNCTION_PREFIX,_is_empty)(struct SOL_QUEUE_STRUCT_NAME* q)
+{
+    return q->count == 0;
+}
+
 
 #undef SOL_QUEUE_ENTRY_TYPE
 #undef SOL_QUEUE_FUNCTION_PREFIX

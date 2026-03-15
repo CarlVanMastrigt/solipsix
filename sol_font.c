@@ -723,8 +723,8 @@ static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct
 	#warning calculate length here, including number (and position?) of breaks -- should be very quick
 
 	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
-	cursor_x =  (int32_t)(position.start.x) << 6;
-	cursor_y = ((int32_t)(position.end.y + position.start.y - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
+	cursor_x =  (int32_t)(position.x.start) << 6;
+	cursor_y = ((int32_t)(position.y.end + position.y.start - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
 	// printf("y: %u %u\n",cursor_y, cursor_y&63);
 
 	for(i = 0; i < glyph_count; i++)
@@ -782,11 +782,10 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
 
 	#warning this needs alignment to be as adaptable as desired
-	x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(position.end.x) << 6) : ((int32_t)(position.start.x) << 6);
+	x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(position.x.end) << 6) : ((int32_t)(position.x.start) << 6);
 
-	/** << 5 here is basically division by 2, as its working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
-	// cursor_y = ((int32_t)(position.end.y + position.start.y - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
-	y_base = ((int32_t)(position.end.y + position.start.y - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
+	/** << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
+	y_base = ((int32_t)(position.y.end + position.y.start - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
 
 
 	cursor = kbts_Cursor(font->kb.direction);
@@ -813,7 +812,7 @@ void sol_font_render_text_simple(const char* text, struct sol_font* font, enum s
 }
 
 
-s16_vec2 sol_font_size_text_simple_hb(const char* text, struct sol_font* font)
+static int16_t sol_font_size_text_x_simple_hb(const struct sol_font* font, const char* text)
 {
 	hb_buffer_t* buffer;
 	unsigned int i, glyph_count;
@@ -839,12 +838,23 @@ s16_vec2 sol_font_size_text_simple_hb(const char* text, struct sol_font* font)
 	}
 
 	advance = accumulated_subpixel_advance >> 6;
-	return s16_vec2_set(advance, font->normalised_orthogonal_size);
+	return advance;
 }
 
 s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
 {
-	return sol_font_size_text_simple_hb(text, font);
+	return s16_vec2_set(sol_font_size_text_x_simple_hb(font, text), font->normalised_orthogonal_size);
+}
+
+int16_t sol_font_size_text_x_simple(const char* text, struct sol_font* font)
+{
+	return sol_font_size_text_x_simple_hb(font, text);
+}
+
+int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font)
+{
+	#warning this could/should be informed as to whether font is vertical
+	return font->normalised_orthogonal_size;
 }
 
 
@@ -868,8 +878,8 @@ static inline void sol_font_render_centred_glyph(struct sol_font* font, uint16_t
 			uint16_t render_type = glyph_map_entry->atlas_type + 1;
 
 
-			offset_x = (position.start.x + position.end.x - glyph_map_entry->size_x) >> 1;
-			offset_y = (position.start.y + position.end.y - glyph_map_entry->size_y) >> 1;
+			offset_x = (position.x.start + position.x.end - glyph_map_entry->size_x) >> 1;
+			offset_y = (position.y.start + position.y.end - glyph_map_entry->size_y) >> 1;
 
 			*render_data =(struct sol_overlay_render_element)
 		    {
