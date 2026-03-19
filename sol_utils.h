@@ -79,6 +79,7 @@ static inline uint64_t sol_u64_exp_gt   (uint64_t v){ return (v < 1) ? 0  : 64-_
 static inline uint64_t sol_u64_exp_lt   (uint64_t v){ return (v < 2) ? 0  : 63-__builtin_clzl(v-1); }
 static inline uint64_t sol_u64_bit_count(uint64_t v){ return              __builtin_popcountl(v  ); }
 
+/** use these for smaller types also */
 static inline uint32_t sol_u32_ctz      (uint32_t v){ return (v < 1) ? 32 :    __builtin_ctz(v  ); }
 static inline uint32_t sol_u32_clz      (uint32_t v){ return (v < 1) ? 32 :    __builtin_clz(v  ); }
 static inline uint32_t sol_u32_exp_ge   (uint32_t v){ return (v < 2) ? 0  : 32-__builtin_clz(v-1); }

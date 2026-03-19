@@ -19,7 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#warning gui vs overlay is confusing, both have
+#warning gui vs overlay is confusing large parts of the code is shared, and they could/should be better delineated
 
 enum sol_overlay_colour
 {

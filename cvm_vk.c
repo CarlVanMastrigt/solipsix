@@ -219,7 +219,7 @@ VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance*
 
     if(!created_surface)
     {
-        fprintf(stderr, "ERROR CREAKING VKSURFACE: %s\n", SDL_GetError());
+        fprintf(stderr, "ERROR CREATING VKSURFACE: %s\n", SDL_GetError());
     }
 
     return created_surface ? surface : VK_NULL_HANDLE;

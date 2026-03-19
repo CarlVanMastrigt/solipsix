@@ -103,7 +103,7 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
-	struct sol_overlay_render_element* render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
+	struct sol_overlay_render_element* render_data;
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
@@ -130,13 +130,16 @@ static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_
 
 	if(s16_rect_valid(rect))
 	{
-		// uint32_t d0 = (0 << 30) | (colour << 24) ;
+		uint16_t type_and_colour = (0) | (colour << 4);
+
 		#warning should also check rect is positive at this point
+		render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
 		*render_data =(struct sol_overlay_render_element)
 	    {
-	        {rect.x.start, rect.y.start, rect.x.end, rect.y.end},
+	        {rect.x.start, rect.x.end, rect.y.start, rect.y.end},
+	        {type_and_colour, 0, 0, 0},
 	        {0, 0, 0, 0},
-	        {0, colour, 0, 0}
+	        {0, 0, 0, 0},
 	    };
 	}
 }
@@ -252,8 +255,7 @@ static int16_t sol_gui_theme_simple_box_size_y(struct sol_gui_theme* theme, uint
 static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
-
-	struct sol_overlay_render_element* render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
+	struct sol_overlay_render_element* render_data;
 
 	if(colour == SOL_OVERLAY_COLOUR_DEFAULT)
 	{
@@ -270,13 +272,16 @@ static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint3
 
 	if(s16_rect_valid(rect))
 	{
-		// uint32_t d0 = (0 << 30) | (colour << 24) ;
+		uint16_t type_and_colour = (0) | (colour << 4);
+
 		#warning should also check rect is positive at this point
+		render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
 		*render_data =(struct sol_overlay_render_element)
 	    {
-	        {rect.x.start, rect.y.start, rect.x.end, rect.y.end},
+	        {rect.x.start, rect.x.end, rect.y.start, rect.y.end},
+	        {type_and_colour, 0, 0, 0},
 	        {0, 0, 0, 0},
-	        {0, colour, 0, 0}
+	        {0, 0, 0, 0},
 	    };
 	}
 }

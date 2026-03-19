@@ -34,17 +34,22 @@ static VkResult sol_overlay_descriptor_pool_create(VkDescriptorPool* pool, struc
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,///by not specifying individual free must reset whole pool (which is fine)
-        .maxSets = active_render_count,
-        .poolSizeCount = 2,
-        .pPoolSizes=(VkDescriptorPoolSize[2])
+        .maxSets = active_render_count * (SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT + 1) + SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
+        .poolSizeCount = 3,
+        .pPoolSizes=(VkDescriptorPoolSize[3])
         {
             {
-                .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
                 .descriptorCount = active_render_count
             },
             {
-                .type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT * active_render_count
+                /** even though this doesnt change, setting it separately requires an entire descriptor set slot (though perhaps that is worth it) */ 
+            },
+            {
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT 
             },
         }
     };
@@ -53,8 +58,9 @@ static VkResult sol_overlay_descriptor_pool_create(VkDescriptorPool* pool, struc
 }
 
 
-#warning why again was it that images got incorporated into a per-frame layout rather than being shared? (was it just for simplicity?)
-static VkResult sol_overlay_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, struct cvm_vk_device * device)
+/** why again was it that images got incorporated into a per-frame layout rather than being shared? (was it just for simplicity?)
+ * ^ to reduce number of active sets (and thus set slot usage) */
+static VkResult sol_overlay_render_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, struct cvm_vk_device * device)
 {
     uint32_t i;
     VkSampler immutable_samplers[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
@@ -81,7 +87,7 @@ static VkResult sol_overlay_descriptor_set_layout_create(VkDescriptorSetLayout* 
                 .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = immutable_samplers,
-                #warning ^^ also test w/ null & setting samplers directly, probably MUCH preferred
+                /** even though this doesnt change, setting it separately requires an entire descriptor set slot (though perhaps that is worth it) */ 
             },
             {
                 .binding = 1,
@@ -96,7 +102,31 @@ static VkResult sol_overlay_descriptor_set_layout_create(VkDescriptorSetLayout* 
     return vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, set_layout);
 }
 
-static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_layout, struct cvm_vk_device * device, VkDescriptorSetLayout descriptor_set_layout)
+static VkResult sol_overlay_compute_atlas_target_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, struct cvm_vk_device * device)
+{
+    *set_layout = VK_NULL_HANDLE;
+
+    VkDescriptorSetLayoutCreateInfo create_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .bindingCount = 1,
+        .pBindings = (VkDescriptorSetLayoutBinding[1])
+        {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+        },
+    };
+
+    return vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, set_layout);
+}
+
+static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_layout, struct cvm_vk_device * device, VkDescriptorSetLayout render_descriptor_set_layout)
 {
     *pipeline_layout = VK_NULL_HANDLE;
 
@@ -108,7 +138,7 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
         .setLayoutCount = 1,
         .pSetLayouts = (VkDescriptorSetLayout[1])
         {
-            descriptor_set_layout,
+            render_descriptor_set_layout,
         },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = (VkPushConstantRange[1])
@@ -124,47 +154,97 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
     return vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, pipeline_layout);
 }
 
-void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device)
+static VkDescriptorSet sol_overlay_compute_atlas_target_descriptor_set_allocate_and_write(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, const struct sol_image_atlas* image_atlas)
 {
-    const struct sol_image_atlas_description bc4_atlas_description =
-    {
-        .format = VK_FORMAT_BC4_UNORM_BLOCK,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        .image_array_dimension = 1,
-        .image_x_dimension_exponent = 9,
-        .image_y_dimension_exponent = 9,
-        .grid_tile_size = u16_vec2_set(4, 4),
-    };
+    VkResult result;
+    VkDescriptorSet descriptor_set;
 
-    const struct sol_image_atlas_description r8_atlas_description =
+    VkDescriptorSetAllocateInfo allocate_info=
     {
-        .format = VK_FORMAT_R8_UNORM,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        .image_array_dimension = 1,
-        .image_x_dimension_exponent = 9,
-        .image_y_dimension_exponent = 9,
-        .grid_tile_size = u16_vec2_set(4, 4),
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = NULL,
+        .descriptorPool = persistent_resources->descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &persistent_resources->compute_atlas_target_descriptor_set_layout,
     };
+    
+    result = vkAllocateDescriptorSets(device->device, &allocate_info, &descriptor_set);
+    assert(result == VK_SUCCESS);
 
-    const struct sol_image_atlas_description rgba8_atlas_description =
-    {
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        .image_array_dimension = 1,
-        .image_x_dimension_exponent = 9,
-        .image_y_dimension_exponent = 9,
-        .grid_tile_size = u16_vec2_set(4, 4),
-    };
 
-    *overlay_rendering_resources = (struct sol_overlay_rendering_resources)
+    VkWriteDescriptorSet write =
     {
-        .atlases =
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext = NULL,
+        .dstSet = descriptor_set,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .pImageInfo = (VkDescriptorImageInfo[1])
         {
-            [SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4]         = sol_image_atlas_create(&bc4_atlas_description  , device),
-            [SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM]    = sol_image_atlas_create(&r8_atlas_description   , device),
-            [SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM] = sol_image_atlas_create(&rgba8_atlas_description, device)
+            {
+                .sampler = device->defaults.fetch_sampler,
+                .imageView = sol_image_atlas_access_image_view(image_atlas),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            }
+        },
+        .pBufferInfo = NULL,
+        .pTexelBufferView = NULL
+    };
+
+    vkUpdateDescriptorSets(device->device, 1, &write, 0, NULL);
+
+    return descriptor_set;
+}
+
+void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources)
+{
+    uint32_t i;
+    struct sol_image_atlas* atlas;
+    VkDescriptorSet descriptor_set;
+
+    *overlay_rendering_resources = (struct sol_overlay_rendering_resources){};
+
+    const struct sol_image_atlas_description atlas_descriptions[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT] =
+    {
+        [SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4] = 
+        {
+            .format = VK_FORMAT_BC4_UNORM_BLOCK,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            .image_array_dimension = 1,
+            .image_x_dimension_exponent = 9,
+            .image_y_dimension_exponent = 9,
+            .grid_tile_size = u16_vec2_set(4, 4),
+        },
+        [SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM] = 
+        {
+            .format = VK_FORMAT_R8_UNORM,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            .image_array_dimension = 1,
+            .image_x_dimension_exponent = 9,
+            .image_y_dimension_exponent = 9,
+            .grid_tile_size = u16_vec2_set(4, 4),
+        },
+        [SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM] = 
+        {
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .image_array_dimension = 1,
+            .image_x_dimension_exponent = 9,
+            .image_y_dimension_exponent = 9,
+            .grid_tile_size = u16_vec2_set(4, 4),
         }
     };
+
+    for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        atlas = sol_image_atlas_create(atlas_descriptions+i, device);
+        overlay_rendering_resources->atlases[i] = atlas;
+        
+        descriptor_set = sol_overlay_compute_atlas_target_descriptor_set_allocate_and_write(device, persistent_resources, atlas);
+        overlay_rendering_resources->image_atlas_compute_targets[i] = descriptor_set;
+    }
 }
 void sol_overlay_rendering_resources_terminate(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device)
 {
@@ -181,10 +261,10 @@ VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_r
     result = sol_overlay_descriptor_pool_create(&persistent_resources->descriptor_pool, device, active_render_count);
     assert(result == VK_SUCCESS);
 
-    result = sol_overlay_descriptor_set_layout_create(&persistent_resources->descriptor_set_layout, device);
+    result = sol_overlay_render_descriptor_set_layout_create(&persistent_resources->render_descriptor_set_layout, device);
     assert(result == VK_SUCCESS);
 
-    result = sol_overlay_pipeline_layout_create(&persistent_resources->pipeline_layout, device, persistent_resources->descriptor_set_layout);
+    result = sol_overlay_pipeline_layout_create(&persistent_resources->pipeline_layout, device, persistent_resources->render_descriptor_set_layout);
     assert(result == VK_SUCCESS);
 
     sol_vk_limited_descriptor_set_stack_initialise(&persistent_resources->descriptor_sets, active_render_count);
@@ -200,6 +280,11 @@ VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_r
         sol_vk_create_shader_stage_info(&persistent_resources->vertex_pipeline_stage,   device, "solipsix/shaders/overlay_reference.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         sol_vk_create_shader_stage_info(&persistent_resources->fragment_pipeline_stage, device, "solipsix/shaders/overlay_reference.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
     }
+
+
+
+    result = sol_overlay_compute_atlas_target_descriptor_set_layout_create(&persistent_resources->compute_atlas_target_descriptor_set_layout, device);
+    assert(result == VK_SUCCESS);
 
     return result;
 }
@@ -218,7 +303,11 @@ void sol_overlay_render_persistent_resources_terminate(struct sol_overlay_render
     sol_vk_limited_descriptor_set_stack_terminate(&persistent_resources->descriptor_sets);
 
     vkDestroyDescriptorPool(device->device, persistent_resources->descriptor_pool, device->host_allocator);
-    vkDestroyDescriptorSetLayout(device->device, persistent_resources->descriptor_set_layout, device->host_allocator);
+    vkDestroyDescriptorSetLayout(device->device, persistent_resources->render_descriptor_set_layout, device->host_allocator);
+    
+
+
+    vkDestroyDescriptorSetLayout(device->device, persistent_resources->compute_atlas_target_descriptor_set_layout, device->host_allocator);
 }
 
 VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device* device, struct sol_overlay_render_persistent_resources* persistent_resources)
@@ -232,7 +321,7 @@ VkDescriptorSet sol_overlay_render_descriptor_set_allocate(struct cvm_vk_device*
         .pNext = NULL,
         .descriptorPool = persistent_resources->descriptor_pool,
         .descriptorSetCount = 1,
-        .pSetLayouts = &persistent_resources->descriptor_set_layout,
+        .pSetLayouts = &persistent_resources->render_descriptor_set_layout,
     };
     
     result = vkAllocateDescriptorSets(device->device, &allocate_info, &descriptor_set);
@@ -285,19 +374,19 @@ VkPipeline sol_overlay_render_pipeline_create_static(struct cvm_vk_device* devic
                     .location = 1,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element, tex_coords)
+                    .offset = offsetof(struct sol_overlay_render_element, d1)
                 },
                 {
                     .location = 2,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element, other_data)
+                    .offset = offsetof(struct sol_overlay_render_element, d2)
                 },
                 {
                     .location = 3,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element, idk)
+                    .offset = offsetof(struct sol_overlay_render_element, d3)
                 },
             }
         },
@@ -447,19 +536,19 @@ VkPipeline sol_overlay_render_pipeline_create_dynamic(struct cvm_vk_device* devi
                     .location = 1,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element, tex_coords)
+                    .offset = offsetof(struct sol_overlay_render_element, d1)
                 },
                 {
                     .location = 2,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element, other_data)
+                    .offset = offsetof(struct sol_overlay_render_element, d2)
                 },
                 {
                     .location = 3,
                     .binding = 0,
                     .format = VK_FORMAT_R16G16B16A16_UINT,
-                    .offset = offsetof(struct sol_overlay_render_element, idk)
+                    .offset = offsetof(struct sol_overlay_render_element, d3)
                 },
             }
         },

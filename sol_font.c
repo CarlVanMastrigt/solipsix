@@ -671,18 +671,20 @@ static inline void sol_font_render_overlay_glyph(uint32_t glyph_codepoint, int32
 
 		assert(glyph_map_entry->atlas_type == SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM);
 
-
 		#warning clean this shit up (give it a general implementation!??) needs to clamp these values to the rect also!
-		render_data = sol_overlay_render_element_list_append_ptr(&render_batch->elements);
-		assert((uint16_t)colour < 256);
-		uint16_t array_layer_and_colour = colour | (glyph_atlas_location.array_layer << 8);
-		uint16_t render_type = glyph_map_entry->atlas_type + 1;
+		assert((uint16_t)colour < 4096);
+		uint16_t type_and_colour = (glyph_map_entry->atlas_type + 1) | (colour << 4);
+		uint16_t array_layer = glyph_atlas_location.array_layer;
+		uint16_t loc_x = glyph_atlas_location.offset.x;
+		uint16_t loc_y = glyph_atlas_location.offset.y;
 
+		render_data = sol_overlay_render_element_list_append_ptr(&render_batch->elements);
 		*render_data =(struct sol_overlay_render_element)
 	    {
-	        {offset_x, offset_y, offset_x + glyph_map_entry->size_x, offset_y + glyph_map_entry->size_y},
-	        {0, 0, glyph_atlas_location.offset.x, glyph_atlas_location.offset.y},
-	        {render_type, array_layer_and_colour, 0, colour}
+	        {offset_x, offset_x + glyph_map_entry->size_x, offset_y, offset_y + glyph_map_entry->size_y},
+	        {type_and_colour, array_layer, loc_x, loc_y},
+	        {0, 0, 0, 0},
+	        {0, 0, 0, 0},
 	    };
 	}
 }
@@ -872,20 +874,22 @@ static inline void sol_font_render_centred_glyph(struct sol_font* font, uint16_t
 			assert(glyph_map_entry->atlas_type == SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM);
 
 			#warning clean this shit up (give it a general implementation!??) needs to clamp these values to the rect also!
-			render_data = sol_overlay_render_element_list_append_ptr(&render_batch->elements);
-			assert((uint16_t)colour < 256);
-			uint16_t array_layer_and_colour = colour | (glyph_atlas_location.array_layer << 8);
-			uint16_t render_type = glyph_map_entry->atlas_type + 1;
-
+			assert((uint16_t)colour < 4096);
+			uint16_t type_and_colour = (glyph_map_entry->atlas_type + 1) | (colour << 4);
+			uint16_t array_layer = glyph_atlas_location.array_layer;
+			uint16_t loc_x = glyph_atlas_location.offset.x;
+			uint16_t loc_y = glyph_atlas_location.offset.y;
 
 			offset_x = (position.x.start + position.x.end - glyph_map_entry->size_x) >> 1;
 			offset_y = (position.y.start + position.y.end - glyph_map_entry->size_y) >> 1;
 
+			render_data = sol_overlay_render_element_list_append_ptr(&render_batch->elements);
 			*render_data =(struct sol_overlay_render_element)
 		    {
-		        {offset_x, offset_y, offset_x + glyph_map_entry->size_x, offset_y + glyph_map_entry->size_y},
-		        {0, 0, glyph_atlas_location.offset.x, glyph_atlas_location.offset.y},
-		        {render_type, array_layer_and_colour, 0, colour}
+		        {offset_x, offset_x + glyph_map_entry->size_x, offset_y, offset_y + glyph_map_entry->size_y},
+		        {type_and_colour, array_layer, loc_x, loc_y},
+		        {0, 0, 0, 0},
+		        {0, 0, 0, 0},
 		    };
 		}
 	}}

@@ -459,7 +459,7 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device* d
 
     cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue, active_render_count);
 
-    sol_overlay_rendering_resources_default_initialise(&renderer->overlay_rendering_resources, device);
+    sol_overlay_rendering_resources_default_initialise(&renderer->overlay_rendering_resources, device, &renderer->persistent_rendering_resources);
     renderer->staging_buffer = staging_buffer;
 
     cvm_overlay_target_resources_queue_initialise(&renderer->target_resources, 16);

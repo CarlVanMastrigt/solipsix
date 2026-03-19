@@ -19,6 +19,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #version 450
 
+// #extension GL_EXT_shader_explicit_arithmetic_types_int16 : enable
+#define u16vec4 uvec4
+#define u16vec2 uvec2
+#define i16vec3 ivec3
+#define uint16_t uint
+
+
 /// array, [0] = alpha image, [1] = colour image
 layout(set=0,binding=0) uniform sampler2DArray images[3];
 // layout(set=0,binding=0) uniform sampler2D images[3];
@@ -30,63 +37,37 @@ layout(set=0,binding=1) uniform overlay_colours
 
 /** rect can be passed in as relative... */
 
-layout(location=0) flat in uvec4 rect;/** note: u16 -- start_x, start_y, end_x, end_y */
-layout(location=1) flat in uvec4 d1;
-layout(location=2) flat in uvec4 d2;
-layout(location=3) flat in uvec4 d3;
+layout(location=0) flat in u16vec4 rect;/** note: u16 -- start_x, end_x, start_y, end_y */
+layout(location=1) flat in u16vec4 d1;
+layout(location=2) flat in u16vec4 d2;
+layout(location=3) flat in u16vec4 d3;
 
 layout(location=0) out vec4 c;
 
-/**
- * descriptions of inputs:
- */
-
 void main()
 {
-    uint render_type = d2.x & (0x000Fu);
+    uint16_t render_type = d1.x & uint16_t(0x000Fu);
+    uint16_t colour_index = d1.x >> 4;
 
-    uint array_layer = (d2.y >> 8u) & (0x00FFu);
-    uint colour_index = d2.y & (0x00FFu);
-    ivec3 atlas_coords = ivec3(gl_FragCoord.xy - rect.xy + d1.zw, array_layer);
+    uint16_t array_layer = d1.y & uint16_t(0x00FFu);
+    i16vec3 atlas_coords = i16vec3(gl_FragCoord.xy - rect.xz + d1.zw, array_layer);
 
 
-
-    if(render_type == 0)
+    switch(int(render_type))
     {
+    case 0:
         c = colours[colour_index];
-    }
-    else if (render_type == 1)
-    {
+        break;
+    case 1:
         c = colours[colour_index];
         c.a *= texelFetch(images[0], atlas_coords, 0).x;
-    }
-    else if (render_type == 2)
-    {
+        break;
+    case 2:
         c = colours[colour_index];
         c.a *= texelFetch(images[1], atlas_coords, 0).x;
-    }
-    else if(render_type == 3)
-    {
+        break;
+    case 3:
         c = texelFetch(images[2], atlas_coords, 0);
+        break;
     }
-
-    // mask/clip texture
-    // switch(d1.x&0xC0000000)///need to check assembly for if both paths are taken (and hence both loads!) and if so conditionally(?) load val early to use in each effective branch
-    // {
-    //     case 0x40000000: c.a=min(c.a, texelFetch(images[0], atlas_coords, 0).x);break;
-    //     case 0x80000000: c.a*=texelFetch(images[0], atlas_coords, 0).x;break;
-    // }
-
-    // r=(d1.y>>18)&0x3F;///left fade
-    // if(r>0) c.a*=min(1.0,(gl_FragCoord.x-float(rect.x-((d1.x>>18)&0x3F)))/float(r));
-
-    // r=(d1.y>>12)&0x3F;///top fade
-    // if(r>0) c.a*=min(1.0,(gl_FragCoord.y-float(rect.y-((d1.x>>12)&0x3F)))/float(r));
-
-    // r=(d1.y>>6)&0x3F;///right fade
-    // if(r>0) c.a*=min(1.0,(float(rect.z+((d1.x>>6)&0x3F))-gl_FragCoord.x)/float(r));
-
-    // r=d1.y&0x3F;///bottom fade
-    // if(r>0) c.a*=min(1.0,(float(rect.w+(d1.x&0x3F))-gl_FragCoord.y)/float(r));
-
 }

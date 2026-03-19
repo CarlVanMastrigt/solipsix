@@ -281,6 +281,8 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
         }
 	};
 
+	#warning if usage includes render: probably want to create a simple 2d view (and maybe more) for each layer
+
     result = vkCreateImageView(device->device, &view_create_info, device->host_allocator, &atlas->image_view);
     assert(result == VK_SUCCESS);
 
@@ -297,7 +299,6 @@ struct sol_image_atlas* sol_image_atlas_create(const struct sol_image_atlas_desc
 
 	sol_indices_stack_initialise(&atlas->transient_indices, 0);
 
-	/** NOTE: only up to 2M entries are actually supported by internal link indices, this upper bound on the map ENFRCES that this doesnt get exceeded */
 	struct sol_hash_map_descriptor map_descriptor = 
 	{/** move this to description? */
 		.entry_space_exponent_initial = 12,// 4096
@@ -624,7 +625,7 @@ struct sol_vk_supervised_image* sol_image_atlas_access_supervised_image(struct s
 	return &atlas->image;
 }
 
-VkImageView sol_image_atlas_access_image_view(struct sol_image_atlas* atlas)
+VkImageView sol_image_atlas_access_image_view(const struct sol_image_atlas* atlas)
 {
 	return atlas->image_view;
 }

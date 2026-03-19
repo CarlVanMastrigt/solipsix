@@ -136,10 +136,10 @@ typedef struct cvm_vk_instance_setup
 {
     const VkAllocationCallbacks* host_allocator;
 
-    const char** layer_names;
+    const char* const* layer_names;
     uint32_t layer_count;
 
-    const char** extension_names;
+    const char* const* extension_names;
     uint32_t extension_count;
 
     const char* application_name;

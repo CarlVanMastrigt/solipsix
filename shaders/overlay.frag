@@ -45,31 +45,29 @@ layout(location=0) out vec4 c;
 
 void main()
 {
-    uint16_t render_type = d2.x & uint16_t(0x000Fu);
+    uint16_t render_type = d1.x & uint16_t(0x000Fu);
+    uint16_t colour_index = d1.x >> 4;
 
-    uint16_t array_layer = (d2.y >> 8u) & uint16_t(0x00FFu);
-    uint16_t colour_index = d2.y & uint16_t(0x00FFu);
+    uint16_t array_layer = d1.y & uint16_t(0x00FFu);
     i16vec3 atlas_coords = i16vec3(gl_FragCoord.xy - rect.xy + d1.zw, array_layer);
 
 
-
-    if(render_type == 0)
+    switch(int(render_type))
     {
+    case 0:
         c = colours[colour_index];
-    }
-    else if (render_type == 1)
-    {
+        break;
+    case 1:
         c = colours[colour_index];
         c.a *= texelFetch(images[0], atlas_coords, 0).x;
-    }
-    else if (render_type == 2)
-    {
+        break;
+    case 2:
         c = colours[colour_index];
         c.a *= texelFetch(images[1], atlas_coords, 0).x;
-    }
-    else if(render_type == 3)
-    {
+        break;
+    case 3:
         c = texelFetch(images[2], atlas_coords, 0);
+        break;
     }
 
     // mask/clip texture

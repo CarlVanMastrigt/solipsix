@@ -33,9 +33,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_overlay_render_element
 {
     int16_t pos_rect[4];/// start(x,y), end(x,y)
-    uint16_t tex_coords[4];/// base_tex(x,y), mask_tex(x,y)
-    uint16_t other_data[4];// extra data - texture_id:2 - reserved
-    uint16_t idk[4];// reserved
+    uint16_t d1[4];
+    uint16_t d2[4];
+    uint16_t d3[4];
 };
 
 #define SOL_STACK_ENTRY_TYPE struct sol_overlay_render_element
@@ -62,9 +62,12 @@ struct sol_overlay_render_persistent_resources
 
     /** for creating the render pipeline */
     VkPipelineLayout pipeline_layout;
-    VkDescriptorSetLayout descriptor_set_layout;
+    VkDescriptorSetLayout render_descriptor_set_layout;
     VkPipelineShaderStageCreateInfo vertex_pipeline_stage;
     VkPipelineShaderStageCreateInfo fragment_pipeline_stage;
+    
+    /** for external preparation (compute) */
+    VkDescriptorSetLayout compute_atlas_target_descriptor_set_layout;
 };
 
 /** this should only be called once at program start, only need one sol_overlay_render_resources */
@@ -88,9 +91,12 @@ struct sol_overlay_rendering_resources
      * some of these may be null depending on implementation details
      * these will, in order, match bind points in shader that renders overlay elements */
     struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    VkDescriptorSet image_atlas_compute_targets[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+
+
 };
 
-void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device); 
+void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources); 
 void sol_overlay_rendering_resources_terminate(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device); 
 
 

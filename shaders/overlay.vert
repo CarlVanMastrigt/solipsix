@@ -39,16 +39,14 @@ layout (push_constant) uniform screen_dimensions
 
 void main()
 {
-    uvec2 p;
+    u16vec2 p;
     switch(gl_VertexIndex)
     {
-        case 0 : p=rect.xy; break;
-        case 1 : p=rect.xw; break;
-        case 2 : p=rect.zy; break;
-        default: p=rect.zw;// 3
+        case 0: p = rect.xz; break;
+        case 1: p = rect.yz; break;
+        case 2: p = rect.xw; break;
+        case 3: p = rect.yw; break;
     }
-
-
 
     gl_Position=vec4(p*inv_screen_size_doubled-1.0, 0.0, 1.0);
 
