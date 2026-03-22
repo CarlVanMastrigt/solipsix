@@ -45,10 +45,10 @@ struct sol_overlay_render_element
 
 enum sol_overlay_image_atlas_type
 {
-    SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4,
-    SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM,
-    SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM,
-    SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4 = 0,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM = 1,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM = 2,
+    SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT = 3,
 };
 
 
@@ -91,7 +91,7 @@ struct sol_overlay_rendering_resources
      * some of these may be null depending on implementation details
      * these will, in order, match bind points in shader that renders overlay elements */
     struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-    VkDescriptorSet image_atlas_compute_targets[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
+    VkDescriptorSet compute_target_array;
 };
 
 void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources); 

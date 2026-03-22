@@ -40,16 +40,16 @@ static VkResult sol_overlay_descriptor_pool_create(VkDescriptorPool* pool, struc
         {
             {
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount = active_render_count
+                .descriptorCount = active_render_count,
             },
             {
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT * active_render_count
+                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT * active_render_count,
                 /** even though this doesnt change, setting it separately requires an entire descriptor set slot (though perhaps that is worth it) */ 
             },
             {
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT 
+                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
             },
         }
     };
@@ -102,30 +102,6 @@ static VkResult sol_overlay_render_descriptor_set_layout_create(VkDescriptorSetL
     return vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, set_layout);
 }
 
-static VkResult sol_overlay_compute_atlas_target_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, struct cvm_vk_device * device)
-{
-    *set_layout = VK_NULL_HANDLE;
-
-    VkDescriptorSetLayoutCreateInfo create_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .pNext = NULL,
-        .flags = 0,
-        .bindingCount = 1,
-        .pBindings = (VkDescriptorSetLayoutBinding[1])
-        {
-            {
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
-        },
-    };
-
-    return vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, set_layout);
-}
-
 static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_layout, struct cvm_vk_device * device, VkDescriptorSetLayout render_descriptor_set_layout)
 {
     *pipeline_layout = VK_NULL_HANDLE;
@@ -154,10 +130,36 @@ static VkResult sol_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_la
     return vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, pipeline_layout);
 }
 
-static VkDescriptorSet sol_overlay_compute_atlas_target_descriptor_set_allocate_and_write(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, const struct sol_image_atlas* image_atlas)
+static VkResult sol_overlay_compute_atlas_target_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, struct cvm_vk_device * device)
+{
+    *set_layout = VK_NULL_HANDLE;
+
+    VkDescriptorSetLayoutCreateInfo create_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .bindingCount = 1,
+        .pBindings = (VkDescriptorSetLayoutBinding[1])
+        {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+        },
+    };
+
+    return vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, set_layout);
+}
+
+static VkDescriptorSet sol_overlay_compute_atlas_targets_descriptor_set_allocate_and_write(struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources, struct sol_image_atlas** image_atlas_array)
 {
     VkResult result;
     VkDescriptorSet descriptor_set;
+    uint32_t i;
+    VkDescriptorImageInfo image_descriptor_info[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
 
     VkDescriptorSetAllocateInfo allocate_info=
     {
@@ -171,6 +173,15 @@ static VkDescriptorSet sol_overlay_compute_atlas_target_descriptor_set_allocate_
     result = vkAllocateDescriptorSets(device->device, &allocate_info, &descriptor_set);
     assert(result == VK_SUCCESS);
 
+    for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        image_descriptor_info[i] = (VkDescriptorImageInfo)
+        {
+            .sampler = device->defaults.fetch_sampler,
+            .imageView = sol_image_atlas_access_image_view(image_atlas_array[i]),
+            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        };
+    }
 
     VkWriteDescriptorSet write =
     {
@@ -179,16 +190,9 @@ static VkDescriptorSet sol_overlay_compute_atlas_target_descriptor_set_allocate_
         .dstSet = descriptor_set,
         .dstBinding = 0,
         .dstArrayElement = 0,
-        .descriptorCount = 1,
+        .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .pImageInfo = (VkDescriptorImageInfo[1])
-        {
-            {
-                .sampler = device->defaults.fetch_sampler,
-                .imageView = sol_image_atlas_access_image_view(image_atlas),
-                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-            }
-        },
+        .pImageInfo = image_descriptor_info,
         .pBufferInfo = NULL,
         .pTexelBufferView = NULL
     };
@@ -241,16 +245,18 @@ void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rende
     {
         atlas = sol_image_atlas_create(atlas_descriptions+i, device);
         overlay_rendering_resources->atlases[i] = atlas;
-        
-        descriptor_set = sol_overlay_compute_atlas_target_descriptor_set_allocate_and_write(device, persistent_resources, atlas);
-        overlay_rendering_resources->image_atlas_compute_targets[i] = descriptor_set;
     }
+
+    overlay_rendering_resources->compute_target_array = sol_overlay_compute_atlas_targets_descriptor_set_allocate_and_write(device, persistent_resources, overlay_rendering_resources->atlases);
 }
 void sol_overlay_rendering_resources_terminate(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device)
 {
-    sol_image_atlas_destroy(overlay_rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_BC4]        , device);
-    sol_image_atlas_destroy(overlay_rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_R8_UNORM]   , device);
-    sol_image_atlas_destroy(overlay_rendering_resources->atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_RGBA8_UNORM], device);
+    uint32_t i;
+
+    for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
+    {
+        sol_image_atlas_destroy(overlay_rendering_resources->atlases[i], device);
+    }
 }
 
 VkResult sol_overlay_render_persistent_resources_initialise(struct sol_overlay_render_persistent_resources* persistent_resources, struct cvm_vk_device* device, uint32_t active_render_count)
