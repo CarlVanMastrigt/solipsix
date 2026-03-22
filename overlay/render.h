@@ -92,8 +92,6 @@ struct sol_overlay_rendering_resources
      * these will, in order, match bind points in shader that renders overlay elements */
     struct sol_image_atlas* atlases[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
     VkDescriptorSet image_atlas_compute_targets[SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT];
-
-
 };
 
 void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device, const struct sol_overlay_render_persistent_resources* persistent_resources); 

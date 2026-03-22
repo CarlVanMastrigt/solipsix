@@ -116,7 +116,7 @@ static VkResult sol_overlay_compute_atlas_target_descriptor_set_layout_create(Vk
         {
             {
                 .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .descriptorCount = SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
             },
