@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025, 2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -24,12 +24,29 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "math/s16_vec2.h"
 #include "math/s16_rect.h"
 
+#include "solipsix/gui/variable_bar_distribution.h"
+
 /** size classes:
  * size classes allow the creation of boxes that neatly fit inside one another and can fulfill different purposes
+ * would replace box, panel &c.
 */
 
 #warning for texturing may want overlay to know window position relative to screen
 
+enum sol_variable_bar_selection_result_type
+{
+    SOL_VARIABLE_BAR_SELECTION_INTERIOR,/** the grabbable interior was selected */
+    SOL_VARIABLE_BAR_SELECTION_EXTERIOR,/** a non grabable part of the bar was selected */
+};
+
+struct sol_variable_bar_selection_result
+{
+    enum sol_variable_bar_selection_result_type type;
+    int16_t offset;
+
+    /** relative to the rect passed in (i.e. in the same space) the range over which the provided distribution will actually vary */
+    s16_extent extent;
+};
 
 struct sol_overlay_render_batch;
 struct sol_font;
@@ -57,28 +74,43 @@ struct sol_gui_theme
     */
 
     /** these should allow lining up custom widgets with the lines on boxes */ 
-    int16_t    (*normal_size_x)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
-    int16_t    (*normal_size_y)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
-    s16_extent (*normal_content_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent extent);
-    s16_extent (*normal_content_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent extent);
+    int16_t    (*generic_size_x)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    int16_t    (*generic_size_y)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    s16_extent (*generic_content_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent outer_extent);
+    s16_extent (*generic_content_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent outer_extent);
 
-    void       (*box_render)           (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
-    bool       (*box_select)           (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);/// box should be offset should be such that the origin is the selection point to be queried
-    int16_t    (*box_size_x)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
-    int16_t    (*box_size_y)           (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
-    s16_extent (*box_content_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent box_extent);
-    s16_extent (*box_content_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent box_extent);
+
+    void       (*box_render)              (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour colour);
+    bool       (*box_select)              (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);/// box should be offset should be such that the origin is the selection point to be queried
+    int16_t    (*box_size_x)              (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    int16_t    (*box_size_y)              (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    /** given the extent of the box itself, get the extent of its contents */
+    s16_extent (*box_content_extent_x)    (struct sol_gui_theme* theme, uint32_t flags, s16_extent box_extent);
+    s16_extent (*box_content_extent_y)    (struct sol_gui_theme* theme, uint32_t flags, s16_extent box_extent);
     /** above return extent in same space as the panel extent */
     // may need a function that subtracts borders for items that require clipping to be passed on, OR parent information can be passed down (bounds and flags that dictate borders)
 
     // box render with scroll information ?? (for localised scroll, can be extra)
-    void       (*panel_render)            (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch);
+    void       (*panel_render)            (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour colour);
     bool       (*panel_select)            (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location);
     int16_t    (*panel_size_x)            (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
     int16_t    (*panel_size_y)            (struct sol_gui_theme* theme, uint32_t flags, int16_t content_size);
+    /** given the extent of the panel itself, get the extent of its contents */
     s16_extent (*panel_contents_extent_x) (struct sol_gui_theme* theme, uint32_t flags, s16_extent panel_extent);
     s16_extent (*panel_contents_extent_y) (struct sol_gui_theme* theme, uint32_t flags, s16_extent panel_extent);
     /** above return extent in same space as the panel extent */
+
+    /** these are used for generic scroll bars */
+
+    void (*horizontal_variable_bar_render) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour colour, struct sol_variable_bar_distribution distribution);
+    
+    /** result will respect being NULL */
+    bool (*horizontal_variable_bar_select) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, s16_vec2 location, struct sol_variable_bar_distribution distribution, struct sol_variable_bar_selection_result* result);
+
+    /** same as the extent in the result of select above */
+    s16_extent (*horizontal_variable_bar_extent) (struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct sol_variable_bar_distribution distribution);
+
+
 
     #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
     // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)

@@ -664,6 +664,7 @@ void sol_overlay_render_batch_initialise(struct sol_overlay_render_batch* batch,
     VkDeviceSize upload_buffer_alignment = sol_vk_buffer_alignment_requirements(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     sol_overlay_render_element_list_initialise(&batch->elements, 64);
+    sol_overlay_rendering_deferred_operation_list_initialise(&batch->deferred_operations, 64);
 
     /** note: fixed/limited size lends itself well to buddy allocator use */
     sol_buffer_initialise(&batch->upload_buffer, upload_buffer_size, upload_buffer_alignment);
@@ -685,6 +686,7 @@ void sol_overlay_render_batch_terminate(struct sol_overlay_render_batch* batch)
 
     sol_buffer_terminate(&batch->upload_buffer);
 
+    sol_overlay_rendering_deferred_operation_list_terminate(&batch->deferred_operations);
     sol_overlay_render_element_list_terminate(&batch->elements);
 }
 
@@ -811,13 +813,15 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     batch->descriptor_set = descriptor_set;
 }
 
-void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer)
+void sol_overlay_render_step_early_gpu_work(struct sol_overlay_render_batch* batch, struct sol_overlay_rendering_resources* rendering_resources, struct cvm_vk_device* device, VkCommandBuffer command_buffer)
 {
     struct sol_vk_supervised_image* atlas_supervised_image;
     struct sol_vk_buf_img_copy_list* atlas_copy_list;
-    VkBuffer     staging_buffer;
+    struct sol_overlay_rendering_deferred_operation deferred_operation;
+    VkBuffer staging_buffer;
     VkDeviceSize staging_offset;
     uint32_t i;
+    uint32_t deferred_operation_count;
 
     staging_buffer = batch->staging_buffer_allocation.acquired_buffer;
     staging_offset = batch->upload_offset;
@@ -828,12 +832,18 @@ void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch
         atlas_supervised_image = sol_image_atlas_access_supervised_image(batch->rendering_resources->atlases[i]);
         sol_vk_supervised_image_execute_copies(atlas_supervised_image, atlas_copy_list, command_buffer, staging_buffer, staging_offset);
     }
-}
 
-void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer)
-{
-    struct sol_vk_supervised_image* atlas_supervised_image;
-    uint32_t i;
+    deferred_operation_count = batch->deferred_operations.count;
+    for (i=0;i< deferred_operation_count; i++)
+    {
+        deferred_operation = batch->deferred_operations.data[i];
+        deferred_operation.render_function(command_buffer, device, rendering_resources, deferred_operation.context_data);
+    }
+    // while(sol_overlay_rendering_deferred_operation_list_withdraw_ptr(&batch->deferred_operations, &deferred_operation))
+    // {
+    //     deferred_operation->render_function(command_buffer, device, rendering_resources, deferred_operation->context_data);
+    // }
+
 
     for(i = 0; i < SOL_OVERLAY_IMAGE_ATLAS_TYPE_COUNT; i++)
     {
@@ -890,6 +900,7 @@ void sol_overlay_render_step_completion(struct sol_overlay_render_batch* batch, 
 
     sol_buffer_reset(&batch->upload_buffer);
     sol_overlay_render_element_list_reset(&batch->elements);
+    sol_overlay_rendering_deferred_operation_list_reset(&batch->deferred_operations);
 }
 
 

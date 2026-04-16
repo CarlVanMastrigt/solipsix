@@ -231,6 +231,7 @@ struct cvm_vk_device
     const VkPhysicalDeviceMemoryProperties memory_properties;
 
     const VkPhysicalDeviceFeatures2 features;// enabled features
+    // features that internal systems care about
     bool feature_swapchain_maintainence;
     bool feature_int_16_shader_types;
 

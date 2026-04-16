@@ -547,12 +547,8 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
     /// setup/reset the render batch
     sol_overlay_render_step_compose_elements(render_batch, gui_context, &renderer->overlay_rendering_resources, target->extent);
     sol_overlay_render_step_write_descriptors(render_batch, device, renderer->staging_buffer, overlay_colours, transient_resources->descriptor_set);
-    sol_overlay_render_step_submit_vk_transfers(render_batch, cb.buffer);
-    sol_overlay_render_step_insert_vk_barriers(render_batch, cb.buffer);/** optional, can be managed manually if altases are used for other things too */
+    sol_overlay_render_step_early_gpu_work(render_batch, &renderer->overlay_rendering_resources, device, cb.buffer);
     cvm_overlay_add_target_acquire_instructions(&cb, target);
-
-
-
 
     VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
     {

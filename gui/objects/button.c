@@ -123,7 +123,7 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect posi
 	const char* text = sol_gui_button_get_buffer_const(button);
 	s16_rect text_rect;
 
-	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+	theme->box_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
 	text_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);
 	text_rect.y = theme->box_content_extent_y(theme, obj->flags, position.y);
@@ -199,7 +199,7 @@ static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect
 	const char* text = sol_gui_button_get_buffer_const(button);
 	s16_rect icon_rect;
 
-	theme->box_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+	theme->box_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
 
 	icon_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);

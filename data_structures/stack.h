@@ -228,6 +228,7 @@ static inline SOL_STACK_ENTRY_TYPE SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_ge
     assert(index < s->count);
     return s->data[index];
 }
+#warning consider making this actually maintain order, potentially with a name that communicates this...
 static inline void SOL_CONCATENATE(SOL_STACK_FUNCTION_PREFIX,_evict_index)(struct SOL_STACK_STRUCT_NAME* s, uint32_t index)
 {
     assert(index < s->count);

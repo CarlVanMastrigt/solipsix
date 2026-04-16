@@ -38,7 +38,7 @@ static void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, 
 	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = panel->child;
 
-	theme->panel_render(theme, obj->flags, position, SOL_OVERLAY_COLOUR_DEFAULT, batch);
+	theme->panel_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{

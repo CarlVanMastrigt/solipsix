@@ -39,7 +39,6 @@ struct sol_overlay_render_element
 };
 
 #define SOL_STACK_ENTRY_TYPE struct sol_overlay_render_element
-#define SOL_STACK_FUNCTION_PREFIX sol_overlay_render_element_list
 #define SOL_STACK_STRUCT_NAME sol_overlay_render_element_list
 #include "data_structures/stack.h"
 
@@ -98,6 +97,16 @@ void sol_overlay_rendering_resources_default_initialise(struct sol_overlay_rende
 void sol_overlay_rendering_resources_terminate(struct sol_overlay_rendering_resources* overlay_rendering_resources, struct cvm_vk_device* device); 
 
 
+struct sol_overlay_rendering_deferred_operation
+{
+    void (*render_function)(VkCommandBuffer command_buffer, struct cvm_vk_device* device, struct sol_overlay_rendering_resources* overlay_rendering_resources, void* context_data);
+    void* context_data;
+};
+
+#define SOL_STACK_ENTRY_TYPE struct sol_overlay_rendering_deferred_operation
+#define SOL_STACK_STRUCT_NAME sol_overlay_rendering_deferred_operation_list
+#include "data_structures/stack.h"
+
 /** batch is a bad name, need context, sub context stack/ranges for (potential) compositing passes
  * at that point is it maybe better to just handle the backing manually? */
 struct sol_overlay_render_batch
@@ -111,6 +120,8 @@ struct sol_overlay_render_batch
 
     /** actual UI element instance data */
     struct sol_overlay_render_element_list elements;
+
+    struct sol_overlay_rendering_deferred_operation_list deferred_operations;
 
     /** this and count+offset should be in an array per composite range */
     VkDeviceSize element_offset;
@@ -149,12 +160,10 @@ void sol_overlay_render_step_compose_elements(struct sol_overlay_render_batch* b
 /** step : move all resources (e.g. new image atlas pixel data) and draw instructions to staging and write the descriptors for resources rendering will use */
 void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* batch, struct cvm_vk_device* device, struct sol_vk_staging_buffer* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
 
-/** step : perform all copy operations (if any) necessary to set up data (e.g. copy image pixels from staging to the image atlas) */
-void sol_overlay_render_step_submit_vk_transfers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
-
-/** step : write barriers to put required resources (e.g. image atlases) in correct state to e read from while drawing overlay elements to the render target 
- * OPTIONAL IF: all image atlases are barriered manually; e.g. if they are to be rendered into between `sol_overlay_render_step_submit_vk_transfers` and `sol_overlay_render_step_draw_elements` */
-void sol_overlay_render_step_insert_vk_barriers(struct sol_overlay_render_batch* batch, VkCommandBuffer command_buffer);
+/** step : all work that needs to be done GPU side
+ * - perform all copy operations (if any) necessary to set up data (e.g. copy image pixels from staging to the image atlas) 
+ * - do any scheduled renderin/compute work to fill out the backing image atlas in a way that is used later in rendering */
+void sol_overlay_render_step_early_gpu_work(struct sol_overlay_render_batch* batch, struct sol_overlay_rendering_resources* rendering_resources, struct cvm_vk_device* device, VkCommandBuffer command_buffer);
 
 /** step : encode the required draw commands to a command buffer, the render target/pass for which this applies must be set up externally */
 void sol_overlay_render_step_draw_elements(struct sol_overlay_render_batch* batch, struct sol_overlay_render_persistent_resources* persistent_resources, VkPipeline pipeline, VkCommandBuffer command_buffer);

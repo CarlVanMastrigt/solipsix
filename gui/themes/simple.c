@@ -41,7 +41,7 @@ struct sol_gui_theme_simple_data
 	uint64_t test_checkerboard_id;
 };
 
-static int16_t sol_gui_theme_simple_normal_size_x(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+static int16_t sol_gui_theme_simple_generic_size_x(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 	int16_t size;
@@ -56,7 +56,7 @@ static int16_t sol_gui_theme_simple_normal_size_x(struct sol_gui_theme* theme, u
 
 	return size;
 }
-static int16_t sol_gui_theme_simple_normal_size_y(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
+static int16_t sol_gui_theme_simple_generic_size_y(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 	int16_t size;
@@ -71,7 +71,7 @@ static int16_t sol_gui_theme_simple_normal_size_y(struct sol_gui_theme* theme, u
 
 	return size;
 }
-static s16_extent sol_gui_theme_simple_normal_content_extent_x(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
+static s16_extent sol_gui_theme_simple_generic_content_extent_x(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
@@ -82,7 +82,7 @@ static s16_extent sol_gui_theme_simple_normal_content_extent_x(struct sol_gui_th
 
 	return extent;
 }
-static s16_extent sol_gui_theme_simple_normal_content_extent_y(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
+static s16_extent sol_gui_theme_simple_generic_content_extent_y(struct sol_gui_theme* theme, uint32_t flags, s16_extent extent)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
@@ -99,7 +99,7 @@ static s16_extent sol_gui_theme_simple_normal_content_extent_y(struct sol_gui_th
 // ^ either sub components of the whole struct, allowing it to be substituted at appropriate points
 //   ^also by allowing transient image use we can do sub-renders, *compositor style*, with sub regions of the instance array to render and re-order when needed
 
-static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch)
+static void sol_gui_theme_simple_box_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour colour)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 
@@ -252,7 +252,7 @@ static int16_t sol_gui_theme_simple_box_size_y(struct sol_gui_theme* theme, uint
 
 
 
-static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, enum sol_overlay_colour colour, struct sol_overlay_render_batch * batch)
+static void sol_gui_theme_simple_panel_render(struct sol_gui_theme* theme, uint32_t flags, s16_rect rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour colour)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 	struct sol_overlay_render_element* render_data;
@@ -440,10 +440,10 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.icon_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
 		.other_data = simple_theme_data,
 
-		.normal_size_x           = &sol_gui_theme_simple_normal_size_x,
-		.normal_size_y           = &sol_gui_theme_simple_normal_size_y,
-		.normal_content_extent_x = &sol_gui_theme_simple_normal_content_extent_x,
-		.normal_content_extent_y = &sol_gui_theme_simple_normal_content_extent_y,
+		.generic_size_x           = &sol_gui_theme_simple_generic_size_x,
+		.generic_size_y           = &sol_gui_theme_simple_generic_size_y,
+		.generic_content_extent_x = &sol_gui_theme_simple_generic_content_extent_x,
+		.generic_content_extent_y = &sol_gui_theme_simple_generic_content_extent_y,
 
 		.box_render              = &sol_gui_theme_simple_box_render,
 		.box_select              = &sol_gui_theme_simple_box_select,
