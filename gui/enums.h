@@ -51,20 +51,23 @@ enum sol_gui_placement
 #define SOL_GUI_REFERENCE_BIT_COUNT 8
 
 
-#define SOL_GUI_OBJECT_FLAGS_BIT_COUNT 16
-#define SOL_GUI_OBJECT_STATUS_FLAG_REGISTERED      0x00000001 /** used for validation, ensures the object base is only registered and constructed once */
-#define SOL_GUI_OBJECT_STATUS_FLAG_ENABLED         0x00000002 /* inactive objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
-#define SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT         0x00000004 /** used for validation in various places*/
-#define SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED         0x00000008
-#define SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED     0x00000010
+#define SOL_GUI_OBJECT_FLAGS_BIT_COUNT 24
+#define SOL_GUI_OBJECT_STATUS_FLAG_REGISTERED      0x000001 /** used for validation, ensures the object base is only registered and constructed once */
+#define SOL_GUI_OBJECT_STATUS_FLAG_ENABLED         0x000002 /* inactive objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
+#define SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT         0x000004 /** used for validation in various places*/
+#define SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED         0x000008
+#define SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED     0x000010
 /// these placement used to communicate which edge of the screen (if any) a gui object is touching
-#define SOL_GUI_OBJECT_POSITION_FLAG_FIRST_X       0x00000100
-#define SOL_GUI_OBJECT_POSITION_FLAG_LAST_X        0x00000200
-#define SOL_GUI_OBJECT_POSITION_FLAG_FIRST_Y       0x00000400
-#define SOL_GUI_OBJECT_POSITION_FLAG_LAST_Y        0x00000800
-#define SOL_GUI_OBJECT_POSITION_FLAGS_ALL          0x00000F00
+#define SOL_GUI_OBJECT_POSITION_FLAG_FIRST_X       0x000100
+#define SOL_GUI_OBJECT_POSITION_FLAG_LAST_X        0x000200
+#define SOL_GUI_OBJECT_POSITION_FLAG_FIRST_Y       0x000400
+#define SOL_GUI_OBJECT_POSITION_FLAG_LAST_Y        0x000800
+#define SOL_GUI_OBJECT_POSITION_FLAGS_ALL          0x000F00
 // properties should be immutable after being set at widget creation
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT  0x00001000 /** the object contains text, which may affect theme sizing and styling */
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED      0x00002000 /** the object should have a border (size defined by the theme) applied to it */
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x00004000
-#define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x00008000
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT  0x001000 /** the object contains text, which may affect theme sizing and styling */
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED      0x002000 /** the object should have a border (size defined by the theme) applied to it */
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE     0x004000
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x008000
+
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_CONTRACT_X    0x010000 /** the object should have the minimum size applicable in the x dimension */
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_CONTRACT_Y    0x020000 /** the object should have the minimum size applicable in the x dimension */

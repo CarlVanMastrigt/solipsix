@@ -45,6 +45,7 @@ static inline bool s16_rect_valid(s16_rect r)
 }
 static inline bool s16_rect_will_intersect(s16_rect lhs, s16_rect rhs)
 {
+    #warning implement in terms of extent intersects
     return lhs.x.start < rhs.x.end && rhs.x.start < lhs.x.end && lhs.y.start < rhs.y.end && rhs.y.start < lhs.y.end;
 }
 static inline s16_rect s16_rect_intersect(s16_rect lhs, s16_rect rhs)
@@ -52,6 +53,8 @@ static inline s16_rect s16_rect_intersect(s16_rect lhs, s16_rect rhs)
     // note that this function doesn't return whether the 2 rectangles intersect
     // in the case that intersection isn't guaranteed `s16_rect_will_intersect` can be used
     // OR the result of this function can be validated by checking its dimensions are both greater than zero
+
+    #warning implement in terms of extent intersects
 
     lhs.x.start = (rhs.x.start < lhs.x.start) ? lhs.x.start : rhs.x.start;
     lhs.y.start = (rhs.y.start < lhs.y.start) ? lhs.y.start : rhs.y.start;

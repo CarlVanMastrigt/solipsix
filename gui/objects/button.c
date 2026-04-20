@@ -22,11 +22,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <assert.h>
 
-#include "sol_input.h"
-#include "overlay/enums.h"
-#include "gui/objects/button.h"
+#include "solipsix/sol_input.h"
+#include "solipsix/overlay/enums.h"
+#include "solipsix/gui/objects/button.h"
 
-#include "sol_font.h"
+#include "solipsix/sol_font.h"
 
 
 
@@ -76,7 +76,16 @@ bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struc
 	}
 }
 
-void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void* data)
+void sol_gui_button_destroy_action(struct sol_gui_object* obj)
+{
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	if(button->destroy_action)
+	{
+		button->destroy_action(button->data);
+	}
+}
+
+void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data)
 {
 	sol_gui_object_construct(&button->base, context);
 
@@ -85,12 +94,8 @@ void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_cont
 	#warning focusable is questionable property, but useful when taking action on release &c.
 
 	button->select_action = select_action;
+	button->destroy_action = destroy_action;
 	button->data = data;
-}
-
-struct sol_gui_object* sol_gui_button_as_object(struct sol_gui_button* button)
-{
-	return &button->base;
 }
 
 
@@ -125,6 +130,7 @@ static void sol_gui_text_button_render(struct sol_gui_object* obj, s16_rect posi
 
 	theme->box_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
+	#warning make helper for below?
 	text_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);
 	text_rect.y = theme->box_content_extent_y(theme, obj->flags, position.y);
 
@@ -169,14 +175,15 @@ static const struct sol_gui_object_structure_functions sol_gui_text_button_struc
 	.hit_scan   = &sol_gui_text_button_hit_scan,
 	.min_size_x = &sol_gui_text_button_min_size_x,
 	.min_size_y = &sol_gui_text_button_min_size_y,
+	.destroy    = &sol_gui_button_destroy_action,
 };
-struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
+struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* text)
 {
 	size_t text_len = strlen(text) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + text_len);
 	void* text_buf = sol_gui_button_get_buffer(button);
 
-	sol_gui_button_construct(button, context, select_action, data);
+	sol_gui_button_construct(button, context, select_action, destroy_action, data);
 	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED | SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT;
 
 	button->base.structure_functions = &sol_gui_text_button_structure_functions;
@@ -185,9 +192,9 @@ struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* contex
 
 	return button;
 }
-struct sol_gui_object* sol_gui_text_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
+struct sol_gui_object* sol_gui_text_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* text)
 {
-	return sol_gui_button_as_object( sol_gui_text_button_create(context, select_action, data, text) );
+	return sol_gui_button_as_object( sol_gui_text_button_create(context, select_action, destroy_action, data, text) );
 }
 
 
@@ -201,7 +208,7 @@ static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, s16_rect
 
 	theme->box_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
-
+	#warning make helper for below?
 	icon_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);
 	icon_rect.y = theme->box_content_extent_y(theme, obj->flags, position.y);
 
@@ -249,14 +256,15 @@ static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_
 	.hit_scan   = &sol_gui_utf8_icon_button_hit_scan,
 	.min_size_x = &sol_gui_utf8_icon_button_min_size_x,
 	.min_size_y = &sol_gui_utf8_icon_button_min_size_y,
+	.destroy    = &sol_gui_button_destroy_action,
 };
-struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
+struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* utf8_icon)
 {
 	size_t utf8_icon_len = strlen(utf8_icon) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + utf8_icon_len);
 	void* utf8_icon_buf = sol_gui_button_get_buffer(button);
 
-	sol_gui_button_construct(button, context, select_action, data);
+	sol_gui_button_construct(button, context, select_action, destroy_action, data);
 	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 
 	button->base.structure_functions = &sol_gui_utf8_icon_button_structure_functions;
@@ -265,9 +273,9 @@ struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* c
 
 	return button;
 }
-struct sol_gui_object* sol_gui_utf8_icon_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
+struct sol_gui_object* sol_gui_utf8_icon_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* utf8_icon)
 {
-	return sol_gui_button_as_object( sol_gui_utf8_icon_button_create(context, select_action, data, utf8_icon) );
+	return sol_gui_button_as_object( sol_gui_utf8_icon_button_create(context, select_action, data, destroy_action, utf8_icon) );
 }
 
 

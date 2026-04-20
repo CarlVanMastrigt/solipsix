@@ -26,3 +26,4 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/objects/sequence.h"
 #include "gui/objects/button.h"
 #include "gui/objects/panel.h"
+#include "gui/objects/range_control.h"

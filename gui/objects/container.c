@@ -255,10 +255,7 @@ struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* c
 	return sol_gui_container_as_object( sol_gui_container_create(context) );
 }
 
-struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container)
-{
-	return &container->base;
-}
+
 
 
 

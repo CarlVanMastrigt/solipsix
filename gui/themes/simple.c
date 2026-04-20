@@ -41,6 +41,9 @@ struct sol_gui_theme_simple_data
 	uint64_t test_checkerboard_id;
 };
 
+
+
+
 static int16_t sol_gui_theme_simple_generic_size_x(struct sol_gui_theme* theme, uint32_t flags, int16_t content_size)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
@@ -367,6 +370,177 @@ static int16_t sol_gui_theme_simple_panel_size_y(struct sol_gui_theme* theme, ui
 
 
 
+#warning calculate internal rect in separate function? (used below in both cases)
+static inline void sol_gui_theme_simple_range_control_extents(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution, s16_extent* functional_extent, s16_extent* interior_extent)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t min_interior_size, half_interior_size;
+	s16_extent extent;
+
+	/** note: for this theme the minimum size of the interior is based on the base unit size */
+	#warning need to account for border/offset in min_interior_size
+
+	switch(orientation)
+	{
+		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+			min_interior_size = simple_theme_data->base_unit_size.x;
+			extent = s16_extent_dilate(current_rect.x, -simple_theme_data->box_content_border.x);
+			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+			{
+				extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.x);
+			}
+			break;
+		case SOL_OVERLAY_ORIENTATION_VERTICAL:
+			min_interior_size = simple_theme_data->base_unit_size.y;
+			extent = s16_extent_dilate(current_rect.y, -simple_theme_data->box_content_border.y);
+			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+			{
+				extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.y);
+			}
+			break;
+	}
+
+	*functional_extent = extent;
+
+	*interior_extent = sol_range_control_distribution_interior_extent_with_minimum_size(distribution, extent, min_interior_size);
+	// *interior_extent = sol_range_control_distribution_interior_extent(distribution, extent);
+	// printf("%d %d : %d %d : %d %d  :  %d - \n",current_rect.x.start,current_rect.x.end, extent.start, extent.end, interior_extent->start, interior_extent->end, s16_extent_size(extent));
+}
+
+static void sol_gui_theme_simple_range_control_render(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour main_colour, enum sol_overlay_colour interior_colour, struct sol_range_control_distribution distribution)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	s16_extent functional_extent, interior_extent;
+	int16_t interior_size, half_interior_size;
+	struct sol_overlay_render_element* render_data;
+	s16_rect rect;
+
+	sol_gui_theme_simple_box_render(theme, flags, current_rect, batch, main_colour);
+
+	sol_gui_theme_simple_range_control_extents(theme, flags, orientation, current_rect, distribution, &functional_extent, &interior_extent);
+
+	// s16_extent_resize
+	switch(orientation)
+	{
+		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+			rect.x = interior_extent;
+			rect.y = s16_extent_dilate(current_rect.y, -simple_theme_data->box_content_border.y);
+			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+			{
+				rect.y = s16_extent_dilate(rect.y, -simple_theme_data->normal_border.y);
+			}
+			break;
+		case SOL_OVERLAY_ORIENTATION_VERTICAL:
+			rect.y = interior_extent;
+			rect.x = s16_extent_dilate(current_rect.x, -simple_theme_data->box_content_border.x);
+			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+			{
+				rect.x = s16_extent_dilate(rect.x, -simple_theme_data->normal_border.x);
+			}
+			break;
+	}
+
+	rect = s16_rect_intersect(rect, batch->bounds);
+
+	if(s16_rect_valid(rect))
+	{
+		uint16_t type_and_colour = (0) | (interior_colour << 4);
+
+		#warning should also check rect is positive at this point
+		render_data = sol_overlay_render_element_list_append_ptr(&batch->elements);
+		*render_data =(struct sol_overlay_render_element)
+	    {
+	        {rect.x.start, rect.x.end, rect.y.start, rect.y.end},
+	        {type_and_colour, 0, 0, 0},
+	        {0, 0, 0, 0},
+	        {0, 0, 0, 0},
+	    };
+	}
+}
+static bool sol_gui_theme_simple_range_control_select(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, s16_vec2 location)
+{
+	return sol_gui_theme_simple_box_select(theme, flags, current_rect, location);
+}
+static bool sol_gui_theme_simple_range_control_interior(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, s16_vec2 location, struct sol_range_control_distribution distribution, int16_t* selected_offset)
+{
+	switch(orientation)
+	{
+		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+			break;
+		case SOL_OVERLAY_ORIENTATION_VERTICAL:
+			break;
+	}
+	return false;
+}
+static s16_extent sol_gui_theme_simple_range_control_selection_extent(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	s16_extent functional_extent, interior_extent;
+	int16_t interior_size, half_interior_size;
+
+	sol_gui_theme_simple_range_control_extents(theme, flags, orientation, current_rect, distribution, &functional_extent, &interior_extent);
+
+	interior_size = s16_extent_size(interior_extent);
+
+	assert(interior_size >= 0);
+	half_interior_size = interior_size >> 1;
+
+	/** remove the interior extent from the functional extent
+	 * note: `sol_range_control_distribution_interior_extent_with_minimum_size` rounds towards -infinity so to counteract this; round towards +infinity here */
+	functional_extent.end = functional_extent.end - half_interior_size;
+	functional_extent.start = functional_extent.start - half_interior_size + interior_size;
+
+	return functional_extent;
+}
+static int16_t sol_gui_theme_simple_range_control_size_x(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, int16_t possible_gradations)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	/** this minimum size accounts for the effect of appending the box normal border later */
+	size = simple_theme_data->base_unit_size.x;
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->normal_border.x * 2;
+	}
+
+	switch(orientation)
+	{
+		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+			size += possible_gradations;
+			break;
+		case SOL_OVERLAY_ORIENTATION_VERTICAL:
+			break;
+	}
+
+	return size;
+}
+static int16_t sol_gui_theme_simple_range_control_size_y(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, int16_t possible_gradations)
+{
+	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
+	int16_t size;
+
+	/** this minimum size accounts for the effect of appending the box normal border later */
+	size = simple_theme_data->base_unit_size.y;
+
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		size += simple_theme_data->normal_border.y * 2;
+	}
+
+	switch(orientation)
+	{
+		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+			break;
+		case SOL_OVERLAY_ORIENTATION_VERTICAL:
+			size += possible_gradations;
+			break;
+	}
+	return size;
+}
+
+
 
 
 
@@ -383,8 +557,8 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 			{
 				.base_unit_size        = s16_vec2_set(16, 16),// min size
 				.normal_border         = s16_vec2_set(1, 1),
-				.box_content_border = s16_vec2_set(2, 2),
-				.box_text_border    = s16_vec2_set(6, 2),
+				.box_content_border    = s16_vec2_set(2, 2),
+				.box_text_border       = s16_vec2_set(6, 2),
 				.panel_content_border  = s16_vec2_set(3, 3),
 				.panel_border          = s16_vec2_set(1, 1),
 			};
@@ -458,6 +632,13 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.panel_size_y            = &sol_gui_theme_simple_panel_size_y,
 		.panel_contents_extent_x = &sol_gui_theme_simple_panel_content_extent_x,
 		.panel_contents_extent_y = &sol_gui_theme_simple_panel_content_extent_y,
+
+		.range_control_render     = &sol_gui_theme_simple_range_control_render,
+		.range_control_select     = &sol_gui_theme_simple_range_control_select,
+		.range_control_interior   = &sol_gui_theme_simple_range_control_interior,
+		.range_control_size_x     = &sol_gui_theme_simple_range_control_size_x,
+		.range_control_size_y     = &sol_gui_theme_simple_range_control_size_y,
+
 	};
 
 	assert(theme->text_font);

@@ -90,7 +90,10 @@ struct sol_gui_object
 	/** may need enumerator for return type? **/
 	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input);
 
+    /** note: active state of object should NOT be determined dynamically (with a function pointer here) as changes to activity reqire laying out the structure again */
+
 	#warning combine status and position flags; pass into rendering and allow them to inform nature of rendering (e.g. if colour passed is DEFAULT then pick correct one from status)
+    #warning make this a u64?
 	uint32_t reference_count : SOL_GUI_REFERENCE_BIT_COUNT;
 	uint32_t flags           : SOL_GUI_OBJECT_FLAGS_BIT_COUNT;
 

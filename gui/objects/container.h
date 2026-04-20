@@ -34,7 +34,10 @@ void sol_gui_container_construct(struct sol_gui_container* container, struct sol
 struct sol_gui_container* sol_gui_container_create(struct sol_gui_context* context);
 struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* context);
 
-struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container);
+static inline struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container)
+{
+	return &container->base;
+}
 
 /** generic functions */
 void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch);

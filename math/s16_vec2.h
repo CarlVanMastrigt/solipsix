@@ -24,6 +24,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "math/m16_vec2.h"
 
+#warning consider rename s16 -> int16
+
 typedef struct s16_vec2
 {
     int16_t x;
