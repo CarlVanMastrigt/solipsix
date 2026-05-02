@@ -260,101 +260,101 @@ struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* c
 
 
 
-void sol_gui_container_move_child(struct sol_gui_container* container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement)
-{
-	struct sol_gui_object* container_obj = sol_gui_container_as_object(container);
+// void sol_gui_container_move_child(struct sol_gui_container* container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement)
+// {
+// 	struct sol_gui_object* container_obj = sol_gui_container_as_object(container);
 
-	assert(container);
-	assert(child);
-	assert(child->parent == container_obj);
-	assert(sibling == NULL || sibling->parent == container_obj);
+// 	assert(container);
+// 	assert(child);
+// 	assert(child->parent == container_obj);
+// 	assert(sibling == NULL || sibling->parent == container_obj);
 
-	switch (placement) {
-		case SOL_GUI_PLACEMENT_START:
-			sibling = container->first_child;
-			placement = SOL_GUI_PLACEMENT_BEFORE;
-			break;
-		case SOL_GUI_PLACEMENT_END:
-			sibling = container->last_child;
-			placement = SOL_GUI_PLACEMENT_AFTER;
-			break;
-		case SOL_GUI_PLACEMENT_AFTER:
-			if(sibling == NULL)
-			{
-				sibling = child->next;
-			}
-			break;
-		case SOL_GUI_PLACEMENT_BEFORE:
-			if(sibling == NULL)
-			{
-				sibling = child->prev;
-			}
-			break;
-	}
+// 	switch (placement) {
+// 		case SOL_GUI_PLACEMENT_START:
+// 			sibling = container->first_child;
+// 			placement = SOL_GUI_PLACEMENT_BEFORE;
+// 			break;
+// 		case SOL_GUI_PLACEMENT_END:
+// 			sibling = container->last_child;
+// 			placement = SOL_GUI_PLACEMENT_AFTER;
+// 			break;
+// 		case SOL_GUI_PLACEMENT_AFTER:
+// 			if(sibling == NULL)
+// 			{
+// 				sibling = child->next;
+// 			}
+// 			break;
+// 		case SOL_GUI_PLACEMENT_BEFORE:
+// 			if(sibling == NULL)
+// 			{
+// 				sibling = child->prev;
+// 			}
+// 			break;
+// 	}
 
-	if(sibling && sibling != child)//these values can be brought about by above, and are no-ops
-	{
-		// remove child from present location
-		if(child->prev)
-		{
-			child->prev->next = child->next;
-		}
-		else
-		{
-			assert(child == container->first_child);
-			container->first_child = child->next;
-		}
+// 	if(sibling && sibling != child)//these values can be brought about by above, and are no-ops
+// 	{
+// 		// remove child from present location
+// 		if(child->prev)
+// 		{
+// 			child->prev->next = child->next;
+// 		}
+// 		else
+// 		{
+// 			assert(child == container->first_child);
+// 			container->first_child = child->next;
+// 		}
 
-		if(child->next)
-		{
-			child->next->prev = child->prev;
-		}
-		else
-		{
-			assert(child == container->last_child);
-			container->last_child = child->prev;
-		}
+// 		if(child->next)
+// 		{
+// 			child->next->prev = child->prev;
+// 		}
+// 		else
+// 		{
+// 			assert(child == container->last_child);
+// 			container->last_child = child->prev;
+// 		}
 
-		// put child in the desired location
-		switch (placement) {
-		case SOL_GUI_PLACEMENT_AFTER:
-			if(sibling->next)
-			{
-				sibling->next->prev = child;
-				child->next = sibling->next;
-			}
-			else
-			{
-				assert(container->last_child = sibling);
-				container->last_child = child;
-				child->next = NULL;
-			}
-			sibling->next = child;
-			child->prev = sibling;
-			break;
-		case SOL_GUI_PLACEMENT_BEFORE:
-			if(sibling->prev)
-			{
-				sibling->prev->next = child;
-				child->prev = sibling->prev;
-			}
-			else
-			{
-				assert(container->first_child = sibling);
-				container->first_child = child;
-				child->prev = NULL;
-			}
-			sibling->prev = child;
-			child->next = sibling;
-			break;
-		default:
-			assert(false);// should be cut out by above switch
-		}
+// 		// put child in the desired location
+// 		switch (placement) {
+// 		case SOL_GUI_PLACEMENT_AFTER:
+// 			if(sibling->next)
+// 			{
+// 				sibling->next->prev = child;
+// 				child->next = sibling->next;
+// 			}
+// 			else
+// 			{
+// 				assert(container->last_child = sibling);
+// 				container->last_child = child;
+// 				child->next = NULL;
+// 			}
+// 			sibling->next = child;
+// 			child->prev = sibling;
+// 			break;
+// 		case SOL_GUI_PLACEMENT_BEFORE:
+// 			if(sibling->prev)
+// 			{
+// 				sibling->prev->next = child;
+// 				child->prev = sibling->prev;
+// 			}
+// 			else
+// 			{
+// 				assert(container->first_child = sibling);
+// 				container->first_child = child;
+// 				child->prev = NULL;
+// 			}
+// 			sibling->prev = child;
+// 			child->next = sibling;
+// 			break;
+// 		default:
+// 			assert(false);// should be cut out by above switch
+// 		}
 
-		// contents have (potentially) changed position (though not size) so need to reposition the containers contents
-		sol_gui_object_reposition_contents(container_obj);
-	}
-}
+// 		// contents have (potentially) changed position (though not size) so need to reposition the containers contents
+// 		sol_gui_object_reposition_contents(container_obj);
+// 	}
+// }
 
 int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container)
 {

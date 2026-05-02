@@ -135,12 +135,7 @@ void                   sol_gui_object_add_child          (struct sol_gui_object*
 void                   sol_gui_object_remove_child       (struct sol_gui_object* obj, struct sol_gui_object* child);
 
 
-
-// perhaps handle active widget if necessary? also searches for
-bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_input* input);
-
-// must be called if placement of contents has changed (BUT NOT MIN SIZE, if min size has potentially changed toplevel root must be reorganised)
-void sol_gui_object_reposition_contents(struct sol_gui_object* obj);
+s16_rect sol_gui_object_absolute_rect(struct sol_gui_object* obj);
 
 
 

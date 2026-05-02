@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2024,2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -22,11 +22,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 
 
-#include "lockfree/pool.h"
-#include "sync/primitive.h"
+#include "solipsix/lockfree/pool.h"
+#include "solipsix/sync/primitive.h"
 
 /** special thank you to my dad Peter, for suggesting the name for this */
-struct sol_sync_gate;
 
 struct sol_sync_gate_pool
 {
@@ -36,18 +35,28 @@ struct sol_sync_gate_pool
 void sol_sync_gate_pool_initialise(struct sol_sync_gate_pool* pool, size_t capacity_exponent);
 void sol_sync_gate_pool_terminate(struct sol_sync_gate_pool* pool);
 
-struct sol_sync_gate* sol_sync_gate_prepare(struct sol_sync_gate_pool* pool);
 
-/// MUST be called at some point as this will clean up the acquired gate
-void sol_sync_gate_wait(struct sol_sync_gate* gate);
+struct sol_sync_gate_handle
+{
+    /** gate is a polymorphic sync primitive
+     * this pointer should never be altered once vended, but can be used freely as argument to `sync_primitive` function calls */
+    struct sol_sync_primitive* primitive;
+};
+
+struct sol_sync_gate_handle sol_sync_gate_prepare(struct sol_sync_gate_pool* pool);
+
+/** MUST be called at some point as this will clean up the prepared gate 
+ * is similar to activate that other primitives use */
+void sol_sync_gate_wait(struct sol_sync_gate_handle gate);
 
 
-/// used to set up dependencies (calls to sol_sync_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
-/// must know that an gate has at least one outstanding dependency and/or that the gate hasn't been waited on for calling this to be legal
-void sol_sync_gate_impose_conditions(struct sol_sync_gate* gate, uint_fast32_t count);
+/** used to set up dependencies (calls to sol_sync_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
+ * must know that an gate has at least one outstanding dependency or that the gate hasn't yet had `sol_sync_gate_wait` called */
+void sol_sync_gate_impose_conditions(struct sol_sync_gate_handle gate, uint32_t count);
 
-/// must be called once for every dependency added by a call to sol_sync_gate_impose_conditions
-void sol_sync_gate_signal_conditions(struct sol_sync_gate* gate, uint_fast32_t count);
+/** must be called once for every dependency added by a call to sol_sync_gate_impose_conditions */
+void sol_sync_gate_signal_conditions(struct sol_sync_gate_handle gate, uint32_t count);
 
-struct sol_sync_primitive* sol_sync_gate_primitive(struct sol_sync_gate* gate);
+
+
 

@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2024,2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -22,6 +22,28 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sync/task.h"
 
+
+struct sol_sync_task
+{
+    struct sol_sync_primitive primitive;
+
+    struct sol_sync_task_system* task_system;
+
+    void(*task_function)(void*);
+    void* task_function_data;
+
+    /// need to only init atomics once: "If obj was not default-constructed, or this function is called twice on the same obj, the behavior is undefined."
+
+    atomic_uint_fast32_t condition_count;
+    atomic_uint_fast32_t reference_count;
+
+    struct sol_lockfree_hopper successor_hopper;
+};
+
+#define SOL_TASK_INTERNAL_COUNTER_BIT ((uint_fast32_t)0x80000000)
+
+static void sol_sync_task_release_references_polymorphic(struct sol_sync_primitive* primitive, uint32_t count);
+
 static inline struct sol_sync_task* sol_sync_task_worker_thread_get_task(struct sol_sync_task_system* task_system)
 {
     struct sol_sync_task* task;
@@ -33,7 +55,7 @@ static inline struct sol_sync_task* sol_sync_task_worker_thread_get_task(struct 
         assert(task_system->stalled_thread_count < task_system->worker_thread_count);
         task_system->stalled_thread_count++;
 
-        /// if all threads are stalled (there is no work left to do) and we've asked the system to shut down (this requires there are no more tasks being created) then we can finalise shutdown
+        /** if all threads are stalled (there is no work left to do) and we've asked the system to shut down (this requires there are no more tasks being created) then we can finalise shutdown */
         if(task_system->shutdown_initiated && (task_system->stalled_thread_count == task_system->worker_thread_count))
         {
             task_system->stalled_thread_count--;
@@ -43,7 +65,7 @@ static inline struct sol_sync_task* sol_sync_task_worker_thread_get_task(struct 
             return NULL;
         }
 
-        /// wait untill more workers are needed or we're shutting down (with appropriate checks in case of spurrious wakeup)
+        /** wait untill more workers are needed or we're shutting down (with appropriate checks in case of spurrious wakeup) */
         cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
 
         assert(task_system->stalled_thread_count > 0);
@@ -61,7 +83,6 @@ static inline struct sol_sync_task* sol_sync_task_worker_thread_get_task(struct 
     return task;
 }
 
-
 static int sol_sync_task_worker_thread_function(void* in)
 {
     struct sol_sync_task_system* task_system = in;
@@ -76,14 +97,17 @@ static int sol_sync_task_worker_thread_function(void* in)
         first_successor_index = sol_lockfree_hopper_close(&task->successor_hopper);
         successor_ptr = sol_lockfree_pool_get_entry_pointer(&task_system->successor_pool, first_successor_index);
 
-        // is important for deterministic task pool usage to release the task BEFORE actually signalling successors
-        sol_sync_task_release_references(task, 1);
+        /** is important for deterministic task pool usage to release the task BEFORE actually signalling successors (if it is not still being retained) 
+         * this retained reference ensures that the task is retained until all its conditions have been signalled (as opposed to just all external retains) 
+         * this is so that task conforms to the primitive requirement that an unsatisfied condition also retains the prinmitive
+         * note that the task itself is invalid after this point, but all necessary data for what follows has already been extracted by closing the hopper */
+        sol_sync_task_release_references_polymorphic((struct sol_sync_primitive*)task, SOL_TASK_INTERNAL_COUNTER_BIT); /** we cast back to the base primitive type */
 
         successor_index = first_successor_index;
 
         while(successor_ptr)
         {
-            sol_sync_primitive_signal_condition(*successor_ptr);
+            sol_sync_primitive_signal_conditions(*successor_ptr, 1);
             successor_ptr = sol_lockfree_pool_iterate(&task_system->successor_pool, &successor_index);
         }
 
@@ -93,34 +117,110 @@ static int sol_sync_task_worker_thread_function(void* in)
     return 0;
 }
 
-static void sol_sync_task_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
+
+
+
+static void sol_sync_task_impose_conditions_polymorphic(struct sol_sync_primitive* primitive, uint32_t count)
 {
-    sol_sync_task_impose_conditions((struct sol_sync_task*)primitive, 1);
+    /** undo polymorphism */
+    struct sol_sync_task* task = (struct sol_sync_task*)primitive;
+
+    uint_fast32_t old_count = atomic_fetch_add_explicit(&task->condition_count, count, memory_order_relaxed);
+    assert(old_count>0);/** should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies) */
 }
-static void sol_sync_task_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_task_signal_conditions_polymorphic(struct sol_sync_primitive* primitive, uint32_t count)
 {
-    sol_sync_task_signal_conditions((struct sol_sync_task*)primitive, 1);
+    /** undo polymorphism */
+    struct sol_sync_task* task = (struct sol_sync_task*)primitive;
+    struct sol_sync_task_system* task_system = task->task_system;
+
+    uint_fast32_t old_count;
+
+    /** this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function) 
+     * at present the `task_system->worker_thread_mutex` releases memory but acquire-release here is sufficient if that changes (e.g. if the task is executed immediately) */
+    old_count = atomic_fetch_sub_explicit(&task->condition_count, count, memory_order_acq_rel);
+    assert(old_count >= count);/** must not make condition count go negative */
+
+    if(old_count==count)/** this is the last dependency/condition this task was waiting on, put it on list of "ready to run" tasks and make sure there's a worker thread to satisfy it */
+    {
+        mtx_lock(&task_system->worker_thread_mutex);
+
+        sol_task_queue_enqueue(&task_system->pending_task_queue, task, NULL);
+
+        if(task_system->stalled_thread_count)
+        {
+            assert(!task_system->shutdown_completed);/** shouldnt have stopped running if tasks have yet to complete */
+            cnd_signal(&task_system->worker_thread_condition);
+        }
+
+        mtx_unlock(&task_system->worker_thread_mutex);
+    }
+}
+static void sol_sync_task_retain_references_polymorphic(struct sol_sync_primitive* primitive, uint32_t count)
+{
+    /** undo polymorphism */
+    struct sol_sync_task* task = (struct sol_sync_task*)primitive;
+
+    uint_fast32_t old_count = atomic_fetch_add_explicit(&task->reference_count, count, memory_order_relaxed);
+    assert(old_count!=0);/** should not be adding references without already holding one (need held successors reservations to addsetup more successors reservations) */
+}
+static void sol_sync_task_release_references_polymorphic(struct sol_sync_primitive* primitive, uint32_t count)
+{
+    /** undo polymorphism */
+    struct sol_sync_task* task = (struct sol_sync_task*)primitive;
+
+    /** need to release to prevent reads/writes of successor/completion data being moved after this operation */
+    uint_fast32_t old_count = atomic_fetch_sub_explicit(&task->reference_count, count, memory_order_release);
+
+    assert(old_count >= count);/** cannot release more references than were retained */
+
+    if(old_count == count)
+    {
+        /** this should only happen after task completion, BUT the only time this counter can (if used properly) hit zero is if the task HAS completed! */
+        sol_lockfree_pool_relinquish_entry(&task->task_system->task_pool, task);
+    }
 }
 static void sol_sync_task_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
 {
-    sol_sync_task_attach_successor((struct sol_sync_task*)primitive, successor);
-}
-static void sol_sync_task_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
-{
-    sol_sync_task_retain_references((struct sol_sync_task*)primitive, 1);
-}
-static void sol_sync_task_release_reference_polymorphic(struct sol_sync_primitive* primitive)
-{
-    sol_sync_task_release_references((struct sol_sync_task*)primitive, 1);
+    /** undo polymorphism */
+    struct sol_sync_task* task = (struct sol_sync_task*)primitive;
+
+    struct sol_lockfree_pool* successor_pool;
+    struct sol_sync_primitive** successor_ptr;
+
+    assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
+    /** task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible) */
+
+    /** if hopper already locked then task has been completed, as such dont need to impose this condition on the successor to begin with */
+    if( ! sol_lockfree_hopper_is_closed(&task->successor_hopper))
+    {
+        sol_sync_primitive_impose_conditions(successor, 1);
+
+        successor_pool = &task->task_system->successor_pool;
+
+        successor_ptr = sol_lockfree_pool_acquire_entry(successor_pool);
+        assert(successor_ptr);///ran out of successors
+
+        *successor_ptr = successor;
+
+        if( ! sol_lockfree_hopper_push(&task->successor_hopper, successor_pool, successor_ptr))
+        {
+            // potential to run out of successors if thread stalls here, shouldn't be a problem unless system is under stress
+            //  ^ (max_worker_threads * max_successors) should be sufficient overhead
+            /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
+            sol_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
+            sol_sync_primitive_signal_conditions(successor, 1);
+        }
+    }
 }
 
 const static struct sol_sync_primitive_functions task_sync_functions =
 {
-    .impose_condition  = &sol_sync_task_impose_condition_polymorphic,
-    .signal_condition  = &sol_sync_task_signal_condition_polymorphic,
-    .attach_successor  = &sol_sync_task_attach_successor_polymorphic,
-    .retain_reference  = &sol_sync_task_retain_reference_polymorphic,
-    .release_reference = &sol_sync_task_release_reference_polymorphic,
+    .impose_conditions  = &sol_sync_task_impose_conditions_polymorphic,
+    .signal_conditions  = &sol_sync_task_signal_conditions_polymorphic,
+    .retain_references  = &sol_sync_task_retain_references_polymorphic,
+    .release_references = &sol_sync_task_release_references_polymorphic,
+    .attach_successor   = &sol_sync_task_attach_successor_polymorphic,
 };
 
 static void sol_sync_task_initialise(void* entry, void* data)
@@ -136,6 +236,7 @@ static void sol_sync_task_initialise(void* entry, void* data)
     atomic_init(&task->condition_count, 0);
     atomic_init(&task->reference_count, 0);
 }
+
 
 void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent)
 {
@@ -166,7 +267,6 @@ void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, u
     }
 }
 
-
 void sol_sync_task_system_begin_shutdown(struct sol_sync_task_system* task_system)
 {
     mtx_lock(&task_system->worker_thread_mutex);
@@ -174,8 +274,6 @@ void sol_sync_task_system_begin_shutdown(struct sol_sync_task_system* task_syste
     cnd_signal(&task_system->worker_thread_condition);/// ensure at least one worker is awake to finalise shutdown
     mtx_unlock(&task_system->worker_thread_mutex);
 }
-/// ^ this is also necessary/useful for queues i believe,
-///     ^ have to wait till all tasks that would use a queue have completed before attempting to terminate the queue, best/safest way to do this is to have the queue outlive the task system
 
 void sol_sync_task_system_end_shutdown(struct sol_sync_task_system* task_system)
 {
@@ -211,7 +309,7 @@ void sol_sync_task_system_terminate(struct sol_sync_task_system* task_system)
 
 
 
-struct sol_sync_task* sol_sync_task_prepare(struct sol_sync_task_system* task_system, void(*task_function)(void*), void * data)
+struct sol_sync_task_handle sol_sync_task_prepare(struct sol_sync_task_system* task_system, void(*task_function)(void*), void * data)
 {
     struct sol_sync_task* task;
 
@@ -223,110 +321,53 @@ struct sol_sync_task* sol_sync_task_prepare(struct sol_sync_task_system* task_sy
 
     sol_lockfree_hopper_reset(&task->successor_hopper);
 
-    /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
-    atomic_store_explicit(&task->condition_count, 1, memory_order_relaxed);
-    /// need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task
-    atomic_store_explicit(&task->reference_count, 1, memory_order_relaxed);
+    /** need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal) */
+    atomic_store_explicit(&task->condition_count, SOL_TASK_INTERNAL_COUNTER_BIT, memory_order_relaxed);
+    /** need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task */
+    atomic_store_explicit(&task->reference_count, SOL_TASK_INTERNAL_COUNTER_BIT, memory_order_relaxed);
 
-    return task;
-}
-
-void sol_sync_task_activate(struct sol_sync_task* task)
-{
-    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
-    sol_sync_task_signal_conditions(task, 1);
-}
-
-
-
-
-void sol_sync_task_impose_conditions(struct sol_sync_task* task, uint_fast32_t count)
-{
-    uint_fast32_t old_count=atomic_fetch_add_explicit(&task->condition_count, count, memory_order_relaxed);
-    assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
-}
-
-void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t count)
-{
-    uint_fast32_t old_count;
-    bool unstall_worker;
-    struct sol_sync_task_system* task_system = task->task_system;
-
-    /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
-    old_count = atomic_fetch_sub_explicit(&task->condition_count, count, memory_order_acq_rel);
-    assert(old_count >= count);///must not make dep. count go negative
-
-    if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
+    return (struct sol_sync_task_handle)
     {
-        mtx_lock(&task_system->worker_thread_mutex);
-
-        sol_task_queue_enqueue(&task_system->pending_task_queue, task, NULL);
-
-        if(task_system->stalled_thread_count)
-        {
-            assert(!task_system->shutdown_completed);/// shouldnt have stopped running if tasks have yet to complete
-            cnd_signal(&task_system->worker_thread_condition);
-        }
-
-        mtx_unlock(&task_system->worker_thread_mutex);
-    }
+        .primitive = (struct sol_sync_primitive*) task,
+    };
 }
 
-
-
-void sol_sync_task_retain_references(struct sol_sync_task * task, uint_fast32_t count)
+void sol_sync_task_activate(struct sol_sync_task_handle task)
 {
-    uint_fast32_t old_count=atomic_fetch_add_explicit(&task->reference_count, count, memory_order_relaxed);
-    assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
+    /** this is basically just called differently to account for the "hidden" wait counter added on task creation */
+    /** sol_sync_task_signal_conditions(task, 1); */
+    assert(task.primitive->sync_functions->signal_conditions == &sol_sync_task_signal_conditions_polymorphic);
+    sol_sync_task_signal_conditions_polymorphic(task.primitive, SOL_TASK_INTERNAL_COUNTER_BIT);
 }
 
-void sol_sync_task_release_references(struct sol_sync_task * task, uint_fast32_t count)
+void sol_sync_task_impose_conditions(struct sol_sync_task_handle task, uint_fast32_t count)
 {
-    /// need to release to prevent reads/writes of successor/completion data being moved after this operation
-    uint_fast32_t old_count=atomic_fetch_sub_explicit(&task->reference_count, count, memory_order_release);
-
-    assert(old_count >= count);/// have completed more successor reservations than were made
-
-    if(old_count==count)
-    {
-        /// this should only happen after task completion, BUT the only time this counter can (if used properly) hit zero is if the task HAS completed!
-        sol_lockfree_pool_relinquish_entry(&task->task_system->task_pool, task);
-    }
+    assert(task.primitive->sync_functions->impose_conditions == &sol_sync_task_impose_conditions_polymorphic);
+    sol_sync_task_impose_conditions_polymorphic(task.primitive, count);
 }
 
-void sol_sync_task_attach_successor(struct sol_sync_task* task, struct sol_sync_primitive* successor)
+void sol_sync_task_signal_conditions(struct sol_sync_task_handle task, uint_fast32_t count)
 {
-    struct sol_lockfree_pool* successor_pool;
-    struct sol_sync_primitive** successor_ptr;
+    assert(task.primitive->sync_functions->signal_conditions == &sol_sync_task_signal_conditions_polymorphic);
+    sol_sync_task_signal_conditions_polymorphic(task.primitive, count);
+}
 
-    sol_sync_primitive_impose_condition(successor);
+void sol_sync_task_retain_references(struct sol_sync_task_handle task, uint_fast32_t count)
+{
+    assert(task.primitive->sync_functions->retain_references == &sol_sync_task_retain_references_polymorphic);
+    sol_sync_task_retain_references_polymorphic(task.primitive, count);
+}
 
-    assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
-    /// task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
+void sol_sync_task_release_references(struct sol_sync_task_handle task, uint_fast32_t count)
+{
+    assert(task.primitive->sync_functions->release_references == &sol_sync_task_release_references_polymorphic);
+    sol_sync_task_release_references_polymorphic(task.primitive, count);
+}
 
-    if(sol_lockfree_hopper_is_closed(&task->successor_hopper))
-    {
-        /// if hopper already locked then task has been completed, can signal
-        sol_sync_primitive_signal_condition(successor);
-    }
-    else
-    {
-        successor_pool = &task->task_system->successor_pool;
-
-        successor_ptr = sol_lockfree_pool_acquire_entry(successor_pool);
-        assert(successor_ptr);///ran out of successors
-
-        *successor_ptr = successor;
-
-        if(!sol_lockfree_hopper_push(&task->successor_hopper, successor_pool, successor_ptr))
-        {
-            // potential to run out of successors if thread stalls here, shouldn't be a problem unless system is under stress
-            //  ^ (max_worker_threads * max_successors) should be sufficient overhead
-            /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
-            sol_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
-            sol_sync_primitive_signal_condition(successor);
-        }
-    }
+void sol_sync_task_attach_successor(struct sol_sync_task_handle task, struct sol_sync_primitive* successor)
+{
+    assert(task.primitive->sync_functions->attach_successor == &sol_sync_task_attach_successor_polymorphic);
+    sol_sync_task_attach_successor_polymorphic(task.primitive, successor);
 }
 
 

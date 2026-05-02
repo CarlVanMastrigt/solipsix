@@ -369,40 +369,32 @@ static int16_t sol_gui_theme_simple_panel_size_y(struct sol_gui_theme* theme, ui
 }
 
 
-
-#warning calculate internal rect in separate function? (used below in both cases)
-static inline void sol_gui_theme_simple_range_control_extents(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution, s16_extent* functional_extent, s16_extent* interior_extent)
+static inline s16_rect sol_gui_theme_simple_range_control_interior_rect(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
-	int16_t min_interior_size, half_interior_size;
-	s16_extent extent;
+	s16_rect rect;
+	s16_vec2 interior_size;
 
 	/** note: for this theme the minimum size of the interior is based on the base unit size */
-	#warning need to account for border/offset in min_interior_size
+
+	rect = s16_rect_sub_border(current_rect, simple_theme_data->box_content_border);
+	interior_size = s16_vec2_sub(simple_theme_data->base_unit_size, s16_vec2_mul_scalar(simple_theme_data->box_content_border, 2));
+	if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+	{
+		rect = s16_rect_sub_border(rect, simple_theme_data->normal_border);
+	}
 
 	switch(orientation)
 	{
-		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
-			min_interior_size = simple_theme_data->base_unit_size.x;
-			extent = s16_extent_dilate(current_rect.x, -simple_theme_data->box_content_border.x);
-			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
-			{
-				extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.x);
-			}
-			break;
-		case SOL_OVERLAY_ORIENTATION_VERTICAL:
-			min_interior_size = simple_theme_data->base_unit_size.y;
-			extent = s16_extent_dilate(current_rect.y, -simple_theme_data->box_content_border.y);
-			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
-			{
-				extent = s16_extent_dilate(extent, -simple_theme_data->normal_border.y);
-			}
-			break;
+	case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+		rect.x = sol_range_control_distribution_interior_extent_with_minimum_size(distribution, rect.x, interior_size.x);
+		break;
+	case SOL_OVERLAY_ORIENTATION_VERTICAL:
+		rect.y = sol_range_control_distribution_interior_extent_with_minimum_size(distribution, rect.y, interior_size.y);
+		break;
 	}
 
-	*functional_extent = extent;
-
-	*interior_extent = sol_range_control_distribution_interior_extent_with_minimum_size(distribution, extent, min_interior_size);
+	return rect;
 	// *interior_extent = sol_range_control_distribution_interior_extent(distribution, extent);
 	// printf("%d %d : %d %d : %d %d  :  %d - \n",current_rect.x.start,current_rect.x.end, extent.start, extent.end, interior_extent->start, interior_extent->end, s16_extent_size(extent));
 }
@@ -417,28 +409,7 @@ static void sol_gui_theme_simple_range_control_render(struct sol_gui_theme* them
 
 	sol_gui_theme_simple_box_render(theme, flags, current_rect, batch, main_colour);
 
-	sol_gui_theme_simple_range_control_extents(theme, flags, orientation, current_rect, distribution, &functional_extent, &interior_extent);
-
-	// s16_extent_resize
-	switch(orientation)
-	{
-		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
-			rect.x = interior_extent;
-			rect.y = s16_extent_dilate(current_rect.y, -simple_theme_data->box_content_border.y);
-			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
-			{
-				rect.y = s16_extent_dilate(rect.y, -simple_theme_data->normal_border.y);
-			}
-			break;
-		case SOL_OVERLAY_ORIENTATION_VERTICAL:
-			rect.y = interior_extent;
-			rect.x = s16_extent_dilate(current_rect.x, -simple_theme_data->box_content_border.x);
-			if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
-			{
-				rect.x = s16_extent_dilate(rect.x, -simple_theme_data->normal_border.x);
-			}
-			break;
-	}
+	rect = sol_gui_theme_simple_range_control_interior_rect(theme, flags, orientation, current_rect, distribution);
 
 	rect = s16_rect_intersect(rect, batch->bounds);
 
@@ -463,22 +434,63 @@ static bool sol_gui_theme_simple_range_control_select(struct sol_gui_theme* them
 }
 static bool sol_gui_theme_simple_range_control_interior(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, s16_vec2 location, struct sol_range_control_distribution distribution, int16_t* selected_offset)
 {
-	switch(orientation)
+	int16_t interior_size, half_interior_size, base_offset;
+	s16_rect rect = sol_gui_theme_simple_range_control_interior_rect(theme, flags, orientation, current_rect, distribution);
+
+	if(s16_rect_contains_point(rect, location))
 	{
+		switch(orientation)
+		{
 		case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+			interior_size = s16_extent_size(rect.x);
+			base_offset = location.x - rect.x.start;
 			break;
 		case SOL_OVERLAY_ORIENTATION_VERTICAL:
+			interior_size = s16_extent_size(rect.y);
+			base_offset = location.y - rect.y.start;
 			break;
+		}
+
+		half_interior_size = interior_size >> 1;
+		/** note: done this way to match "midpoint" in range calculation of sol_gui_theme_simple_range_control_selection_extent */
+		*selected_offset = base_offset - half_interior_size;
+		
+		return true;
 	}
-	return false;
+	else
+	{
+		*selected_offset = 0;
+		return false;
+	}
 }
+
 static s16_extent sol_gui_theme_simple_range_control_selection_extent(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 	s16_extent functional_extent, interior_extent;
-	int16_t interior_size, half_interior_size;
+	int16_t interior_size, half_interior_size, min_interior_size;
 
-	sol_gui_theme_simple_range_control_extents(theme, flags, orientation, current_rect, distribution, &functional_extent, &interior_extent);
+	switch(orientation)
+	{
+	case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+		min_interior_size = simple_theme_data->base_unit_size.x - simple_theme_data->box_content_border.x;
+		functional_extent = s16_extent_dilate(current_rect.x, -simple_theme_data->box_content_border.x);
+		if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+		{
+			functional_extent = s16_extent_dilate(functional_extent, -simple_theme_data->normal_border.x);
+		}
+		interior_extent = sol_range_control_distribution_interior_extent_with_minimum_size(distribution, functional_extent, min_interior_size);
+		break;
+	case SOL_OVERLAY_ORIENTATION_VERTICAL:
+		min_interior_size = simple_theme_data->base_unit_size.y - simple_theme_data->box_content_border.y;
+		functional_extent = s16_extent_dilate(current_rect.y, -simple_theme_data->box_content_border.y);
+		if(flags & SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED)
+		{
+			functional_extent = s16_extent_dilate(functional_extent, -simple_theme_data->normal_border.y);
+		}
+		interior_extent = sol_range_control_distribution_interior_extent_with_minimum_size(distribution, functional_extent, min_interior_size);
+		break;
+	}
 
 	interior_size = s16_extent_size(interior_extent);
 
@@ -487,8 +499,8 @@ static s16_extent sol_gui_theme_simple_range_control_selection_extent(struct sol
 
 	/** remove the interior extent from the functional extent
 	 * note: `sol_range_control_distribution_interior_extent_with_minimum_size` rounds towards -infinity so to counteract this; round towards +infinity here */
-	functional_extent.end = functional_extent.end - half_interior_size;
-	functional_extent.start = functional_extent.start - half_interior_size + interior_size;
+	functional_extent.start = functional_extent.start + half_interior_size;
+	functional_extent.end = functional_extent.end + half_interior_size - interior_size;
 
 	return functional_extent;
 }
@@ -638,6 +650,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.range_control_interior   = &sol_gui_theme_simple_range_control_interior,
 		.range_control_size_x     = &sol_gui_theme_simple_range_control_size_x,
 		.range_control_size_y     = &sol_gui_theme_simple_range_control_size_y,
+		.range_control_selection  = &sol_gui_theme_simple_range_control_selection_extent,
 
 	};
 

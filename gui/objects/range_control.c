@@ -21,15 +21,48 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "solipsix/sol_utils.h"
 #include "solipsix/sol_input.h"
 #include "solipsix/gui/objects/range_control.h"
 
+
+static inline void sol_gui_range_control_alter_value(struct sol_gui_range_control* range_control, struct sol_gui_theme* theme, s16_rect current_rect, s16_vec2 mouse_location, struct sol_range_control_distribution distribution)
+{
+	s16_extent selection_extent;
+	int16_t n, d;
+
+	selection_extent = theme->range_control_selection(theme, range_control->base.flags, range_control->orientation, current_rect, distribution);
+
+	switch(range_control->orientation)
+	{
+	case SOL_OVERLAY_ORIENTATION_HORIZONTAL:
+		n = mouse_location.x;
+		break;
+	case SOL_OVERLAY_ORIENTATION_VERTICAL:
+		n = mouse_location.y;
+		break;
+	}
+
+	d = s16_extent_size(selection_extent) - 1;
+	d = SOL_MAX(d, 1);
+
+	n = n - selection_extent.start - range_control->interior_selection_offset;
+	n = SOL_CLAMP(n, 0, d);
+
+	range_control->update_action(range_control->data, n, d);
+}
 
 bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_range_control* range_control = (struct sol_gui_range_control*)obj;
 	struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
+
+	struct sol_range_control_distribution distribution;
 	s16_vec2 mouse_location;
+	
+	s16_rect current_rect;
+	bool hit_interior;
 
 	// should activate only on release?
 	// dynamic case handling?
@@ -37,23 +70,38 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		//range_control->select_action(range_control->data);
-		// sol_gui_context_change_focused_object(context, obj);
+		sol_gui_context_change_focused_object(context, obj);
+		mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
+		current_rect = sol_gui_object_absolute_rect(obj);
+		range_control->get_distribution(range_control->data, &distribution);
+
+		hit_interior = theme->range_control_interior(theme, obj->flags, range_control->orientation, current_rect, mouse_location, distribution, &range_control->interior_selection_offset);
+
+		if(!hit_interior)
+		{
+			sol_gui_range_control_alter_value(range_control, theme, current_rect, mouse_location, distribution);
+		}
 		return true;
 
-	case SDL_EVENT_MOUSE_BUTTON_UP:
+	case SDL_EVENT_MOUSE_MOTION:
+		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+		{
+			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+			current_rect = sol_gui_object_absolute_rect(obj);
+			range_control->get_distribution(range_control->data, &distribution);
 
-		// sol_gui_context_change_focused_object(context, NULL);
-		// mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
-		// if(obj == sol_gui_context_hit_scan(context, mouse_location))
-		// {
-		// 	range_control->select_action(range_control->data);
-		// 	return true;
-		// }
-		// else
-		// {
-		// 	return false;
-		// }
+			sol_gui_range_control_alter_value(range_control, theme, current_rect, mouse_location, distribution);
+
+			return true;
+		}
+		return false;
+
+
+		
+
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+		sol_gui_context_change_focused_object(context, NULL);
+
 		return false;
 
 	default:

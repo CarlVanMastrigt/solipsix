@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2024,2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -76,49 +76,36 @@ void sol_sync_task_system_terminate(struct sol_sync_task_system* task_system);
 
 
 
-struct sol_sync_task
+struct sol_sync_task_handle
 {
-    struct sol_sync_primitive primitive;
-
-    struct sol_sync_task_system* task_system;
-
-    void(*task_function)(void*);
-    void* task_function_data;
-
-    /// need to only init atomics once: "If obj was not default-constructed, or this function is called twice on the same obj, the behavior is undefined."
-
-    atomic_uint_fast32_t condition_count;
-    atomic_uint_fast32_t reference_count;
-
-    struct sol_lockfree_hopper successor_hopper;
+    struct sol_sync_primitive* primitive;
 };
 
-
 // task starts inert/unactivated and cannot run (so that order of execution relative to other primitives can be established) `sol_sync_task_activate` must be called for it to run
-struct sol_sync_task* sol_sync_task_prepare(struct sol_sync_task_system* task_system, void(*task_function)(void*), void* data);
+struct sol_sync_task_handle sol_sync_task_prepare(struct sol_sync_task_system* task_system, void(*task_function)(void*), void* data);
 
 /// allows a task to be executed
 /// must either add all associated dependencies/condition before calling this OR impose conditions and retain references the task as necessary to set up dependencies later
-void sol_sync_task_activate(struct sol_sync_task* task);//commit?
+void sol_sync_task_activate(struct sol_sync_task_handle task);//commit?
 
 
 // all conditions must be satisfied for a task to run
 
 /// corresponds to the number of times a matching `sol_sync_task_signal_conditions` must be called for the task before it can be executed
 /// at least one condition must be unsignalled in order to set up another condition to that task if it has already been enqueued
-void sol_sync_task_impose_conditions(struct sol_sync_task* task, uint_fast32_t count);
+void sol_sync_task_impose_conditions(struct sol_sync_task_handle task, uint_fast32_t count);
 
 /// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to sol_sync_task_impose_conditions
-void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t count);
+void sol_sync_task_signal_conditions(struct sol_sync_task_handle task, uint_fast32_t count);
 
 
 /// corresponds to the number of times a matching `sol_sync_task_release_reference` must be called for the task before it can be cleaned up
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
-void sol_sync_task_retain_references(struct sol_sync_task* task, uint_fast32_t count);
+void sol_sync_task_retain_references(struct sol_sync_task_handle task, uint_fast32_t count);
 
 /// signal that we are done setting up things that must happen before cleanup (e.g. setting up successors)
-void sol_sync_task_release_references(struct sol_sync_task* task, uint_fast32_t count);
+void sol_sync_task_release_references(struct sol_sync_task_handle task, uint_fast32_t count);
 
 
-// onus on the use to ensure sucessor is a valid synchonization primitive
-void sol_sync_task_attach_successor(struct sol_sync_task* task, struct sol_sync_primitive* successor);
+/** convenient typed dependency setup */
+void sol_sync_task_attach_successor(struct sol_sync_task_handle task, struct sol_sync_primitive* successor);

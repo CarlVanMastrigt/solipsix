@@ -87,7 +87,7 @@ static inline s16_rect s16_rect_sub_border(s16_rect r, s16_vec2 b)
 static inline bool s16_rect_contains_point(s16_rect r, s16_vec2 p)
 {
     // return ((r.x.start <= p.x)&&(r.y.start <= p.y)&&(r.x.end > p.x)&&(r.y.end> p.y));
-    return s16_extent_contains_value(r.x, p.x) && s16_extent_contains_value(r.y, p.y);
+    return s16_extent_contains(r.x, p.x) && s16_extent_contains(r.y, p.y);
 }
 static inline s16_vec2 s16_rect_size(s16_rect r)
 {

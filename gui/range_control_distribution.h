@@ -20,6 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include <inttypes.h>
+#include <stdio.h>
 
 #include "solipsix/math/s16_extent.h"
 
@@ -88,7 +89,7 @@ static inline s16_extent sol_range_control_distribution_interior_extent(struct s
 
 static inline s16_extent sol_range_control_distribution_interior_extent_with_minimum_size(struct sol_range_control_distribution distribution, s16_extent exterior_extent, int16_t minimum_interior)
 {
-	int16_t size, delta;
+	int16_t size, half_interior;
 	s16_extent result_extent;
 
 	size = s16_extent_size(exterior_extent);
@@ -104,8 +105,25 @@ static inline s16_extent sol_range_control_distribution_interior_extent_with_min
 
 	if(size < minimum_interior)
 	{
-		result_extent = s16_extent_resize(result_extent, minimum_interior);
-		result_extent = s16_extent_refit(result_extent, exterior_extent);
+		switch(distribution.type)
+		{
+		case SOL_VARIABLE_BAR_DISTRIBUTION_UINT32:
+			distribution.uint32.inner = 0;
+			break;
+		case SOL_VARIABLE_BAR_DISTRIBUTION_FLOAT32:
+			distribution.float32.inner = 0.0f;
+			break;
+		}
+
+		half_interior = minimum_interior >> 1;
+
+		exterior_extent.start += half_interior;
+		exterior_extent.end += half_interior - minimum_interior;
+
+		result_extent = sol_range_control_distribution_interior_extent(distribution, exterior_extent);
+
+		result_extent.start -= half_interior;
+		result_extent.end -= half_interior - minimum_interior;
 	}
 
 	return result_extent;

@@ -77,8 +77,8 @@ static int sol_vk_sync_thread_function(void* in)
                 /** signal the primitive and remove it from the list */
                 if(result == VK_SUCCESS)
                 {
-                    assert(manager->entry_count > 1);
-                    sol_sync_primitive_signal_condition(manager->primitives[entry_index]);
+                    assert(manager->entry_count >= 1);
+                    sol_sync_primitive_signal_conditions(manager->primitives[entry_index], 1);
 
                     manager->entry_count--;
                     manager->primitives[entry_index] = manager->primitives[manager->entry_count];
@@ -166,7 +166,7 @@ void sol_vk_sync_manager_impose_timeline_semaphore_moment_condition(struct sol_v
     }
 
 
-    sol_sync_primitive_impose_condition(successor);
+    sol_sync_primitive_impose_conditions(successor, 1);
 
     mtx_lock(&manager->mutex);
     assert(manager->running);

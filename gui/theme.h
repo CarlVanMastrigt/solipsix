@@ -89,13 +89,13 @@ struct sol_gui_theme
 
     /** these are used for generic scroll bars, the intention being a box will first be rendered then this will be rendered as content on top, much the same as text, 
      * TODO: consider that these could be used for BOTH an x and y variable at the same time*/
-    void       (*range_control_render)   (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour main_colour, enum sol_overlay_colour interior_colour, struct sol_range_control_distribution);
+    void       (*range_control_render)    (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, struct sol_overlay_render_batch * batch, enum sol_overlay_colour main_colour, enum sol_overlay_colour interior_colour, struct sol_range_control_distribution);
     /** note: this will only communicate selection of the interior (grababale part) of the bar, box select is required to know if another part of the bar was selected 
      * the selected_offset is an axis applicable offset to apply to the cursor when determining the current position of the cursor withing the selection_extent */
-    bool       (*range_control_select)   (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, s16_vec2 location);
-    bool       (*range_control_interior) (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, s16_vec2 location, struct sol_range_control_distribution, int16_t* range_offset);
+    bool       (*range_control_select)    (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, s16_vec2 location);
+    bool       (*range_control_interior)  (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, s16_vec2 location, struct sol_range_control_distribution, int16_t* range_offset);
     /** this returns the extent (in the appropriate axis) over which  */ 
-    s16_extent (*range_control_selection_extent) (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, struct sol_range_control_distribution);
+    s16_extent (*range_control_selection) (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, struct sol_range_control_distribution);
 
     /** the size of a variable box widget; should be used INSTEAD of the box size functions (despite also rendering the box being suggested) 
      * the number of gradations may be inaccurate if a nonzero interior region is provided in the distribution used to render */

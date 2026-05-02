@@ -40,7 +40,7 @@ void sol_lockfree_hopper_reset(struct sol_lockfree_hopper* hopper)
 
     prev_value = atomic_exchange_explicit(&hopper->head, SOL_LOCKFREE_POOL_INVALID_ENTRY, memory_order_relaxed);
 
-    assert(prev_value == SOL_LOCKFREE_HOPPER_CLOSED_BIT);/// hopper should be locked/invalid upon reset
+    assert(prev_value == SOL_LOCKFREE_HOPPER_CLOSED_BIT);/** hopper should be locked/invalid upon reset */
 }
 
 bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, void* entry)

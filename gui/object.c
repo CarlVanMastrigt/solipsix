@@ -214,6 +214,19 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 }
 
 
+s16_rect sol_gui_object_absolute_rect(struct sol_gui_object* obj)
+{
+	s16_rect rect = obj->rect;
+
+	while((obj = obj->parent))
+	{
+		/** offset the rect by all of its parents starts */
+		rect = s16_rect_add_offset(rect, s16_rect_start(obj->rect));
+	}
+
+	return rect;
+}
+
 
 // this should be used with the utmost care (prefer calling context reorganization function)
 // void sol_gui_object_reorganise(struct sol_gui_object* obj, s16_rect rect)
@@ -224,22 +237,3 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 // }
 
 
-// perhaps handle active widget if necessary? also searches for
-bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_input* input)
-{
-	if(obj->input_action)
-	{
-		return obj->input_action(obj, input);
-	}
-	fprintf(stderr, "should not allow input to be called when widget does not support input");
-	return false;
-}
-
-
-void sol_gui_object_reposition_contents(struct sol_gui_object* obj)
-{
-	assert(false);
-	/** with the switch back to the old paradigm of min height dependent on actual width this function has become a foot gun */ 
-	sol_gui_object_set_extent_x(obj, obj->rect.x);
-	sol_gui_object_set_extent_x(obj, obj->rect.y);
-}
