@@ -18,16 +18,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdlib.h>
-#include <stdio.h>
-#warning remove above
 #include <assert.h>
 
 #include <SDL3/SDL_timer.h>
 
 #include "sol_input.h"
 
-#include "gui/context.h"
-#include "gui/objects/container.h"
+#include "solipsix/gui/context.h"
+#include "solipsix/gui/object.h"
+#include "solipsix/gui/objects/container.h"
 
 #include "sol_utils.h"
 
@@ -180,7 +179,7 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 		.SOL_GUI_EVENT_OBJECT_FOCUS_END       = SOL_GUI_EVENT_BASE + 3,
 	};
 
-	root_container = sol_gui_container_object_create(context);
+	root_container = sol_gui_container_create(context).object;
 
 	context->root_container = root_container;
 	root_container->flags |= SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT;

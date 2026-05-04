@@ -19,11 +19,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <assert.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "solipsix/sol_utils.h"
 #include "solipsix/sol_input.h"
+
 #include "solipsix/gui/objects/range_control.h"
+#include "solipsix/gui/objects/range_control_basis.h"
 
 
 static inline void sol_gui_range_control_alter_value(struct sol_gui_range_control* range_control, struct sol_gui_theme* theme, s16_rect current_rect, s16_vec2 mouse_location, struct sol_range_control_distribution distribution)
@@ -197,16 +198,14 @@ void sol_gui_range_control_construct(struct sol_gui_range_control* range_control
 }
 
 // cannot construct these as they have flexible buffers
-struct sol_gui_range_control* sol_gui_range_control_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data)
+struct sol_gui_range_control_handle sol_gui_range_control_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data)
 {
 	struct sol_gui_range_control* range_control = malloc(sizeof(struct sol_gui_range_control));
 
 	sol_gui_range_control_construct(range_control, context, orientation, get_distribution, update_action, destroy_action, data);
 
-	return range_control;
-}
-
-struct sol_gui_object* sol_gui_range_control_object_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data)
-{
-	return sol_gui_range_control_as_object(sol_gui_range_control_create(context, orientation, get_distribution, update_action, destroy_action, data));
+	return (struct sol_gui_range_control_handle)
+	{
+		.object = (struct sol_gui_object*) range_control,
+	};
 }

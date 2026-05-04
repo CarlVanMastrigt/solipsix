@@ -20,12 +20,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <assert.h>
 
-#include "gui/objects/container.h"
+#include "solipsix/sol_utils.h"
 
-#include "sol_utils.h"
+#include "solipsix/gui/object.h"
+#include "solipsix/gui/objects/container.h"
+#include "solipsix/gui/objects/container_basis.h"
 
-#warning container should only perform actions on enabled children
-#warning is it better to remove the concept of enabled/disabled entirely? would require altering structure to add/remove elements (add in random locations)
+
+/** container should only perform actions on enabled children
+ * OR: would it be better to remove the concept of enabled/disabled entirely? would require altering structure to add/remove elements (add in random locations) */
 
 void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
@@ -241,18 +244,16 @@ void sol_gui_container_construct(struct sol_gui_container* container, struct sol
 	container->last_child  = NULL;
 }
 
-struct sol_gui_container* sol_gui_container_create(struct sol_gui_context* context)
+struct sol_gui_container_handle sol_gui_container_create(struct sol_gui_context* context)
 {
 	struct sol_gui_container* container = malloc(sizeof(struct sol_gui_container));
 
 	sol_gui_container_construct(container, context);
 
-	return container;
-}
-
-struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* context)
-{
-	return sol_gui_container_as_object( sol_gui_container_create(context) );
+	return (struct sol_gui_container_handle)
+	{
+		.object = (struct sol_gui_object*) container,
+	};
 }
 
 

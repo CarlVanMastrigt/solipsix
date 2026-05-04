@@ -402,7 +402,7 @@ void sol_vk_buffer_atlas_destroy(struct sol_vk_buffer_atlas* table, struct cvm_v
 	assert(table->active_accessor_count == 0);
 	assert(sol_vk_buffer_atlas_access_range_stack_is_empty(&table->in_flight_access_ranges));
 	assert(sol_vk_buffer_atlas_region_array_is_empty(&table->region_array));
-	assert(sol_buddy_tree_empty(&table->region_tree));
+	assert(sol_buddy_tree_is_empty(&table->region_tree));
 
 	sol_vk_buffer_atlas_region_array_terminate(&table->region_array);
 

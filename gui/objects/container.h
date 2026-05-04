@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025,2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -19,43 +19,21 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "gui/object.h"
+#include "solipsix/gui/enums.h"
 
-// container definition included as is common basis for custom gui objects
-struct sol_gui_container
+struct sol_gui_context;
+struct sol_gui_object;
+
+struct sol_gui_container_handle
 {
-	struct sol_gui_object base;
-	struct sol_gui_object* first_child;
-	struct sol_gui_object* last_child;
+	struct sol_gui_object* object;
 };
 
-void sol_gui_container_construct(struct sol_gui_container* container, struct sol_gui_context* context);
-
-struct sol_gui_container* sol_gui_container_create(struct sol_gui_context* context);
-struct sol_gui_object* sol_gui_container_object_create(struct sol_gui_context* context);
-
-static inline struct sol_gui_object* sol_gui_container_as_object(struct sol_gui_container* container)
-{
-	return &container->base;
-}
-
-/** generic functions */
-void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location);
-void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child);
-void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child);
-void sol_gui_container_destroy(struct sol_gui_object* obj);
-
-void sol_gui_container_distribute_position_flags(struct sol_gui_object* obj, uint32_t position_flags);
-int16_t sol_gui_container_min_size_x(struct sol_gui_object* obj);
-int16_t sol_gui_container_min_size_y(struct sol_gui_object* obj);
-void sol_gui_container_set_extent_x(struct sol_gui_object* obj, s16_extent extent_x);
-void sol_gui_container_set_extent_y(struct sol_gui_object* obj, s16_extent extent_y);
+struct sol_gui_container_handle sol_gui_container_create(struct sol_gui_context* context);
 
 /** moves a child (potentioaly) relative to a sibling
  * if placement is start/end sibling will be ignored (may be NULL)
  * if sibling is NULL before/after will move child relative to present sibling in the spot before/after itself (basically before becomes; move backwards and after; move forwards)
  * NOTE: placement is with respect to ALL objects in the container; not just active ones (could pass in ignore inactive but this raises too may questions IMO) */
-void sol_gui_container_move_child(struct sol_gui_container* container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement);
+void sol_gui_container_move_child(struct sol_gui_container_handle container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement);
 
-int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container);

@@ -21,6 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include "gui/objects/container.h"
+#include "gui/objects/container_basis.h"
 #include "gui/objects/sequence.h"
 #include "sol_utils.h"
 
@@ -615,21 +616,14 @@ void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gu
 	}
 }
 
-struct sol_gui_sequence* sol_gui_sequence_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)
+struct sol_gui_sequence_handle sol_gui_sequence_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)
 {
 	struct sol_gui_sequence* sequence = malloc(sizeof(struct sol_gui_sequence));
 
 	sol_gui_sequence_construct(sequence, context, orientation, distribution);
 
-	return sequence;
-}
-
-struct sol_gui_object* sol_gui_sequence_object_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)
-{
-	return sol_gui_sequence_as_object( sol_gui_sequence_create(context, orientation, distribution) );
-}
-
-struct sol_gui_object* sol_gui_sequence_as_object(struct sol_gui_sequence* sequence)
-{
-	return &sequence->base.base;
+	return (struct sol_gui_sequence_handle)
+	{
+		.object = (struct sol_gui_object*) sequence,
+	};
 }

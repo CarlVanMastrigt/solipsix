@@ -19,17 +19,17 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
 #include <assert.h>
-#include <stdio.h>
 
-#include "gui/objects/panel.h"
-#include "overlay/enums.h"
+#include "solipsix/overlay/enums.h"
+
+#include "solipsix/gui/object.h"
+#include "solipsix/gui/objects/panel.h"
 
 
 struct sol_gui_panel
 {
 	struct sol_gui_object base;
 	struct sol_gui_object* child;
-	uint32_t inset_content: 1;
 };
 
 static void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
@@ -199,7 +199,7 @@ static const struct sol_gui_object_structure_functions sol_gui_panel_functions =
 	.destroy                   = &sol_gui_panel_destroy,
 };
 
-void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered, bool inset_content)
+void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered)
 {
 	struct sol_gui_object* base = &panel->base;
 	sol_gui_object_construct(base, context);
@@ -211,25 +211,17 @@ void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context
 		base->flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 	}
 
-	panel->inset_content = inset_content;
 	panel->child = NULL;
 }
 
-struct sol_gui_panel* sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content)
+struct sol_gui_panel_handle sol_gui_panel_create(struct sol_gui_context* context, bool clear_bordered)
 {
 	struct sol_gui_panel* panel = malloc(sizeof(struct sol_gui_panel));
 
-	sol_gui_panel_construct(panel, context, clear_bordered, inset_content);
+	sol_gui_panel_construct(panel, context, clear_bordered);
 
-	return panel;
-}
-
-struct sol_gui_object* sol_gui_panel_object_create(struct sol_gui_context* context, bool clear_bordered, bool inset_content)
-{
-	return sol_gui_panel_as_object( sol_gui_panel_create(context, clear_bordered, inset_content) );
-}
-
-struct sol_gui_object* sol_gui_panel_as_object(struct sol_gui_panel* panel)
-{
-	return &panel->base;
+	return (struct sol_gui_panel_handle)
+	{
+		.object = (struct sol_gui_object*) panel,
+	};
 }

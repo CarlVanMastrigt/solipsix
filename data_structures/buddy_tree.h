@@ -48,7 +48,7 @@ static inline bool sol_buddy_tree_has_space(struct sol_buddy_tree* tree, uint32_
 }
 
 /** tree has NO allocations */
-static inline bool sol_buddy_tree_empty(struct sol_buddy_tree* tree)
+static inline bool sol_buddy_tree_is_empty(struct sol_buddy_tree* tree)
 {
 	return tree->availablity_masks[1] == tree->size;
 }

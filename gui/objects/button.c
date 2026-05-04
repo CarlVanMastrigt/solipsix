@@ -27,20 +27,31 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "solipsix/gui/objects/button.h"
 
 #include "solipsix/sol_font.h"
+#include "solipsix/gui/objects/button_basis.h"
 
 
 
-
-
-
-bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
+bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_context* context = obj->context;
 	s16_vec2 mouse_location;
 
-	// should activate only on release?
-	// dynamic case handling?
+	switch(input->sdl_event.type)
+	{
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		button->select_action(button->data);
+		return true;
+
+	default:
+		return false;
+	}
+}
+bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input)
+{
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_context* context = obj->context;
+	s16_vec2 mouse_location;
 
 	switch(input->sdl_event.type)
 	{
@@ -67,11 +78,6 @@ bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struc
 		{
 			return true;// must consume input if focused? seems stupid
 		}
-		// handle non-standard (custom) events
-		// if(event_type == context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END)
-		// {
-		// 	//do nothing here...
-		// }
 		return false;
 	}
 }
@@ -85,13 +91,21 @@ void sol_gui_button_destroy_action(struct sol_gui_object* obj)
 	}
 }
 
-void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data)
+
+void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, bool action_on_release)
 {
 	sol_gui_object_construct(&button->base, context);
 
-	button->base.input_action = &sol_gui_button_default_input_action;
-	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE;
-	#warning focusable is questionable property, but useful when taking action on release &c.
+	if(action_on_release)
+	{
+		button->base.input_action = &sol_gui_button_default_input_action_on_button_up;
+		button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE;
+	}
+	else
+	{
+		button->base.input_action = &sol_gui_button_default_input_action_on_button_down;
+		button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE;
+	}
 
 	button->select_action = select_action;
 	button->destroy_action = destroy_action;
@@ -105,10 +119,10 @@ void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_cont
 
 
 
-// specific buttons
 
-// get the buffer malloc'd after the button,
-//actually preferable here NOT to have pointer as it communicates that its not an allocated buffer and should NOT be freed
+
+/** get the buffer malloc'd after the button,
+actually preferable here NOT to have pointer as it communicates that its not an allocated buffer and should NOT be freed */
 
 static inline void* sol_gui_button_get_buffer(struct sol_gui_button* button)
 {
@@ -177,24 +191,23 @@ static const struct sol_gui_object_structure_functions sol_gui_text_button_struc
 	.min_size_y = &sol_gui_text_button_min_size_y,
 	.destroy    = &sol_gui_button_destroy_action,
 };
-struct sol_gui_button* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* text)
+struct sol_gui_text_button_handle sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* text)
 {
 	size_t text_len = strlen(text) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + text_len);
 	void* text_buf = sol_gui_button_get_buffer(button);
 
-	sol_gui_button_construct(button, context, select_action, destroy_action, data);
+	sol_gui_button_construct_default(button, context, select_action, destroy_action, data, true);
 	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED | SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT;
 
 	button->base.structure_functions = &sol_gui_text_button_structure_functions;
 
 	memcpy(text_buf, text, text_len);
 
-	return button;
-}
-struct sol_gui_object* sol_gui_text_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* text)
-{
-	return sol_gui_button_as_object( sol_gui_text_button_create(context, select_action, destroy_action, data, text) );
+	return (struct sol_gui_text_button_handle)
+	{
+		.object = (struct sol_gui_object*) button,
+	};
 }
 
 
@@ -258,24 +271,23 @@ static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_
 	.min_size_y = &sol_gui_utf8_icon_button_min_size_y,
 	.destroy    = &sol_gui_button_destroy_action,
 };
-struct sol_gui_button* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* utf8_icon)
+struct sol_gui_utf8_icon_button_handle sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* utf8_icon)
 {
 	size_t utf8_icon_len = strlen(utf8_icon) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + utf8_icon_len);
 	void* utf8_icon_buf = sol_gui_button_get_buffer(button);
 
-	sol_gui_button_construct(button, context, select_action, destroy_action, data);
+	sol_gui_button_construct_default(button, context, select_action, destroy_action, data, true);
 	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 
 	button->base.structure_functions = &sol_gui_utf8_icon_button_structure_functions;
 
 	memcpy(utf8_icon_buf, utf8_icon, utf8_icon_len);
 
-	return button;
-}
-struct sol_gui_object* sol_gui_utf8_icon_button_object_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* utf8_icon)
-{
-	return sol_gui_button_as_object( sol_gui_utf8_icon_button_create(context, select_action, data, destroy_action, utf8_icon) );
+	return (struct sol_gui_utf8_icon_button_handle)
+	{
+		.object = (struct sol_gui_object*) button,
+	};
 }
 
 
