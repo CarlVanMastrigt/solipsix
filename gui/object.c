@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdio.h>
 
+
 void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context* context)
 {
 	assert(obj);
@@ -34,17 +35,29 @@ void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context
 		.context = context,
 		// .structure_functions = NULL,
 		// .input_action = NULL,
-		.reference_count = 1,// existing is a reference, MUST call delete
-		.flags = SOL_GUI_OBJECT_STATUS_FLAG_REGISTERED | SOL_GUI_OBJECT_STATUS_FLAG_ENABLED,
+		.reference_count = 0,
+		.flags = SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED | SOL_GUI_OBJECT_STATUS_FLAG_ENABLED,
 		// .property_flags = 0,
 	};
 
+	context->unreferenced_object_count++;
 	context->registered_object_count++;
 }
 
 void sol_gui_object_retain(struct sol_gui_object* obj)
 {
-	assert(obj->reference_count > 0);
+	struct sol_gui_context* context = obj->context;
+
+	if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED)
+	{
+		obj->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED;
+		context->unreferenced_object_count--;
+		assert(obj->reference_count == 0);
+	}
+	else
+	{
+		assert(obj->reference_count > 0);
+	}
 
 	obj->reference_count++;
 }
@@ -84,6 +97,13 @@ void sol_gui_object_remove_from_parent(struct sol_gui_object* obj)
 	}
 }
 
+void sol_gui_object_recursive_release_refernces(struct sol_gui_object* obj)
+{
+	if(obj->structure_functions && obj->structure_functions->release_refernces)
+	{
+		obj->structure_functions->release_refernces(obj);
+	}
+}
 
 
 
@@ -195,7 +215,10 @@ void sol_gui_object_add_child(struct sol_gui_object* obj, struct sol_gui_object*
 	sol_gui_object_retain(child);
 
 	child->parent = obj;
+
 	obj->structure_functions->add_child(obj, child);
+
+	assert(child->parent != NULL);
 }
 
 void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child)
@@ -205,16 +228,17 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 	assert(child);
 	assert(child->parent == obj);
 
-	sol_gui_object_release(child);
-
 	obj->structure_functions->remove_child(obj, child);
+
 	child->parent = NULL;
 	child->prev = NULL;
 	child->next = NULL;
+
+	sol_gui_object_release(child);
 }
 
 
-s16_rect sol_gui_object_absolute_rect(struct sol_gui_object* obj)
+s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj)
 {
 	s16_rect rect = obj->rect;
 
@@ -225,6 +249,41 @@ s16_rect sol_gui_object_absolute_rect(struct sol_gui_object* obj)
 	}
 
 	return rect;
+}
+
+s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor)
+{
+	assert(sol_gui_object_is_ancestor(obj, ancestor));
+
+	s16_rect rect = obj->rect;
+
+	while((obj = obj->parent) && obj != ancestor)
+	{
+		rect = s16_rect_add_offset(rect, s16_rect_start(obj->rect));
+	}
+
+	return rect;
+}
+
+bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for)
+{
+	assert(obj);
+
+	while((obj = obj->parent))
+	{
+		if(obj == ancestor_to_search_for)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+bool sol_gui_object_toggle_activity(struct sol_gui_object* obj)
+{
+	#warning NYI
+	assert(false);
 }
 
 

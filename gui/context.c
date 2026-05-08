@@ -165,6 +165,7 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 		.window_offset = window_offset,
 		.theme = theme,
 		.registered_object_count = 0,
+		.unreferenced_object_count = 0,
 		.content_fit = true,
 		.highlighted_object = NULL,
 		.focused_object = NULL,
@@ -180,6 +181,7 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 	};
 
 	root_container = sol_gui_container_create(context).object;
+	sol_gui_object_retain(root_container);
 
 	context->root_container = root_container;
 	root_container->flags |= SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT;
@@ -204,11 +206,14 @@ void sol_gui_context_terminate(struct sol_gui_context* context)
 		sol_gui_object_release(context->previous_highlighted_object);
 	}
 
-	// this will effectively recursively release the objects in the heirarchy
+	/** this will effectively recursively release the objects in the heirarchy */
+	sol_gui_object_recursive_release_refernces(context->root_container);
 	root_widget_destroyed = sol_gui_object_release(context->root_container);
 	assert(root_widget_destroyed);
 
+	// printf("gui context registered object count: %u\n", context->registered_object_count);
 	assert(context->registered_object_count == 0);
+	assert(context->unreferenced_object_count == 0);
 
 	free(context->scratch_buffer);
 }

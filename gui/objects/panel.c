@@ -154,9 +154,15 @@ void sol_gui_panel_add_child(struct sol_gui_object* obj, struct sol_gui_object* 
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 
+	assert(child->prev == NULL);
+	assert(child->next == NULL);
+	assert(child->parent == obj);
+
 	assert(panel->child == NULL);
 
 	panel->child = child;
+
+
 }
 void sol_gui_panel_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child)
 {
@@ -169,37 +175,35 @@ void sol_gui_panel_remove_child(struct sol_gui_object* obj, struct sol_gui_objec
 	panel->child = NULL;
 	// rest is handled by wrapper function
 }
-void sol_gui_panel_destroy(struct sol_gui_object* obj)
+void sol_gui_panel_release_references(struct sol_gui_object* obj)
 {
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_object* child = panel->child;
 
 	if(child)
 	{
+		/** note: the order of these is very important */
+		sol_gui_object_recursive_release_refernces(child);
 		sol_gui_object_remove_child(obj, child);
-		sol_gui_object_release(child);
-		// ^ this line is responsible for recursive deletion of widgets, implicitly a panel "gains ownership" of it's child when they are added
-		// specifically they take implicit ownership of the initial reference all widgets start with
 	}
-
-	assert(panel->base.reference_count == 0);
 }
 
 static const struct sol_gui_object_structure_functions sol_gui_panel_functions =
 {
 	.render                    = &sol_gui_panel_render,
 	.hit_scan                  = &sol_gui_panel_hit_scan,
-	.distribute_position_flags = NULL,
+	.distribute_position_flags = &sol_gui_panel_distribute_position_flags,
 	.min_size_x                = &sol_gui_panel_min_size_x,
 	.min_size_y                = &sol_gui_panel_min_size_y,
 	.set_extent_x              = &sol_gui_panel_set_extent_x,
 	.set_extent_y              = &sol_gui_panel_set_extent_y,
 	.add_child                 = &sol_gui_panel_add_child,
 	.remove_child              = &sol_gui_panel_remove_child,
-	.destroy                   = &sol_gui_panel_destroy,
+	.release_refernces         = &sol_gui_panel_release_references,
+	// .destroy                   = &sol_gui_panel_destroy,
 };
 
-void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered)
+static inline void sol_gui_panel_construct(struct sol_gui_panel* panel, struct sol_gui_context* context, bool clear_bordered)
 {
 	struct sol_gui_object* base = &panel->base;
 	sol_gui_object_construct(base, context);

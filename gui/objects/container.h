@@ -19,7 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "solipsix/gui/enums.h"
+#include "solipsix/gui/constants.h"
 
 struct sol_gui_context;
 struct sol_gui_object;

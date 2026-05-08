@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -19,13 +19,14 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "gui/context.h"
-#include "gui/object.h"
+#include <inttypes.h>
 
-#include "gui/objects/container.h"
-#include "gui/objects/sequence.h"
-#include "gui/objects/button.h"
-#include "gui/objects/panel.h"
-#include "gui/objects/range_control.h"
-#include "gui/objects/floating_region.h"
-#include "gui/objects/anchor.h"
+struct sol_gui_context;
+struct sol_gui_object;
+
+struct sol_gui_floating_region_handle
+{
+	struct sol_gui_object* object;
+};
+
+struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context, uint32_t position_flags_to_preserve);

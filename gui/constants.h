@@ -39,6 +39,7 @@ enum sol_gui_distribution
     SOL_GUI_SPACE_DISTRIBUTION_UNIFORM,
 };
 
+#warning implement these (or similar) in add_child associated functions
 enum sol_gui_placement
 {
     SOL_GUI_PLACEMENT_BEFORE,
@@ -47,12 +48,21 @@ enum sol_gui_placement
     SOL_GUI_PLACEMENT_END
 };
 
+enum sol_gui_relative_placement
+{
+    SOL_GUI_RELATIVE_PLACEMENT_BEFORE,/** end of object aligned with start of reference */
+    SOL_GUI_RELATIVE_PLACEMENT_START_SIDE,/** start of both line up */
+    SOL_GUI_RELATIVE_PLACEMENT_CENTRED,/** centrelines match */
+    SOL_GUI_RELATIVE_PLACEMENT_END_SIDE,/** end of both line up */
+    SOL_GUI_RELATIVE_PLACEMENT_AFTER,/** start of object aligned with end of reference */
+};
+
 // SOL_GUI_REFERENCE_BIT_COUNT + SOL_GUI_OBJECT_STATUS_BIT_COUNT + SOL_GUI_OBJECT_PROPERTY_BIT_COUNT <= 32
 #define SOL_GUI_REFERENCE_BIT_COUNT 8
 
 
 #define SOL_GUI_OBJECT_FLAGS_BIT_COUNT 24
-#define SOL_GUI_OBJECT_STATUS_FLAG_REGISTERED      0x000001 /** used for validation, ensures the object base is only registered and constructed once */
+#define SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED    0x000001 /** used for freshly constructed surfaces, this is the state objects are created in before being retained by anything else (e.g. their parent container) */
 #define SOL_GUI_OBJECT_STATUS_FLAG_ENABLED         0x000002 /* inactive objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
 #define SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT         0x000004 /** used for validation in various places*/
 #define SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED         0x000008

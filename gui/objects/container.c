@@ -157,9 +157,14 @@ void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_obje
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 
+	assert(child->prev == NULL);
+	assert(child->next == NULL);
+	assert(child->parent == obj);
+
 	if(container->last_child == NULL)
 	{
 		assert(container->first_child == NULL);
+
 		container->first_child = child;
 		container->last_child  = child;
 	}
@@ -200,24 +205,22 @@ void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_o
 		assert(child->prev->next == child);
 		child->prev->next = child->next;
 	}
-
 }
-void sol_gui_container_destroy(struct sol_gui_object* obj)
+void sol_gui_container_recursive_release_references(struct sol_gui_object* obj)
 {
 	struct sol_gui_container* container = (struct sol_gui_container*)obj;
 	struct sol_gui_object* child;
 
 	while((child = container->first_child))
 	{
+		/** note: the order of these is very important */
+		sol_gui_object_recursive_release_refernces(child);
 		sol_gui_object_remove_child(obj, child);
-		sol_gui_object_release(child);
-		// ^ this line is responsible for recursive deletion of gui objects, implicitly a container "gains ownership" of it's children when they are added
-		// specifically they take implicit ownership of the initial reference all gui objects start with
-		// they also lose ownership when the child is removed through normal means
+		/** ^ these lines will usually be responsible for the vast majority of recursive deletion of gui objects
+		 * this is because a container is usually the only thing retaining it's children */
 	}
-
-	assert(container->base.reference_count == 0);
 }
+
 static const struct sol_gui_object_structure_functions sol_gui_container_structure_functions =
 {
 	.render                       = &sol_gui_container_render,
@@ -229,7 +232,8 @@ static const struct sol_gui_object_structure_functions sol_gui_container_structu
 	.set_extent_y                 = &sol_gui_container_set_extent_y,
 	.add_child                    = &sol_gui_container_add_child,
 	.remove_child                 = &sol_gui_container_remove_child,
-	.destroy                      = &sol_gui_container_destroy,
+	.release_refernces            = &sol_gui_container_recursive_release_references,
+	// .destroy                      = &sol_gui_container_destroy,
 };
 
 

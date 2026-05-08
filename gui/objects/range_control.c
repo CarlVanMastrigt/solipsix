@@ -119,7 +119,7 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 	}
 }
 
-void sol_gui_range_control_destroy_action(struct sol_gui_object* obj)
+void sol_gui_range_control_destroy(struct sol_gui_object* obj)
 {
 	struct sol_gui_range_control* range_control = (struct sol_gui_range_control*)obj;
 	if(range_control->destroy_action)
@@ -178,7 +178,7 @@ static const struct sol_gui_object_structure_functions sol_gui_text_range_contro
 	.hit_scan   = &sol_gui_range_control_hit_scan,
 	.min_size_x = &sol_gui_range_control_min_size_x,
 	.min_size_y = &sol_gui_range_control_min_size_y,
-	.destroy    = &sol_gui_range_control_destroy_action,
+	.destroy    = &sol_gui_range_control_destroy,
 };
 
 void sol_gui_range_control_construct(struct sol_gui_range_control* range_control, struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data)

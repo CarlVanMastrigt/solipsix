@@ -46,6 +46,7 @@ struct sol_gui_context
 
 
     uint32_t registered_object_count;//for debug
+    uint32_t unreferenced_object_count;//for debug
     bool content_fit;
 
     // uint32_t double_click_time;//move to settings

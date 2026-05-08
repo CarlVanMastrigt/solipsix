@@ -41,7 +41,8 @@ void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, str
 struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location);
 void sol_gui_container_add_child(struct sol_gui_object* obj, struct sol_gui_object* child);
 void sol_gui_container_remove_child(struct sol_gui_object* obj, struct sol_gui_object* child);
-void sol_gui_container_destroy(struct sol_gui_object* obj);
+// void sol_gui_container_destroy(struct sol_gui_object* obj);
+void sol_gui_container_recursive_release_references(struct sol_gui_object* obj);
 
 void sol_gui_container_distribute_position_flags(struct sol_gui_object* obj, uint32_t position_flags);
 int16_t sol_gui_container_min_size_x(struct sol_gui_object* obj);

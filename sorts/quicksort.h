@@ -18,6 +18,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 
+#warning test randomization in pivot selection
+
 #include <stdlib.h>
 
 #ifndef SOL_SORT_TYPE

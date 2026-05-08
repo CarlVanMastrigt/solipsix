@@ -26,7 +26,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "math/s16_rect.h"
 #include "math/s16_extent.h"
 
-#include "gui/enums.h"
+#include "gui/constants.h"
 #include "gui/context.h"
 #include "gui/theme.h"
 
@@ -63,20 +63,23 @@ struct sol_gui_object_structure_functions
     /** the above scan structure is suboptimal compared to offsetting by the checked location but more easily understood, as it operates in absolute screen space, with location never changing **/
 
     /** applies position flags to children_appropriately **/
-    void (*const distribute_position_flags) (struct sol_gui_object* obj, uint32_t position_flags);
+    void (*const distribute_position_flags)  (struct sol_gui_object* obj, uint32_t position_flags);
 
-    // sets the min_size of the gui_object to inform parents of their minimum size **/
-    int16_t (*const min_size_x) (struct sol_gui_object* obj);
-    int16_t (*const min_size_y) (struct sol_gui_object* obj);
+    /** sets the min_size of the gui_object to inform parents of their minimum size **/
+    int16_t (*const min_size_x)     (struct sol_gui_object* obj);
+    int16_t (*const min_size_y)     (struct sol_gui_object* obj);
 
     /** fills out any data affected by the position(size and location) of this object (which must have been set by the gui_object's parent) and decides how to distribute that space amongst its children if it has them
      * note: as all contents are relative, this should only take the dimensions of its rect into account (though its position will have been updated by the time this is called) **/
-    void (*const set_extent_x) (struct sol_gui_object* obj, s16_extent extent_x);
-    void (*const set_extent_y) (struct sol_gui_object* obj, s16_extent extent_y);
+    void (*const set_extent_x)      (struct sol_gui_object* obj, s16_extent extent_x);
+    void (*const set_extent_y)      (struct sol_gui_object* obj, s16_extent extent_y);
 
     /** adds a child to this widget, will error if widget cannot accept children **/
-    void (*const add_child)    (struct sol_gui_object* obj, struct sol_gui_object* child);
-    void (*const remove_child) (struct sol_gui_object* obj, struct sol_gui_object* child);
+    void (*const add_child)         (struct sol_gui_object* obj, struct sol_gui_object* child);
+    void (*const remove_child)      (struct sol_gui_object* obj, struct sol_gui_object* child);
+
+    /** recursively release all other standard referenced gui objects (e.g. children), needed as part of cleanup step to (help) prevent circular dependency */
+    void (*const release_refernces) (struct sol_gui_object* obj);
 
     void (*const destroy) (struct sol_gui_object* obj);
 };
@@ -121,6 +124,7 @@ bool sol_gui_object_release(struct sol_gui_object* obj);
 void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 
 
+void sol_gui_object_recursive_release_refernces(struct sol_gui_object* obj);
 
 
 /** these perform any meta operations on objects and call their internal functions if present */
@@ -135,10 +139,14 @@ void                   sol_gui_object_add_child          (struct sol_gui_object*
 void                   sol_gui_object_remove_child       (struct sol_gui_object* obj, struct sol_gui_object* child);
 
 
-s16_rect sol_gui_object_absolute_rect(struct sol_gui_object* obj);
+s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj);
+s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor);
+
+/** returns whether the object is active AFTER this function has run 
+ * will lay out its toplevel ancestors contents again after toggling */
+bool sol_gui_object_toggle_activity(struct sol_gui_object* obj);
 
 
-
-// this should be used with the utmost care (prefer calling context reorganization function)
-// void sol_gui_object_reorganise(struct sol_gui_object* obj, s16_rect rect);
+/** useful for ensuring (asserting) object graph stays acyclic */
+bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for);
 

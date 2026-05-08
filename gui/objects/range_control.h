@@ -21,9 +21,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
-#include "solipsix/gui/object.h"
 #include "solipsix/gui/range_control_distribution.h"
 #include "solipsix/overlay/enums.h"
+
+struct sol_gui_context;
+struct sol_gui_object;
 
 struct sol_gui_range_control_handle
 {

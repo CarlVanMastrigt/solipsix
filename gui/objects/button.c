@@ -30,6 +30,17 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "solipsix/gui/objects/button_basis.h"
 
 
+void sol_gui_button_set_packet(struct sol_gui_button_handle button_handle, struct sol_gui_button_packet packet)
+{
+	struct sol_gui_button* button = (struct sol_gui_button*)button_handle.object;
+
+	assert(button->packet.action  == NULL);
+	assert(button->packet.destroy == NULL);
+	assert(button->packet.data    == NULL);
+
+	button->packet = packet;
+}
+
 
 bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input)
 {
@@ -40,7 +51,10 @@ bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* o
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		button->select_action(button->data);
+		if(button->packet.action)
+		{
+			button->packet.action(button->packet.data);
+		}
 		return true;
 
 	default:
@@ -65,7 +79,10 @@ bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj
 		mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
 		if(obj == sol_gui_context_hit_scan(context, mouse_location))
 		{
-			button->select_action(button->data);
+			if(button->packet.action)
+			{
+				button->packet.action(button->packet.data);
+			}
 			return true;
 		}
 		else
@@ -82,17 +99,17 @@ bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj
 	}
 }
 
-void sol_gui_button_destroy_action(struct sol_gui_object* obj)
+void sol_gui_button_destroy(struct sol_gui_object* obj)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	if(button->destroy_action)
+	if(button->packet.destroy)
 	{
-		button->destroy_action(button->data);
+		button->packet.destroy(button->packet.data);
 	}
 }
 
 
-void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, bool action_on_release)
+void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_gui_context* context, struct sol_gui_button_packet packet, bool action_on_release)
 {
 	sol_gui_object_construct(&button->base, context);
 
@@ -107,9 +124,7 @@ void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_
 		button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE;
 	}
 
-	button->select_action = select_action;
-	button->destroy_action = destroy_action;
-	button->data = data;
+	button->packet = packet;
 }
 
 
@@ -189,15 +204,15 @@ static const struct sol_gui_object_structure_functions sol_gui_text_button_struc
 	.hit_scan   = &sol_gui_text_button_hit_scan,
 	.min_size_x = &sol_gui_text_button_min_size_x,
 	.min_size_y = &sol_gui_text_button_min_size_y,
-	.destroy    = &sol_gui_button_destroy_action,
+	.destroy    = &sol_gui_button_destroy,
 };
-struct sol_gui_text_button_handle sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* text)
+struct sol_gui_text_button_handle sol_gui_text_button_create(struct sol_gui_context* context, struct sol_gui_button_packet packet, char* text)
 {
 	size_t text_len = strlen(text) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + text_len);
 	void* text_buf = sol_gui_button_get_buffer(button);
 
-	sol_gui_button_construct_default(button, context, select_action, destroy_action, data, true);
+	sol_gui_button_construct_default(button, context, packet, true);
 	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED | SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT;
 
 	button->base.structure_functions = &sol_gui_text_button_structure_functions;
@@ -206,7 +221,7 @@ struct sol_gui_text_button_handle sol_gui_text_button_create(struct sol_gui_cont
 
 	return (struct sol_gui_text_button_handle)
 	{
-		.object = (struct sol_gui_object*) button,
+		.button.object = (struct sol_gui_object*) button,
 	};
 }
 
@@ -269,15 +284,15 @@ static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_
 	.hit_scan   = &sol_gui_utf8_icon_button_hit_scan,
 	.min_size_x = &sol_gui_utf8_icon_button_min_size_x,
 	.min_size_y = &sol_gui_utf8_icon_button_min_size_y,
-	.destroy    = &sol_gui_button_destroy_action,
+	.destroy    = &sol_gui_button_destroy,
 };
-struct sol_gui_utf8_icon_button_handle sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, char* utf8_icon)
+struct sol_gui_utf8_icon_button_handle sol_gui_utf8_icon_button_create(struct sol_gui_context* context, struct sol_gui_button_packet packet, char* utf8_icon)
 {
 	size_t utf8_icon_len = strlen(utf8_icon) + 1;
 	struct sol_gui_button* button = malloc(sizeof(struct sol_gui_button) + utf8_icon_len);
 	void* utf8_icon_buf = sol_gui_button_get_buffer(button);
 
-	sol_gui_button_construct_default(button, context, select_action, destroy_action, data, true);
+	sol_gui_button_construct_default(button, context, packet, true);
 	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 
 	button->base.structure_functions = &sol_gui_utf8_icon_button_structure_functions;
@@ -286,7 +301,7 @@ struct sol_gui_utf8_icon_button_handle sol_gui_utf8_icon_button_create(struct so
 
 	return (struct sol_gui_utf8_icon_button_handle)
 	{
-		.object = (struct sol_gui_object*) button,
+		.button.object = (struct sol_gui_object*) button,
 	};
 }
 

@@ -21,7 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // #include <stdio.h>
 
 #include "gui/theme.h"
-#include "gui/enums.h"
+#include "gui/constants.h"
 #include "overlay/enums.h"
 #include "overlay/render.h"
 #include "sol_font.h"

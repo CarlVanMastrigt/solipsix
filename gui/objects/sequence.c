@@ -443,7 +443,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_container_set_extent_y,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_horizontal_end =
 {
@@ -456,7 +457,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_container_set_extent_y,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_horizontal_first =
 {
@@ -469,7 +471,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_container_set_extent_y,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_horizontal_last =
 {
@@ -482,7 +485,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_container_set_extent_y,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_horizontal_uniform =
 {
@@ -495,7 +499,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_container_set_extent_y,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 
 /** vertical **/
@@ -510,7 +515,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_sequence_set_extent_y_vertical_start,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_vertical_end =
 {
@@ -523,7 +529,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_sequence_set_extent_y_vertical_end,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_vertical_first =
 {
@@ -536,7 +543,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_sequence_set_extent_y_vertical_first,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_vertical_last =
 {
@@ -549,7 +557,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_sequence_set_extent_y_vertical_last,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 static const struct sol_gui_object_structure_functions sol_gui_sequence_functions_vertical_uniform =
 {
@@ -562,7 +571,8 @@ static const struct sol_gui_object_structure_functions sol_gui_sequence_function
 	.set_extent_y              = &sol_gui_sequence_set_extent_y_vertical_uniform,
 	.add_child                 = &sol_gui_container_add_child,
 	.remove_child              = &sol_gui_container_remove_child,
-	.destroy                   = &sol_gui_container_destroy,
+	.release_refernces         = &sol_gui_container_recursive_release_references,
+	// .destroy                   = &sol_gui_container_destroy,
 };
 
 void sol_gui_sequence_construct(struct sol_gui_sequence* sequence, struct sol_gui_context* context, enum sol_overlay_orientation orientation, enum sol_gui_distribution distribution)

@@ -20,24 +20,22 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include "solipsix/gui/object.h"
+#include "solipsix/gui/objects/button.h"
+
 
 struct sol_gui_button
 {
 	struct sol_gui_object base;
 
-	/** the effect of the button being pressed, data will be passed in */
-	void (*select_action)(void*);
-	/** data may need cleanup (can be null) */
-	void (*destroy_action)(void*);
-	void* data;
+	struct sol_gui_button_packet packet;
 };
 
 /** constructs the base button, the specific implementations cannot be constructed as they generally contain dynamic sized buffers */
-void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, bool action_on_release);
-
+void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_gui_context* context, struct sol_gui_button_packet packet, bool action_on_release);
+// void sol_gui_button_construct_extended(struct sol_gui_button* button, struct sol_gui_context* context, void(*select_action)(void*), void(*destroy_action)(void*), void* data, bool action_on_release);
 
 /** for use in `sol_gui_object_structure_functions` for custom buttons, does necessary cleanup (i.e. calls the destroy action) */
-void sol_gui_button_destroy_action(struct sol_gui_object* obj);
+void sol_gui_button_destroy(struct sol_gui_object* obj);
 
 
 bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input);
