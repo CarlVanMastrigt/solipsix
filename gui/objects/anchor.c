@@ -25,7 +25,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include "solipsix/sol_input.h"
-#include "solipsix/overlay/enums.h"
+
 #include "solipsix/gui/object.h"
 #include "solipsix/gui/objects/anchor.h"
 
@@ -192,79 +192,4 @@ struct sol_gui_anchor_handle sol_gui_text_anchor_create(struct sol_gui_context* 
 
 
 
-void sol_gui_anchor_set_relative_placement(struct sol_gui_anchor_handle anchor_handle, struct sol_gui_object* reference_object, enum sol_gui_relative_placement anchor_placement_x, enum sol_gui_relative_placement anchor_placement_y)
-{
-	struct sol_gui_anchor* anchor = (struct sol_gui_anchor*)anchor_handle.object;
-	s16_rect absolute_region_rect, absolute_reference_rect, relative_anchor_rect;
-
-	/** is invalid to place something relative to its own child */
-	assert(!sol_gui_object_is_ancestor(reference_object, anchor->floating_region.object));
-
-	/** get region.child -> anchor, absolute(reference) - absolute(anchor) */
-
-	/** could be null due to cleanup */
-	if(anchor->floating_region.object)
-	{
-		absolute_region_rect = sol_gui_object_absolute_rect(anchor->floating_region.object);
-		absolute_reference_rect = sol_gui_object_absolute_rect(reference_object);
-		relative_anchor_rect = sol_gui_object_relative_rect(anchor_handle.object, anchor->floating_region.object);
-
-		printf("SET ANCHOR\n");
-		#warning NYI
-	}
-}
-
-
-
-
-struct sol_gui_anchor_toggle_button_packet
-{
-    enum sol_gui_relative_placement anchor_placement_x;
-    enum sol_gui_relative_placement anchor_placement_y;
-    struct sol_gui_anchor_handle anchor_handle;
-    struct sol_gui_button_handle button_handle;/** important that this is not retained, its the data in the button and so will (should) only be destroyed after the button is, if it were retained the button would in effect be retaining itself */
-};
-
-static void anchor_toggle_button_action_function(void* data)
-{
-	struct sol_gui_anchor_toggle_button_packet* packet = data;
-	struct sol_gui_anchor* anchor = (struct sol_gui_anchor*)packet->anchor_handle.object;
-
-	if(anchor->floating_region.object && sol_gui_object_toggle_activity(anchor->floating_region.object))
-	{
-		sol_gui_anchor_set_relative_placement(packet->anchor_handle, packet->button_handle.object, packet->anchor_placement_x, packet->anchor_placement_y);
-	}
-}
-
-static void anchor_toggle_button_destroy_function(void* data)
-{
-	struct sol_gui_anchor_toggle_button_packet* packet = data;
-
-	sol_gui_object_release(packet->anchor_handle.object);
-
-	free(packet);
-}
-
-
-void sol_gui_button_set_anchor_toggle_button_packet(struct sol_gui_button_handle button_handle, struct sol_gui_anchor_handle anchor_handle, enum sol_gui_relative_placement anchor_placement_x, enum sol_gui_relative_placement anchor_placement_y)
-{
-	struct sol_gui_anchor_toggle_button_packet* toggle_packet = malloc(sizeof(struct sol_gui_anchor_toggle_button_packet));
-
-	*toggle_packet = (struct sol_gui_anchor_toggle_button_packet)
-	{
-		.anchor_placement_x = anchor_placement_x,
-		.anchor_placement_y = anchor_placement_y,
-		.button_handle = button_handle,
-		.anchor_handle = anchor_handle
-	};
-
-	struct sol_gui_button_packet button_packet =
-	{
-		.action  = &anchor_toggle_button_action_function,
-		.destroy = &anchor_toggle_button_destroy_function,
-		.data = toggle_packet,
-	};
-
-	sol_gui_button_set_packet(button_handle, button_packet);
-}
 

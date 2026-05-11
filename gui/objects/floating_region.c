@@ -105,6 +105,7 @@ static int16_t sol_gui_floating_region_min_size_y(struct sol_gui_object* obj)
 	struct sol_gui_object* child = floating_region->child;
 	int16_t content_min_size;
 
+	#warning should just make this (and associated functions) handle null and disbled objects wherever they can!
 	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
 	{
 		content_min_size = sol_gui_object_min_size_y(child);
@@ -266,4 +267,103 @@ struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_
 		.object = (struct sol_gui_object*) region,
 	};
 }
+
+
+
+
+
+void sol_gui_floating_region_set_relative_placement(struct sol_gui_floating_region_handle region_handle, struct sol_gui_object* reference_external_object, struct sol_gui_object* reference_decendant, enum sol_gui_relative_placement placement_x, enum sol_gui_relative_placement placement_y)
+{
+	struct sol_gui_floating_region* region = (struct sol_gui_floating_region*)region_handle.object;
+	s16_rect region_rect_absolute, reference_rect_absolute, descendant_rect_relative;
+	s16_vec2 delta;
+
+	/** is invalid to place something relative to its own child */
+	assert(!sol_gui_object_is_ancestor(reference_external_object, region_handle.object));
+
+	/** get region.child -> anchor, absolute(reference) - absolute(anchor) */
+
+	/** will do nothing (but NOT break) if region->child is NULL */ 
+	region_rect_absolute = sol_gui_object_absolute_rect(region_handle.object);
+	reference_rect_absolute = sol_gui_object_absolute_rect(reference_external_object);
+	descendant_rect_relative = sol_gui_object_relative_rect(reference_decendant, region->child);
+
+	#warning actual offset should involve theme because it probably want to be ajjustable and take into account the presence of a background panel
+	#warning generify this behaviour if possible inside floating panel specifically, anchor is not the pivot object at all (want button/panel contents to be)
+	delta.x = reference_rect_absolute.x.end - region_rect_absolute.x.start - descendant_rect_relative.x.start;
+	delta.y = reference_rect_absolute.y.end - region_rect_absolute.y.start - descendant_rect_relative.y.start;
+
+	printf("FR delta: %d %d\n", delta.x, delta.y);
+
+}
+
+
+
+
+struct sol_gui_floating_region_toggle_button_packet
+{
+    enum sol_gui_relative_placement anchor_placement_x;
+    enum sol_gui_relative_placement anchor_placement_y;
+    struct sol_gui_floating_region_handle floating_region_handle;
+    struct sol_gui_object* reference_decendant;
+    struct sol_gui_button_handle button_handle;/** important that this is not retained, its the data in the button and so will (should) only be destroyed after the button is, if it were retained the button would in effect be retaining itself */
+};
+
+static void floating_region_toggle_button_action_function(void* data)
+{
+	struct sol_gui_floating_region_toggle_button_packet* packet = data;
+	struct sol_gui_floating_region* floating_region = (struct sol_gui_floating_region*) packet->floating_region_handle.object;
+
+	#warning should alter `sol_gui_object_toggle_enabled_status` floating regions REALLY shouldn't require reorganise of structure on toggle (could be a conditionally valid intercept point for reorganise)
+	/// ^ this is technically only true if the first ancestor is the floating region... (because of min size effects)
+	if(floating_region->child && sol_gui_object_toggle_enabled_status(floating_region->child))
+	{
+		puts("AAA");
+		sol_gui_floating_region_set_relative_placement(packet->floating_region_handle, packet->button_handle.object, packet->reference_decendant, packet->anchor_placement_x, packet->anchor_placement_y);
+	}
+}
+
+static void floating_region_toggle_button_destroy_function(void* data)
+{
+	struct sol_gui_floating_region_toggle_button_packet* packet = data;
+
+	sol_gui_object_release(packet->floating_region_handle.object);
+	sol_gui_object_release(packet->reference_decendant);
+
+	free(packet);
+}
+
+
+#warning could vary anchor/floating window, to permit out of bounds behaviour but force an anchor to be (at least partially) "on-screen" when re-enabled
+
+void sol_gui_button_set_floating_region_toggle_button_packet(struct sol_gui_button_handle button_handle, struct sol_gui_floating_region_handle floating_region_handle, struct sol_gui_object* reference_decendant, enum sol_gui_relative_placement anchor_placement_x, enum sol_gui_relative_placement anchor_placement_y)
+{
+	struct sol_gui_floating_region_toggle_button_packet* toggle_packet = malloc(sizeof(struct sol_gui_floating_region_toggle_button_packet));
+
+	assert(reference_decendant);
+	assert(!sol_gui_object_is_ancestor(button_handle.object, floating_region_handle.object));
+
+	/** to be able to access the anchor, it must be retained */
+	sol_gui_object_retain(floating_region_handle.object);
+	sol_gui_object_retain(reference_decendant);
+
+	*toggle_packet = (struct sol_gui_floating_region_toggle_button_packet)
+	{
+		.anchor_placement_x = anchor_placement_x,
+		.anchor_placement_y = anchor_placement_y,
+		.floating_region_handle = floating_region_handle,
+		.reference_decendant = reference_decendant,
+		.button_handle = button_handle,
+	};
+
+	struct sol_gui_button_packet button_packet =
+	{
+		.action  = &floating_region_toggle_button_action_function,
+		.destroy = &floating_region_toggle_button_destroy_function,
+		.data = toggle_packet,
+	};
+
+	sol_gui_button_set_packet(button_handle, button_packet);
+}
+
 

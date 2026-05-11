@@ -253,8 +253,6 @@ s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj)
 
 s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor)
 {
-	assert(sol_gui_object_is_ancestor(obj, ancestor));
-
 	s16_rect rect = obj->rect;
 
 	while((obj = obj->parent) && obj != ancestor)
@@ -262,7 +260,38 @@ s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const st
 		rect = s16_rect_add_offset(rect, s16_rect_start(obj->rect));
 	}
 
+	/** `ancestor` should actually be an ancestor of `obj`
+	 * `obj` being null here implies ancestor was not encountered */
+	assert(obj);
+
 	return rect;
+}
+
+struct sol_gui_object* sol_gui_object_find_first_ancestor(struct sol_gui_object* obj)
+{
+	while(obj)
+	{
+		if(obj->parent)
+		{
+			if(obj->parent->flags & SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT)
+			{
+				/** if something is the root of a context-connected subtree its parent should be the root container of that context */
+				assert(obj->parent == obj->context->root_container);
+				return obj;
+			}
+			obj = obj->parent;
+		}
+		else
+		{
+			/** TODO: there are cases where this may actually desired: 
+			 * e.g. a disconnected subtree that its desirable to calculate the min sizes for, 
+			 * for those cases a compiler flag should/will be provided to disable this stderr print 
+			 * (even as is it will behave "correctly") */
+			fprintf(stderr, "attempted to find the first ancestor of a gui object not in a contexts tree, this is unlikely to be what you wanted");
+			return obj;
+		}
+	}
+	return NULL;
 }
 
 bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for)
@@ -280,19 +309,76 @@ bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct s
 }
 
 
-bool sol_gui_object_toggle_activity(struct sol_gui_object* obj)
+void sol_gui_object_disable(struct sol_gui_object* obj)
 {
-	#warning NYI
-	assert(false);
+	obj->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_ENABLED;
+
+	#warning instead of `obj->reference_count` could set a "dirty" flag and as objects are created dirty then this would be redundant (also multi-change actions)
+	#warning could also set this "need to lay out" on the first ancestors and run it as a step in/before rendering
+	/** only need to lay out first ancestor if this object is not yet referenced or is a first widget */
+	if(obj->reference_count && obj->parent != obj->context->root_container)
+	{
+		sol_gui_object_reorganise_first_ancestor(obj);
+	}
 }
 
+bool sol_gui_object_toggle_enabled_status(struct sol_gui_object* obj)
+{
+	obj->flags ^= SOL_GUI_OBJECT_STATUS_FLAG_ENABLED;
+	
+	/** dont need to lay out widgets at the top of the tree that been disabled
+	 * (those widgets always have a fixed size and have nothing adjacent to affect) */ 
+	if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED || obj->parent != obj->context->root_container)
+	{
+		puts("reorganise");
+		sol_gui_object_reorganise_first_ancestor(obj);
+	}
 
-// this should be used with the utmost care (prefer calling context reorganization function)
-// void sol_gui_object_reorganise(struct sol_gui_object* obj, s16_rect rect)
-// {
-// 	s16_vec2 min_size = sol_gui_object_min_size(obj);
-// 	assert( s16_vec2_cmp_all_lte(min_size, s16_rect_size(rect)) );// provided rect must have enough space for
-// 	sol_gui_object_place_content(obj, rect);
-// }
+	return sol_gui_object_is_enabled(obj);
+}
+
+void sol_gui_object_reorganise_first_ancestor(struct sol_gui_object* obj)
+{
+	const struct sol_gui_context* context = obj->context;
+	uint32_t position_flags;
+	s16_rect rect;
+	s16_vec2 min_size;
+
+	obj = sol_gui_object_find_first_ancestor(obj);
+
+	position_flags = obj->flags & SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
+
+	if(obj->parent)
+	{
+		assert(obj->parent == context->root_container);
+		assert(obj->parent->flags & SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT);
+		rect = s16_rect_at_origin_with_size(context->window_size);
+	}
+	else
+	{
+		rect = obj->rect;
+	}
+	
+
+	/** do the reorganise */
+	sol_gui_object_set_position_flags(obj, position_flags);
+
+	min_size.x = sol_gui_object_min_size_x(obj);
+	if(min_size.x > s16_extent_size(rect.x))
+	{
+		rect.x.end = rect.x.start + min_size.x;
+	}
+	sol_gui_object_set_extent_x(obj, rect.x);
+
+	min_size.y = sol_gui_object_min_size_y(obj);
+	if(min_size.y > s16_extent_size(rect.y))
+	{
+		rect.y.end = rect.y.start + min_size.y;
+	}
+	sol_gui_object_set_extent_y(obj, rect.y);
+
+	#warning if in context tree, need to set context requiremnts/ mark as invalid if too big
+}
+
 
 

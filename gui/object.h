@@ -142,11 +142,27 @@ void                   sol_gui_object_remove_child       (struct sol_gui_object*
 s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj);
 s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor);
 
+static inline bool sol_gui_object_is_enabled(struct sol_gui_object* obj)
+{
+    return obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED;
+}
+
 /** returns whether the object is active AFTER this function has run 
  * will lay out its toplevel ancestors contents again after toggling */
-bool sol_gui_object_toggle_activity(struct sol_gui_object* obj);
+bool sol_gui_object_toggle_enabled_status(struct sol_gui_object* obj);
 
+void sol_gui_object_disable(struct sol_gui_object* obj);
+
+/** find the top of the tree this widget is a part of, 
+ * this excludes the root object in the context as it's children cannot affect each other (i.e.they are effectively separate trees) */
+struct sol_gui_object* sol_gui_object_find_first_ancestor(struct sol_gui_object* obj);
 
 /** useful for ensuring (asserting) object graph stays acyclic */
 bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for);
+
+/** trigger a reorganise of the part of the subtree this object is a part of 
+ * i.e. may/will reorganise ancestors/siblings if necessary
+ * note: may change to be delayed at some point, if that is the case a function to process reorganisation will be provided, however that should be avoided where possible */
+#warning this technically has different behaviour to the context root container, it wont force siblings at the root to share an invalid (larger than the window) size -- change the context or object layout function to respect this!
+void sol_gui_object_reorganise_first_ancestor(struct sol_gui_object* obj);
 

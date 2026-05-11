@@ -24,9 +24,35 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_gui_context;
 struct sol_gui_object;
 
+#include "solipsix/gui/constants.h"
+#include "solipsix/gui/objects/button.h"
+
 struct sol_gui_floating_region_handle
 {
 	struct sol_gui_object* object;
 };
 
 struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context, uint32_t position_flags_to_preserve);
+
+
+void sol_gui_floating_region_set_relative_placement(
+	struct sol_gui_floating_region_handle floating_region, 
+	struct sol_gui_object* reference_external_object, 
+	struct sol_gui_object* reference_decendant, 
+	enum sol_gui_relative_placement placement_x, 
+	enum sol_gui_relative_placement placement_y);
+
+
+#include "solipsix/gui/objects/button.h"
+
+/** toggle a floating window such that the reference child is aligned (as described) with the button used to toggle the floating_region
+ * basically just sets up the button to toggle the floating regions child and call `sol_gui_floating_region_set_relative_placement` with the button as `reference_external_object` on toggle
+ * to use this button must have been created with a null packet
+ * this setup pattern minimises the chances of doing something catastrophically wrong */
+void sol_gui_button_set_floating_region_toggle_button_packet(
+	struct sol_gui_button_handle button, 
+	struct sol_gui_floating_region_handle floating_region, 
+	struct sol_gui_object* reference_decendant, 
+	enum sol_gui_relative_placement placement_x, 
+	enum sol_gui_relative_placement placement_y);
+
