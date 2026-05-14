@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_gui_context;
 struct sol_gui_object;
 
+#include "solipsix/math/s16_vec2.h"
 #include "solipsix/gui/constants.h"
 #include "solipsix/gui/objects/button.h"
 
@@ -34,13 +35,15 @@ struct sol_gui_floating_region_handle
 
 struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context, uint32_t position_flags_to_preserve);
 
+#warning should be possible to abstract (some of?) the following functions, calculate placement devoid of reference objects, then apply using a standardised offset function
 
-void sol_gui_floating_region_set_relative_placement(
-	struct sol_gui_floating_region_handle floating_region, 
-	struct sol_gui_object* reference_external_object, 
-	struct sol_gui_object* reference_decendant, 
-	enum sol_gui_relative_placement placement_x, 
-	enum sol_gui_relative_placement placement_y);
+/** start of contained content (will usually be a panel) with respect to the floating region */ 
+void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating_region_handle floating_region, s16_vec2 offset);
+/** start of contained content (will usually be a panel) with respect to the base context space (which is usually the screen) */ 
+void sol_gui_floating_region_set_content_absolute_offset(struct sol_gui_floating_region_handle floating_region, s16_vec2 offset);
+
+/** get the (sole) child of the floating region, which will be NULL if none has been asigned */
+struct sol_gui_object* sol_gui_floating_region_get_content(struct sol_gui_floating_region_handle floating_region);
 
 
 #include "solipsix/gui/objects/button.h"
@@ -55,4 +58,6 @@ void sol_gui_button_set_floating_region_toggle_button_packet(
 	struct sol_gui_object* reference_decendant, 
 	enum sol_gui_relative_placement placement_x, 
 	enum sol_gui_relative_placement placement_y);
+
+
 

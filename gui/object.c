@@ -237,6 +237,34 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 	sol_gui_object_release(child);
 }
 
+s16_vec2 sol_gui_object_absolute_offset(const struct sol_gui_object* obj)
+{
+	s16_vec2 offset = s16_rect_start(obj->rect);
+
+	while((obj = obj->parent))
+	{
+		/** offset the rect by all of its parents starts */
+		offset = s16_vec2_add(offset, s16_rect_start(obj->rect));
+	}
+
+	return offset;
+}
+
+s16_vec2 sol_gui_object_relative_offset(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor)
+{
+	s16_vec2 offset = s16_rect_start(obj->rect);
+
+	while((obj = obj->parent) && obj != ancestor)
+	{
+		offset = s16_vec2_add(offset, s16_rect_start(obj->rect));
+	}
+
+	/** `ancestor` should actually be an ancestor of `obj`
+	 * `obj` being null here implies ancestor was not encountered */
+	assert(obj);
+
+	return offset;
+}
 
 s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj)
 {
@@ -294,7 +322,7 @@ struct sol_gui_object* sol_gui_object_find_first_ancestor(struct sol_gui_object*
 	return NULL;
 }
 
-bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for)
+bool sol_gui_object_has_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for)
 {
 	assert(obj);
 

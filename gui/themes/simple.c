@@ -652,6 +652,8 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.range_control_size_y     = &sol_gui_theme_simple_range_control_size_y,
 		.range_control_selection  = &sol_gui_theme_simple_range_control_selection_extent,
 
+		.horizontal_placement_spacing = (simple_theme_data->panel_content_border.x + simple_theme_data->panel_border.x) * 2,
+		.vertical_placement_spacing   = (simple_theme_data->panel_content_border.y + simple_theme_data->panel_border.y) * 2,
 	};
 
 	assert(theme->text_font);

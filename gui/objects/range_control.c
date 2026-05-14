@@ -97,12 +97,8 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 		}
 		return false;
 
-
-		
-
 	case SDL_EVENT_MOUSE_BUTTON_UP:
 		sol_gui_context_change_focused_object(context, NULL);
-
 		return false;
 
 	default:

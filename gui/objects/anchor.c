@@ -37,6 +37,8 @@ struct sol_gui_anchor
 	struct sol_gui_object base;
 
 	struct sol_gui_floating_region_handle floating_region;
+
+	s16_vec2 select_point_offset;
 };
 
 /** can/should the anchor be declared/defined in the floating_region file? -- they are tightly coupled */
@@ -45,7 +47,7 @@ struct sol_gui_anchor
 /** for a variety of anchor functions to work properly, the floating region it retains must be an ancestor of the anchor */
 static inline bool sol_gui_anchor_has_floating_region_ancestor(const struct sol_gui_anchor* anchor)
 {
-	return sol_gui_object_is_ancestor(&anchor->base, anchor->floating_region.object);
+	return sol_gui_object_has_ancestor(&anchor->base, anchor->floating_region.object);
 }
 
 
@@ -53,7 +55,9 @@ bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_in
 {
 	struct sol_gui_anchor* anchor = (struct sol_gui_anchor*)obj;
 	struct sol_gui_context* context = obj->context;
-	s16_vec2 mouse_location;
+	struct sol_gui_object* base_floating_object;
+	s16_vec2 mouse_location, anchor_absolute_offset, desired_floating_content_absolute_offset, floating_content_to_select_point, floating_region_to_content;
+
 
 	assert(sol_gui_anchor_has_floating_region_ancestor(anchor));
 
@@ -62,11 +66,40 @@ bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_in
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		if(anchor->floating_region.object)
 		{
-			puts("ANCHOR");
+			sol_gui_context_change_focused_object(context, obj);
+			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+			anchor_absolute_offset = sol_gui_object_absolute_offset(obj);
+
+			anchor->select_point_offset = s16_vec2_sub(mouse_location, anchor_absolute_offset);
 		}
 		return true;
 
+	case SDL_EVENT_MOUSE_MOTION:
+		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+		{
+			base_floating_object = sol_gui_floating_region_get_content(anchor->floating_region);
+			if(base_floating_object)
+			{
+				mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+				floating_content_to_select_point = s16_vec2_add(sol_gui_object_relative_offset(obj, base_floating_object), anchor->select_point_offset);
+				desired_floating_content_absolute_offset = s16_vec2_sub(mouse_location, floating_content_to_select_point);
+				sol_gui_floating_region_set_content_absolute_offset(anchor->floating_region, desired_floating_content_absolute_offset);
+			}
+
+			return true;
+		}
+		return false;
+
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+		sol_gui_context_change_focused_object(context, NULL);
+		return false;
+
+
 	default:
+		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+		{
+			return true;// must consume input if focused? seems stupid
+		}
 		return false;
 	}
 }

@@ -97,6 +97,10 @@ static inline s16_rect s16_rect_at_origin_with_size(s16_vec2 size)
 {
     return (s16_rect){.x = s16_extent_set(0, size.x),.y = s16_extent_set(0, size.y)};
 }
+static inline s16_rect s16_rect_at_location_with_size(s16_vec2 location, s16_vec2 size)
+{
+    return (s16_rect){.x = s16_extent_set(location.x, location.x + size.x),.y = s16_extent_set(location.y, location.y + size.y)};
+}
 static inline s16_vec2 s16_rect_start(s16_rect r)
 {
     return (s16_vec2){.x = r.x.start,.y = r.y.start};

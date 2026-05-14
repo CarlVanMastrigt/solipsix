@@ -74,6 +74,14 @@ static inline s16_vec2 s16_vec2_max(s16_vec2 lhs, s16_vec2 rhs)
         .y = lhs.y>rhs.y ? lhs.y : rhs.y,
     };
 }
+static inline s16_vec2 s16_vec2_clamp(s16_vec2 v, s16_vec2 min, s16_vec2 max)
+{
+    return (s16_vec2)
+    {
+        .x = v.x > max.x ? max.x : (v.x < min.x ? min.x : v.x),
+        .y = v.y > max.y ? max.y : (v.y < min.y ? min.y : v.y),
+    };
+}
 static inline m16_vec2 s16_vec2_cmp_eq(s16_vec2 lhs, s16_vec2 rhs)
 {
     return (m16_vec2)

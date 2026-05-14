@@ -102,7 +102,11 @@ struct sol_gui_theme
     int16_t (*range_control_size_x) (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, int16_t gradations);
     int16_t (*range_control_size_y) (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, int16_t gradations);
 
-
+    /** when performing placement operations, `SOL_GUI_RELATIVE_PLACEMENT_BEFORE` and `SOL_GUI_RELATIVE_PLACEMENT_AFTER` 
+     * the theme should be able to describe panel spacing between objects in different panels/trees
+     * these values describe that spacing */
+    int16_t horizontal_placement_spacing;
+    int16_t vertical_placement_spacing;
 
     #warning should rendering consider / use bounds? limited render chould be managed with constrained renders, but this doesnt allow genericized use of widgets within constraints, which is probably undesirable...
     // struct that passes down information regarding current bounds/culling/fade could also pass animation information (e.g. current time)

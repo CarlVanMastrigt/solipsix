@@ -26,6 +26,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // #include "solipsix/overlay/enums.h"
 
 #include "solipsix/gui/object.h"
+#include "solipsix/gui/utilities.h"
 #include "solipsix/gui/objects/floating_region.h"
 
 struct sol_gui_floating_region
@@ -34,8 +35,8 @@ struct sol_gui_floating_region
 	struct sol_gui_object* child;
 
 	/** */
-	s16_extent managed_child_extent;
-	int16_t selection_range;
+	#warning is strange to have this managed both here and in child, especially when size is prescriptive
+	int16_t selection_range;/** distance near edge over which resizing can happen, not sure her is appropriate location for that */
 	uint32_t position_flags_to_preserve;
 };
 
@@ -125,9 +126,14 @@ static void sol_gui_floating_region_set_extent_x(struct sol_gui_object* obj, s16
 	s16_extent child_extent;
 	int16_t available_size, child_size;
 
+	if(child == NULL)
+	{
+		return;
+	}
+
 	available_size = s16_extent_size(extent);/** limit to child extent is all the space in the floating window */
 
-	child_extent = floating_region->managed_child_extent;
+	child_extent = child->rect.x;/** preserve current extent if possible (child is free-floating) */
 	child_size = s16_extent_size(child_extent);
 
 	assert(child_extent.start >= 0);
@@ -164,9 +170,14 @@ static void sol_gui_floating_region_set_extent_y(struct sol_gui_object* obj, s16
 	s16_extent child_extent;
 	int16_t available_size, child_size;
 
+	if(child == NULL)
+	{
+		return;
+	}
+
 	available_size = s16_extent_size(extent);/** limit to child extent is all the space in the floating window */
 
-	child_extent = floating_region->managed_child_extent;
+	child_extent = child->rect.y;/** preserve current extent if possible (child is free-floating) */
 	child_size = s16_extent_size(child_extent);
 
 	assert(child_extent.start >= 0);
@@ -249,7 +260,6 @@ static void sol_gui_floating_region_construct(struct sol_gui_floating_region* re
 
 	base->structure_functions = &sol_gui_floating_region_functions;
 	
-	region->managed_child_extent = (s16_extent){};/** zero init */
 	region->position_flags_to_preserve = position_flags_to_preserve;
 	region->selection_range = 16;/// ??
 
@@ -269,32 +279,44 @@ struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_
 }
 
 
-
-
-
-void sol_gui_floating_region_set_relative_placement(struct sol_gui_floating_region_handle region_handle, struct sol_gui_object* reference_external_object, struct sol_gui_object* reference_decendant, enum sol_gui_relative_placement placement_x, enum sol_gui_relative_placement placement_y)
+void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating_region_handle region_handle, s16_vec2 offset)
 {
 	struct sol_gui_floating_region* region = (struct sol_gui_floating_region*)region_handle.object;
-	s16_rect region_rect_absolute, reference_rect_absolute, descendant_rect_relative;
-	s16_vec2 delta;
+	struct sol_gui_object* child = region->child;
+	s16_vec2 max_offset, child_size;
 
-	/** is invalid to place something relative to its own child */
-	assert(!sol_gui_object_is_ancestor(reference_external_object, region_handle.object));
+	/** will do nothing (but NOT break) if region->child is NULL (i.e. not present) */ 
+	if (child)
+	{
+		child_size = s16_rect_size(child->rect);
+		/** can't/shouldn't push rect to be outside of bounds, preserving child size */ 
+		max_offset = s16_vec2_sub(s16_rect_size(region->base.rect), child_size);
+		/** the approach of attempting to resize here is irreconcilable; 
+		 * because minimum height is dependent on assigned width 
+		 * it has the potential to produce infinite reorganise loops 
+		 * as such; maintain size (known to be correct) and just do a best fit operation 
+		 * size can be assigned if desired */
 
-	/** get region.child -> anchor, absolute(reference) - absolute(anchor) */
+		offset = s16_vec2_clamp(offset, s16_vec2_set(0, 0), max_offset);
 
-	/** will do nothing (but NOT break) if region->child is NULL */ 
-	region_rect_absolute = sol_gui_object_absolute_rect(region_handle.object);
-	reference_rect_absolute = sol_gui_object_absolute_rect(reference_external_object);
-	descendant_rect_relative = sol_gui_object_relative_rect(reference_decendant, region->child);
+		child->rect = s16_rect_at_location_with_size(offset, child_size);
+	}
+}
 
-	#warning actual offset should involve theme because it probably want to be ajjustable and take into account the presence of a background panel
-	#warning generify this behaviour if possible inside floating panel specifically, anchor is not the pivot object at all (want button/panel contents to be)
-	delta.x = reference_rect_absolute.x.end - region_rect_absolute.x.start - descendant_rect_relative.x.start;
-	delta.y = reference_rect_absolute.y.end - region_rect_absolute.y.start - descendant_rect_relative.y.start;
+void sol_gui_floating_region_set_content_absolute_offset(struct sol_gui_floating_region_handle region_handle, s16_vec2 offset)
+{
+	s16_vec2 region_absolute_offset, relative_offset;
 
-	printf("FR delta: %d %d\n", delta.x, delta.y);
+	region_absolute_offset = sol_gui_object_absolute_offset(region_handle.object);
+	relative_offset = s16_vec2_sub(offset, region_absolute_offset);
 
+	sol_gui_floating_region_set_content_relative_offset(region_handle, relative_offset);
+}
+
+struct sol_gui_object* sol_gui_floating_region_get_content(struct sol_gui_floating_region_handle region_handle)
+{
+	struct sol_gui_floating_region* region = (struct sol_gui_floating_region*)region_handle.object;
+	return region->child;
 }
 
 
@@ -313,13 +335,28 @@ static void floating_region_toggle_button_action_function(void* data)
 {
 	struct sol_gui_floating_region_toggle_button_packet* packet = data;
 	struct sol_gui_floating_region* floating_region = (struct sol_gui_floating_region*) packet->floating_region_handle.object;
+	struct sol_gui_object* region_content = floating_region->child;
+	s16_rect button_rect_absolute, descendant_rect_relative;
+	s16_vec2 offset;
 
-	#warning should alter `sol_gui_object_toggle_enabled_status` floating regions REALLY shouldn't require reorganise of structure on toggle (could be a conditionally valid intercept point for reorganise)
-	/// ^ this is technically only true if the first ancestor is the floating region... (because of min size effects)
-	if(floating_region->child && sol_gui_object_toggle_enabled_status(floating_region->child))
+	if(region_content && sol_gui_object_toggle_enabled_status(region_content))
 	{
-		puts("AAA");
-		sol_gui_floating_region_set_relative_placement(packet->floating_region_handle, packet->button_handle.object, packet->reference_decendant, packet->anchor_placement_x, packet->anchor_placement_y);
+		/** slight pain here in that we want to prescribe the size and placement, 
+		 * but its necessary to derive/finalise the layout of the child to know the placement of the reference widget 
+		 * as such `sol_gui_object_toggle_enabled_status` MUST reorganise this subtree to place its contents in a relative fashion, 
+		 * which could mean needing to run the layout code twice if the desired placement and size would exceed the floating region */
+
+
+		/** is invalid to place something relative to its own child */
+		assert(!sol_gui_object_has_ancestor(packet->button_handle.object, region_content));
+		
+		button_rect_absolute = sol_gui_object_absolute_rect(packet->button_handle.object);
+		descendant_rect_relative = sol_gui_object_relative_rect(packet->reference_decendant, region_content);
+
+		/** assuming context and theme are the same for all */
+		offset = sol_gui_required_pacement_offset(descendant_rect_relative, region_content->context->theme, button_rect_absolute, packet->anchor_placement_x, packet->anchor_placement_y);
+
+		sol_gui_floating_region_set_content_absolute_offset(packet->floating_region_handle, offset);
 	}
 }
 
@@ -341,7 +378,7 @@ void sol_gui_button_set_floating_region_toggle_button_packet(struct sol_gui_butt
 	struct sol_gui_floating_region_toggle_button_packet* toggle_packet = malloc(sizeof(struct sol_gui_floating_region_toggle_button_packet));
 
 	assert(reference_decendant);
-	assert(!sol_gui_object_is_ancestor(button_handle.object, floating_region_handle.object));
+	assert(!sol_gui_object_has_ancestor(button_handle.object, floating_region_handle.object));
 
 	/** to be able to access the anchor, it must be retained */
 	sol_gui_object_retain(floating_region_handle.object);
@@ -365,5 +402,10 @@ void sol_gui_button_set_floating_region_toggle_button_packet(struct sol_gui_butt
 
 	sol_gui_button_set_packet(button_handle, button_packet);
 }
+
+
+
+
+
 
 

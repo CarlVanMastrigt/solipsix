@@ -139,6 +139,8 @@ void                   sol_gui_object_add_child          (struct sol_gui_object*
 void                   sol_gui_object_remove_child       (struct sol_gui_object* obj, struct sol_gui_object* child);
 
 
+s16_vec2 sol_gui_object_absolute_offset(const struct sol_gui_object* obj);
+s16_vec2 sol_gui_object_relative_offset(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor);
 s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj);
 s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor);
 
@@ -158,7 +160,7 @@ void sol_gui_object_disable(struct sol_gui_object* obj);
 struct sol_gui_object* sol_gui_object_find_first_ancestor(struct sol_gui_object* obj);
 
 /** useful for ensuring (asserting) object graph stays acyclic */
-bool sol_gui_object_is_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for);
+bool sol_gui_object_has_ancestor(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor_to_search_for);
 
 /** trigger a reorganise of the part of the subtree this object is a part of 
  * i.e. may/will reorganise ancestors/siblings if necessary
