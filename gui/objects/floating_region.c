@@ -20,25 +20,58 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <assert.h>
 
-#warning consider renaming to floating panel, have panel be implicit to better allow behaviour surrounding edges -- that would restrict functionality though...
+#warning consider renaming to floating panel, have panel be implicit to better allow behaviour surrounding edges -- that would restrict functionality, but perhaps that is okay?
 
 #include "solipsix/math/s16_extent.h"
-// #include "solipsix/overlay/enums.h"
 
 #include "solipsix/gui/object.h"
 #include "solipsix/gui/utilities.h"
 #include "solipsix/gui/objects/floating_region.h"
+
+
+
+/** these are intended to align with the overarching property flags seen in solipsix/gui/constants.h, but needn't have the same values 
+ * allows locking the contents to either be restrained to one side or both (effectively maximising the contents) 
+ * only when these are set will the floating regions position flags be passed to the child */
+#define SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_START_X   0x00000001
+#define SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_START_Y   0x00000002
+#define SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_END_X     0x00000004
+#define SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_END_Y     0x00000008
+#define SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_ALL_SIDES 0x0000000F
+
+/** these impose controls on whether the above properties can be set */
+#define SOL_GUI_FLOATING_REGION_PROPERTY_ATTACHABLE_START_X   0x00000010
+#define SOL_GUI_FLOATING_REGION_PROPERTY_ATTACHABLE_START_Y   0x00000020
+#define SOL_GUI_FLOATING_REGION_PROPERTY_ATTACHABLE_END_X     0x00000040
+#define SOL_GUI_FLOATING_REGION_PROPERTY_ATTACHABLE_END_Y     0x00000080
+#define SOL_GUI_FLOATING_REGION_PROPERTY_ATTACHABLE_ALL_SIZES 0x000000F0
+
+#define SOL_GUI_FLOATING_REGION_PROPERTY_RESIZABLE_X  0x00000100
+#define SOL_GUI_FLOATING_REGION_PROPERTY_RESIZABLE_Y  0x00000200
+
+/** if a valid position has been set, ignore weak position requests */
+#define SOL_GUI_FLOATING_REGION_STATUS_HAS_VALID_POSITION 0x00000400
+
+#warning implement the above
 
 struct sol_gui_floating_region
 {
 	struct sol_gui_object base;
 	struct sol_gui_object* child;
 
-	/** */
-	#warning is strange to have this managed both here and in child, especially when size is prescriptive
-	int16_t selection_range;/** distance near edge over which resizing can happen, not sure her is appropriate location for that */
-	uint32_t position_flags_to_preserve;
+	/** because it isn't great to have size be kept around after maximising and then unmaximising a "window" 
+	 * this member variable allows us to retain a size which can then be applied to the child widget 
+	 * MAY be useful to retain this more generally as the last "set" position 
+	 * this also allows the position to be inherited between changes to contents/child */
+	s16_rect unmaximised_size;
+
+	/** important for directional (keyboard, gamepad) navigation, need to know what was/is "above" this in the hierarchy */
+	// struct sol_gui_object* provoking_parent;
+
+	/** flags relevant only to the floating region itself */
+	uint32_t flags;
 };
+
 
 static void sol_gui_floating_region_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
@@ -46,7 +79,7 @@ static void sol_gui_floating_region_render(struct sol_gui_object* obj, s16_rect 
 	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_gui_object* child = subregion->child;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		sol_gui_object_render(child, s16_rect_start(position), batch);
 	}
@@ -59,9 +92,9 @@ static struct sol_gui_object* sol_gui_floating_region_hit_scan(struct sol_gui_ob
 	struct sol_gui_object* child = subregion->child;
 	struct sol_gui_object* result;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
-		// child location is relative to parent
+		/** child location is relative to parent, so add floating_region (parent) offset */
 		result = sol_gui_object_hit_scan(child, s16_rect_start(position), location);
 		if(result)
 		{
@@ -75,10 +108,11 @@ static void sol_gui_floating_region_distribute_position_flags(struct sol_gui_obj
 {
 	struct sol_gui_floating_region* floating_region = (struct sol_gui_floating_region*)obj;
 	struct sol_gui_object* child = floating_region->child;
+	uint32_t position_flags_to_preserve = SOL_GUI_OBJECT_POSITION_FLAGS_ALL;
 
-	if(child && (child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED))
+	if(child && (child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE))
 	{
-		sol_gui_object_set_position_flags(child, position_flags & floating_region->position_flags_to_preserve);
+		sol_gui_object_set_position_flags(child, position_flags & position_flags_to_preserve);
 	}
 }
 static int16_t sol_gui_floating_region_min_size_x(struct sol_gui_object* obj)
@@ -88,7 +122,7 @@ static int16_t sol_gui_floating_region_min_size_x(struct sol_gui_object* obj)
 	struct sol_gui_object* child = floating_region->child;
 	int16_t content_min_size;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		content_min_size = sol_gui_object_min_size_x(child);
 	}
@@ -107,7 +141,7 @@ static int16_t sol_gui_floating_region_min_size_y(struct sol_gui_object* obj)
 	int16_t content_min_size;
 
 	#warning should just make this (and associated functions) handle null and disbled objects wherever they can!
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		content_min_size = sol_gui_object_min_size_y(child);
 	}
@@ -125,40 +159,51 @@ static void sol_gui_floating_region_set_extent_x(struct sol_gui_object* obj, s16
 	struct sol_gui_object* child = floating_region->child;
 	s16_extent child_extent;
 	int16_t available_size, child_size;
+	bool attached_start, attached_end;
 
-	if(child == NULL)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
-		return;
-	}
+		available_size = s16_extent_size(extent);/** limit to child extent is all the space in the floating window */
 
-	available_size = s16_extent_size(extent);/** limit to child extent is all the space in the floating window */
+		child_extent = child->rect.x;/** preserve current extent if possible (child is free-floating) */
+		child_size = s16_extent_size(child_extent);
 
-	child_extent = child->rect.x;/** preserve current extent if possible (child is free-floating) */
-	child_size = s16_extent_size(child_extent);
+		assert(child_extent.start >= 0);
+		assert(child_size >= 0);
 
-	assert(child_extent.start >= 0);
-	assert(child_size >= 0);
+		if(child_size < child->min_size.x)
+		{
+			child_size = child->min_size.x;
+			child_extent.end = child_extent.start + child_size;
+		}
 
-	if(child_size < child->min_size.x)
-	{
-		child_size = child->min_size.x;
-		child_extent.end = child_extent.start + child_size;
-	}
+		attached_start = floating_region->flags & SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_START_X;
+		attached_end   = floating_region->flags & SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_END_X;
 
-	if(child_extent.end > available_size)
-	{
-		if(child_size > available_size)
+		if(attached_start && attached_end)
+		{
+			child_extent = s16_extent_set(0, available_size);
+		}
+		else if(attached_start)
 		{
 			child_extent = s16_extent_set(0, child_size);
 		}
-		else
+		else if(attached_end)
 		{
-			child_extent = s16_extent_add_offset(child_extent, available_size - child_extent.end);
+			child_extent = s16_extent_set(available_size - child_size, available_size);
 		}
-	}
+		else if(child_extent.end > available_size)
+		{
+			if(child_size > available_size)
+			{
+				child_extent = s16_extent_set(0, child_size);
+			}
+			else
+			{
+				child_extent = s16_extent_add_offset(child_extent, available_size - child_extent.end);
+			}
+		}
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
-	{
 		sol_gui_object_set_extent_x(child, child_extent);
 	}
 }
@@ -169,40 +214,51 @@ static void sol_gui_floating_region_set_extent_y(struct sol_gui_object* obj, s16
 	struct sol_gui_object* child = floating_region->child;
 	s16_extent child_extent;
 	int16_t available_size, child_size;
+	bool attached_start, attached_end;
 
-	if(child == NULL)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
-		return;
-	}
+		available_size = s16_extent_size(extent);/** limit to child extent is all the space in the floating window */
 
-	available_size = s16_extent_size(extent);/** limit to child extent is all the space in the floating window */
+		child_extent = child->rect.y;/** preserve current extent if possible (child is free-floating) */
+		child_size = s16_extent_size(child_extent);
 
-	child_extent = child->rect.y;/** preserve current extent if possible (child is free-floating) */
-	child_size = s16_extent_size(child_extent);
+		assert(child_extent.start >= 0);
+		assert(child_size >= 0);
 
-	assert(child_extent.start >= 0);
-	assert(child_size >= 0);
+		if(child_size < child->min_size.y)
+		{
+			child_size = child->min_size.y;
+			child_extent.end = child_extent.start + child_size;
+		}
 
-	if(child_size < child->min_size.y)
-	{
-		child_size = child->min_size.y;
-		child_extent.end = child_extent.start + child_size;
-	}
+		attached_start = floating_region->flags & SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_START_Y;
+		attached_end   = floating_region->flags & SOL_GUI_FLOATING_REGION_STATUS_ATTACHED_END_Y;
 
-	if(child_extent.end > available_size)
-	{
-		if(child_size > available_size)
+		if(attached_start && attached_end)
+		{
+			child_extent = s16_extent_set(0, available_size);
+		}
+		else if(attached_start)
 		{
 			child_extent = s16_extent_set(0, child_size);
 		}
-		else
+		else if(attached_end)
 		{
-			child_extent = s16_extent_add_offset(child_extent, available_size - child_extent.end);
+			child_extent = s16_extent_set(available_size - child_size, available_size);
 		}
-	}
+		else if(child_extent.end > available_size)
+		{
+			if(child_size > available_size)
+			{
+				child_extent = s16_extent_set(0, child_size);
+			}
+			else
+			{
+				child_extent = s16_extent_add_offset(child_extent, available_size - child_extent.end);
+			}
+		}
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
-	{
 		sol_gui_object_set_extent_y(child, child_extent);
 	}
 }
@@ -253,24 +309,22 @@ static const struct sol_gui_object_structure_functions sol_gui_floating_region_f
 
 
 
-static void sol_gui_floating_region_construct(struct sol_gui_floating_region* region, struct sol_gui_context* context, uint32_t position_flags_to_preserve)
+static void sol_gui_floating_region_construct(struct sol_gui_floating_region* region, struct sol_gui_context* context, uint32_t floating_region_flags)
 {
 	struct sol_gui_object* base = &region->base;
 	sol_gui_object_construct(base, context);
 
 	base->structure_functions = &sol_gui_floating_region_functions;
 	
-	region->position_flags_to_preserve = position_flags_to_preserve;
-	region->selection_range = 16;/// ??
-
 	region->child = NULL;
+	region->flags = floating_region_flags;
 }
 
-struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context, uint32_t position_flags_to_preserve)
+struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context)
 {
 	struct sol_gui_floating_region* region = malloc(sizeof(struct sol_gui_floating_region));
 
-	sol_gui_floating_region_construct(region, context, position_flags_to_preserve);
+	sol_gui_floating_region_construct(region, context, SOL_GUI_FLOATING_REGION_PROPERTY_ATTACHABLE_ALL_SIZES);
 
 	return (struct sol_gui_floating_region_handle)
 	{
@@ -279,7 +333,7 @@ struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_
 }
 
 
-void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating_region_handle region_handle, s16_vec2 offset)
+void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating_region_handle region_handle, s16_vec2 offset, bool allow_snapping)
 {
 	struct sol_gui_floating_region* region = (struct sol_gui_floating_region*)region_handle.object;
 	struct sol_gui_object* child = region->child;
@@ -303,14 +357,14 @@ void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating
 	}
 }
 
-void sol_gui_floating_region_set_content_absolute_offset(struct sol_gui_floating_region_handle region_handle, s16_vec2 offset)
+void sol_gui_floating_region_set_content_absolute_offset(struct sol_gui_floating_region_handle region_handle, s16_vec2 offset, bool allow_snapping)
 {
 	s16_vec2 region_absolute_offset, relative_offset;
 
 	region_absolute_offset = sol_gui_object_absolute_offset(region_handle.object);
 	relative_offset = s16_vec2_sub(offset, region_absolute_offset);
 
-	sol_gui_floating_region_set_content_relative_offset(region_handle, relative_offset);
+	sol_gui_floating_region_set_content_relative_offset(region_handle, relative_offset, allow_snapping);
 }
 
 struct sol_gui_object* sol_gui_floating_region_get_content(struct sol_gui_floating_region_handle region_handle)
@@ -339,11 +393,14 @@ static void floating_region_toggle_button_action_function(void* data)
 	s16_rect button_rect_absolute, descendant_rect_relative;
 	s16_vec2 offset;
 
-	if(region_content && sol_gui_object_toggle_enabled_status(region_content))
+	if(region_content && sol_gui_object_toggle_visibility(region_content))
 	{
+		#warning promoting first ancestor here will be invalidated by the button call promoting the ancestor of the clicked button later
+		sol_gui_object_promote_first_ancestor(&floating_region->base);
+		
 		/** slight pain here in that we want to prescribe the size and placement, 
 		 * but its necessary to derive/finalise the layout of the child to know the placement of the reference widget 
-		 * as such `sol_gui_object_toggle_enabled_status` MUST reorganise this subtree to place its contents in a relative fashion, 
+		 * as such `sol_gui_object_toggle_visibility` MUST reorganise this subtree to place its contents in a relative fashion, 
 		 * which could mean needing to run the layout code twice if the desired placement and size would exceed the floating region */
 
 
@@ -356,7 +413,11 @@ static void floating_region_toggle_button_action_function(void* data)
 		/** assuming context and theme are the same for all */
 		offset = sol_gui_required_pacement_offset(descendant_rect_relative, region_content->context->theme, button_rect_absolute, packet->anchor_placement_x, packet->anchor_placement_y);
 
-		sol_gui_floating_region_set_content_absolute_offset(packet->floating_region_handle, offset);
+		if( ! (floating_region->flags & SOL_GUI_FLOATING_REGION_STATUS_HAS_VALID_POSITION))
+		{
+			floating_region->flags |= SOL_GUI_FLOATING_REGION_STATUS_HAS_VALID_POSITION;
+			sol_gui_floating_region_set_content_absolute_offset(packet->floating_region_handle, offset, false);
+		}
 	}
 }
 
@@ -395,8 +456,8 @@ void sol_gui_button_set_floating_region_toggle_button_packet(struct sol_gui_butt
 
 	struct sol_gui_button_packet button_packet =
 	{
-		.action  = &floating_region_toggle_button_action_function,
-		.destroy = &floating_region_toggle_button_destroy_function,
+		.on_activation  = &floating_region_toggle_button_action_function,
+		.on_destruction = &floating_region_toggle_button_destroy_function,
 		.data = toggle_packet,
 	};
 

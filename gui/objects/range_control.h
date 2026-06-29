@@ -21,15 +21,35 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
-#include "solipsix/gui/range_control_distribution.h"
 #include "solipsix/overlay/enums.h"
+#include "solipsix/gui/range_control_distribution.h"
 
 struct sol_gui_context;
 struct sol_gui_object;
+
+/** interface with external data */
+struct sol_gui_range_control_packet
+{
+	/** the user provided data used to acquire and update the range */
+	void* data;
+
+	/** fetch the current range (being controlled) on demand*/
+	void (*get_distribution)(const void* data, struct sol_range_control_distribution* distribution);
+
+	/** update the range, range control operates on some number of pixels out of a possible range, 
+	 * this provides the distilled information to an update function in its raw form;
+	 * the user selected value in the range = `numerator/denominator` 
+	 * finalised will be true if the value is no longer expected to be updated after this */
+	void (*apply_distribution_update)(void* data, int16_t numerator, int16_t denominator, bool final_update);
+
+	/** data may need cleanup (can be null) */
+	void (*on_destruction)(void* data);
+};
+
 
 struct sol_gui_range_control_handle
 {
 	struct sol_gui_object* object;
 };
 
-struct sol_gui_range_control_handle sol_gui_range_control_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data);
+struct sol_gui_range_control_handle sol_gui_range_control_create(struct sol_gui_context* context, struct sol_gui_range_control_packet packet, enum sol_overlay_orientation orientation);

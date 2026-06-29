@@ -197,32 +197,43 @@ struct sol_font
 
 		kbts_glyph* glyphs;
 		uint32_t glyph_space;
+		uint32_t glyph_count;
 	}
 	kb;
 
     // int16_t glyph_size;
-    int16_t baseline_offset;
-    int16_t normalised_orthogonal_size;
+    int16_t linespace;
 
-    int16_t max_advance;
+    int16_t x_ppem;
+    int16_t x_range;
+    int16_t max_advance; 
+
+    int16_t y_ppem;
+    int16_t y_range;
+    int16_t y_range_baseline;
+    int16_t y_em_baseline;/** at present this is a guess, a mechanism should be exposed to permit this to be provided by the user */
+
 
     bool subpixel_offset_render;
 
 
     struct sol_font_glyph_map glyph_map;
-
-
-
-
-    // ///not a great solution but bubble sort new glyphs from end?, is rare enough op and gives low enough cache use to justify?
-    // cvm_overlay_glyph * glyphs;
-    // uint32_t glyph_count;
-    // uint32_t glyph_space;
 };
 
 
 
-
+s16_vec2 sol_font_glyph_size(const struct sol_font* font, enum sol_font_sizing sizing)
+{
+	switch(sizing)
+	{
+	case SOL_FONT_SIZING_EM:
+		return s16_vec2_set(font->x_ppem, font->y_ppem);
+	case SOL_FONT_SIZING_BOUNDS:
+		return s16_vec2_set(font->x_range, font->y_range);
+	default: assert(false);/** unhandled */
+		return s16_vec2_set(0, 0);
+	}
+}
 
 
 
@@ -265,7 +276,6 @@ void sol_font_library_destroy(struct sol_font_library* font_library)
 
 	free(font_library);
 }
-
 
 
 #warning if language not provided perhaps implement guessing in "simple"?
@@ -377,16 +387,30 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 	ascender = font->ft.face->size->metrics.ascender;
 	descender = font->ft.face->size->metrics.descender;
 
+	printf(">> %d %d\n", font->ft.face->size->metrics.x_ppem, font->ft.face->size->metrics.y_ppem);
+
 	assert((ascender & 0x3F) == 0 && (descender & 0x3F) == 0);
+
+    // float em_baseline_fraction = 0.7;
+	// const float em_baseline_fraction = (float)ascender / (ascender - descender);
+	const float em_baseline_fraction = (float)ascender / (ascender - descender);
+    #warning ^^ approximation(s)...
+	
 
 #warning permit 2 othogonal offsets (for odd and even sized differences between bounds and font orthogonal size)
 	#warning this can be done much better: working ENTIRELY in 26.6 units! and placing the basline ON a pixel boundary (i.e. remove orthogonal_subpixel_offset entirely!)
-	font->baseline_offset = ascender >> 6;
-	font->normalised_orthogonal_size = (ascender - descender) >> 6;
+	font->y_ppem = font->ft.face->size->metrics.y_ppem;
+    // font->y_em_baseline = (int16_t)((float)font->y_ppem * em_baseline_fraction + 0.5f);/** round up */
+    font->y_em_baseline = (ascender - (((ascender - descender) - (font->y_ppem << 6)) >> 1) + 32) >> 6; /** assume ascender distance above EM square is same as descender distance below EM square, rounded*/
+	font->y_range = (ascender - descender) >> 6;
+	font->y_range_baseline = ascender >> 6;
 
-    font->max_advance   = font->ft.face->size->metrics.max_advance >> 6;
+	font->x_ppem = font->ft.face->size->metrics.x_ppem;
+    font->x_range     = font->ft.face->size->metrics.max_advance >> 6; /** imperfect but otherwise would need to scan bboxes ? */
+    font->max_advance = font->ft.face->size->metrics.max_advance >> 6;
 
-	// printf("height %d\n", font->normalised_orthogonal_size);
+	printf("height %d : %d : %d %d\n", font->y_range, font->y_ppem ,font->ft.face->height >> 6, ascender>>6);
+	printf("width %d : %d\n", font->x_range, font->x_ppem);
 	// printf("line spacing %d\n", font->line_spacing );
 
 	struct sol_hash_map_descriptor map_descriptor =
@@ -689,109 +713,165 @@ static inline void sol_font_render_overlay_glyph(uint32_t glyph_codepoint, int32
 	}
 }
 
-static inline void sol_font_render_text_simple_harfbuzz(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, struct sol_overlay_render_batch* render_batch)
+// static inline void sol_font_render_text_simple_hb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, struct sol_overlay_render_batch* render_batch)
+// {
+// 	hb_buffer_t* buffer;
+// 	hb_glyph_info_t* glyph_info;
+// 	hb_glyph_position_t* glyph_positions;
+// 	unsigned int i, glyph_count;
+// 	int32_t cursor_x, cursor_y, accumulated_subpixel_advance;
+
+
+// 	buffer = sol_font_get_hb_buffer(font->parent_library);
+// 	#warning should font have an over-riding set of default segment properties provided > font > library
+
+// 	hb_buffer_clear_contents(buffer);
+
+// 	/** assume simple text uses default properties, this must be set every time buffer is recycled */
+// 	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
+
+// 	hb_buffer_add_utf8(buffer, text, -1, 0, -1);
+
+// 	hb_shape(font->hb.font, buffer, NULL, 0);
+
+// 	glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
+// 	glyph_positions = hb_buffer_get_glyph_positions(buffer, &i);
+
+// 	/** glyph count should match between positioning and rendering */
+// 	assert(i == glyph_count);
+
+// 	accumulated_subpixel_advance = 0;
+// 	for(i = 0; i < glyph_count; i++)
+// 	{
+// 		accumulated_subpixel_advance += glyph_positions[i].x_advance;
+// 	}
+
+// 	#warning calculate length here, including number (and position?) of breaks -- should be very quick
+
+// 	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
+// 	cursor_x =  (int32_t)(position.x.start) << 6;
+// 	cursor_y = ((int32_t)(position.y.end + position.y.start - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
+// 	// printf("y: %u %u\n",cursor_y, cursor_y&63);
+
+// 	for(i = 0; i < glyph_count; i++)
+// 	{
+// 		sol_font_render_overlay_glyph(glyph_info[i].codepoint,
+// 			cursor_x + glyph_positions[i].x_offset,
+// 			cursor_y + glyph_positions[i].y_offset,
+// 			font, colour, render_batch);
+
+// 		cursor_x += glyph_positions[i].x_advance;
+// 		cursor_y += glyph_positions[i].y_advance;
+// 	}
+// }
+
+// static int16_t sol_font_size_text_x_simple_hb(const struct sol_font* font, const char* text)
+// {
+// 	hb_buffer_t* buffer;
+// 	unsigned int i, glyph_count;
+// 	int32_t accumulated_subpixel_advance, advance;
+// 	hb_glyph_position_t* glyph_positions;
+
+// 	buffer = sol_font_get_hb_buffer(font->parent_library);
+
+// 	hb_buffer_clear_contents(buffer);
+
+// 	/** assume simple text uses default properties, this must be set every time buffer is recycled */
+// 	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
+
+// 	hb_buffer_add_utf8(buffer, text, -1, 0, -1);
+
+// 	hb_shape(font->hb.font, buffer, NULL, 0);
+
+// 	glyph_positions = hb_buffer_get_glyph_positions(buffer, &glyph_count);
+// 	accumulated_subpixel_advance = 0;
+// 	for(i = 0; i < glyph_count; i++)
+// 	{
+// 		accumulated_subpixel_advance += glyph_positions[i].x_advance;
+// 	}
+
+// 	advance = accumulated_subpixel_advance >> 6;
+// 	return advance;
+// }
+
+static inline uint32_t sol_font_decode_next_glypth_kb(const char* text, size_t remaining_len, struct sol_font* font)
 {
-	hb_buffer_t* buffer;
-	hb_glyph_info_t* glyph_info;
-	hb_glyph_position_t* glyph_positions;
-	unsigned int i, glyph_count;
-	int32_t cursor_x, cursor_y, accumulated_subpixel_advance;
+	kbts_decode decode;
 
-
-	buffer = sol_font_get_hb_buffer(font->parent_library);
-	#warning should font have an over-riding set of default segment properties provided > font > library
-
-	hb_buffer_clear_contents(buffer);
-
-	/** assume simple text uses default properties, this must be set every time buffer is recycled */
-	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
-
-	hb_buffer_add_utf8(buffer, text, -1, 0, -1);
-
-	hb_shape(font->hb.font, buffer, NULL, 0);
-
-	glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
-	glyph_positions = hb_buffer_get_glyph_positions(buffer, &i);
-
-	/** glyph count should match between positioning and rendering */
-	assert(i == glyph_count);
-
-	accumulated_subpixel_advance = 0;
-	for(i = 0; i < glyph_count; i++)
+	decode = kbts_DecodeUtf8(text, remaining_len);
+	if(decode.Valid)
 	{
-		accumulated_subpixel_advance += glyph_positions[i].x_advance;
+		if(font->kb.glyph_count == font->kb.glyph_space)
+		{
+			font->kb.glyph_space *= 2;
+			font->kb.glyphs = realloc(font->kb.glyphs, sizeof(kbts_glyph) * font->kb.glyph_space);
+		}
+		font->kb.glyphs[font->kb.glyph_count++] = kbts_CodepointToGlyph(&font->kb.font, decode.Codepoint);
+		text += decode.SourceCharactersConsumed;
 	}
 
-	#warning calculate length here, including number (and position?) of breaks -- should be very quick
-
-	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
-	cursor_x =  (int32_t)(position.x.start) << 6;
-	cursor_y = ((int32_t)(position.y.end + position.y.start - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
-	// printf("y: %u %u\n",cursor_y, cursor_y&63);
-
-	for(i = 0; i < glyph_count; i++)
-	{
-		sol_font_render_overlay_glyph(glyph_info[i].codepoint,
-			cursor_x + glyph_positions[i].x_offset,
-			cursor_y + glyph_positions[i].y_offset,
-			font, colour, render_batch);
-
-		cursor_x += glyph_positions[i].x_advance;
-		cursor_y += glyph_positions[i].y_advance;
-	}
+	assert(!decode.Valid || decode.SourceCharactersConsumed > 0);
+	
+	return decode.Valid ? decode.SourceCharactersConsumed : 0;
 }
 
-
-static inline void sol_font_render_text_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, struct sol_overlay_render_batch* render_batch)
+/** returns glyph count put in fonts text buffer */
+static inline void sol_font_shape_text_kb(const char* text, struct sol_font* font, bool trailing_space)
 {
-	int32_t cursor_x, cursor_y, x_base, y_base;
-	kbts_decode decode;
-	size_t len, remaining_len;
-	uint32_t i, glyph_count;
-	kbts_glyph glyph;
-	kbts_cursor cursor;
+	
+	size_t remaining_len, consumed_byte_count;
 
-	len = strlen(text);
-	remaining_len = len;
-	glyph_count = 0;
+	remaining_len = strlen(text);
+	font->kb.glyph_count = 0;
 
-	while(remaining_len)
+	while((consumed_byte_count = sol_font_decode_next_glypth_kb(text, remaining_len, font)))
 	{
-		decode = kbts_DecodeUtf8(text, remaining_len);
-		text += decode.SourceCharactersConsumed;
-		remaining_len -= decode.SourceCharactersConsumed;
-		if(decode.Valid)
-		{
-			if(glyph_count == font->kb.glyph_space)
-			{
-				font->kb.glyph_space *= 2;
-				font->kb.glyphs = realloc(font->kb.glyphs, sizeof(kbts_glyph) * font->kb.glyph_space);
-			}
-			font->kb.glyphs[glyph_count++] = kbts_CodepointToGlyph(&font->kb.font, decode.Codepoint);
-		}
-		else
-		{
-			break;
-		}
+		text += consumed_byte_count;
+		remaining_len -= consumed_byte_count;
 	}
 
-	while(kbts_Shape(font->kb.state, &font->kb.config, font->kb.direction, font->kb.direction, font->kb.glyphs, &glyph_count, font->kb.glyph_space))
+	if(trailing_space)
+	{
+		sol_font_decode_next_glypth_kb(" ", 1, font);
+	}
+
+	while(kbts_Shape(font->kb.state, &font->kb.config, font->kb.direction, font->kb.direction, font->kb.glyphs, &font->kb.glyph_count, font->kb.glyph_space))
 	{
 		font->kb.glyph_space *= 2;
 		font->kb.glyphs = realloc(font->kb.glyphs, sizeof(kbts_glyph) * font->kb.glyph_space);
 	}
+}
+
+static inline void sol_font_render_text_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, struct sol_overlay_render_batch* render_batch)
+{
+	int32_t cursor_x, cursor_y, x_base, y_base;
+	uint32_t i;
+	kbts_cursor cursor;
+
+	sol_font_shape_text_kb(text, font, false);
 
 	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
 
 	#warning this needs alignment to be as adaptable as desired
+	/** note: << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
 	x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(position.x.end) << 6) : ((int32_t)(position.x.start) << 6);
-
-	/** << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
-	y_base = ((int32_t)(position.y.end + position.y.start - font->normalised_orthogonal_size) << 5) + ((int32_t)(font->baseline_offset) << 6);
+	switch(vertical_sizing)
+	{
+	case SOL_FONT_SIZING_EM:
+		// printf("%d %d %d -> %d\n",position.y.start, position.y.end, font->y_ppem);
+		y_base = ((int32_t)(position.y.end + position.y.start - font->y_ppem) << 5) + ((int32_t)(font->y_em_baseline) << 6);
+		// y_base = ((int32_t)(position.y.end + position.y.start + font->y_ppem) << 5);
+		break;
+	case SOL_FONT_SIZING_BOUNDS:
+		y_base = ((int32_t)(position.y.end + position.y.start - font->y_range) << 5) + ((int32_t)(font->y_range_baseline) << 6);
+		break;
+	default: assert(false);/** unhandled */
+		y_base = 0;
+	}
 
 
 	cursor = kbts_Cursor(font->kb.direction);
-	for(i = 0; i < glyph_count; i++)
+	for(i = 0; i < font->kb.glyph_count; i++)
 	{
 		kbts_PositionGlyph(&cursor, &font->kb.glyphs[i], &cursor_x, &cursor_y);
 
@@ -803,60 +883,63 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 	}
 }
 
+static inline int16_t sol_font_size_text_x_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_orientation orientation)
+{
+	int32_t cursor_x, cursor_y;
+	uint32_t i;
+	kbts_cursor cursor;
+
+	/** add an extra `space` character to the buffer to get the final position of the cursor, 
+	 * this roughly matches the start of string rendering being the cursor location rather than the start of resultant pixels */ 
+	sol_font_shape_text_kb(text, font, true);
+
+	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
+
+	cursor_x = 0;
+	cursor = kbts_Cursor(font->kb.direction);
+	for(i = 0; i < font->kb.glyph_count; i++)
+	{
+		kbts_PositionGlyph(&cursor, &font->kb.glyphs[i], &cursor_x, &cursor_y);
+
+		/** convert font units (that KB works in) into 26.6 units which freetype and rendering works in, this requires expanding the range to ensure values over 32px dont overflow... */
+		cursor_x = (int32_t)(((int64_t)cursor_x * font->ft.x_scale) >> 16);	
+	}
+
+	return (int16_t)(cursor_x >> 6);/** cursor_x in 26.6 format, need in pixels */
+}
+
 
 void sol_font_render_text_simple(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
 {
 	/** get these from theme ? */
 	enum sol_overlay_alignment alignment = SOL_OVERLAY_ALIGNMENT_START;
 	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
-	// sol_font_render_text_simple_harfbuzz(text, font, colour, position, alignment, orientation, render_batch);
-	sol_font_render_text_simple_kb(text, font, colour, position, alignment, orientation, render_batch);
+	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_EM;
+	// sol_font_render_text_simple_hb(text, font, colour, position, alignment, orientation, render_batch);
+	sol_font_render_text_simple_kb(text, font, colour, position, alignment, orientation, vertical_sizing, render_batch);
 }
 
-
-static int16_t sol_font_size_text_x_simple_hb(const struct sol_font* font, const char* text)
-{
-	hb_buffer_t* buffer;
-	unsigned int i, glyph_count;
-	int32_t accumulated_subpixel_advance, advance;
-	hb_glyph_position_t* glyph_positions;
-
-	buffer = sol_font_get_hb_buffer(font->parent_library);
-
-	hb_buffer_clear_contents(buffer);
-
-	/** assume simple text uses default properties, this must be set every time buffer is recycled */
-	hb_buffer_set_segment_properties(buffer, &font->hb.default_properties);
-
-	hb_buffer_add_utf8(buffer, text, -1, 0, -1);
-
-	hb_shape(font->hb.font, buffer, NULL, 0);
-
-	glyph_positions = hb_buffer_get_glyph_positions(buffer, &glyph_count);
-	accumulated_subpixel_advance = 0;
-	for(i = 0; i < glyph_count; i++)
-	{
-		accumulated_subpixel_advance += glyph_positions[i].x_advance;
-	}
-
-	advance = accumulated_subpixel_advance >> 6;
-	return advance;
-}
-
-s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font)
-{
-	return s16_vec2_set(sol_font_size_text_x_simple_hb(font, text), font->normalised_orthogonal_size);
-}
 
 int16_t sol_font_size_text_x_simple(const char* text, struct sol_font* font)
 {
-	return sol_font_size_text_x_simple_hb(font, text);
+	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
+	return sol_font_size_text_x_simple_kb(text, font, orientation);
 }
 
 int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font)
 {
-	#warning this could/should be informed as to whether font is vertical
-	return font->normalised_orthogonal_size;
+	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
+	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_EM;
+	return font->y_ppem;
+	// switch(sizing)
+	// {
+	// case SOL_FONT_SIZING_EM:
+	// 	return font->y_ppem;
+	// case SOL_FONT_SIZING_BOUNDS:
+	// 	return font->y_range;
+	// default: assert(false);/** unhandled */
+	// 	return 0;
+	// }
 }
 
 
@@ -973,11 +1056,6 @@ void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font,
 	sol_font_render_glyph_simple_kb(utf8_glyph, font, colour, position, render_batch);
 }
 
-s16_vec2 sol_font_size_glyph_simple(const char* utf8_glyph, struct sol_font* font)
-{
-	uint16_t s = font->normalised_orthogonal_size;
-	return s16_vec2_set(s, s);
-}
 
 
 

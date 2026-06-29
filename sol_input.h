@@ -31,5 +31,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_input
 {
 	SDL_Event sdl_event;
+
+	/** a unique identifier of a minimal set of identifiers used to identify/distingush the source of an event 
+	 * for this to be correct: 
+	 * an externally managed system for intercepting gamepad connection/disconnection events 
+	 * and setting up mappings to a minimal set of gamepad identifiers must be used 
+	 * the same must also be used in multi mouse & multi keyboard environments */
+	#warning this will eventually be done within solipsix, but may not be necessary to begin with... (SDL may handle)
+	// uint32_t device_id;
 };
 

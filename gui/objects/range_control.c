@@ -27,10 +27,15 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "solipsix/gui/objects/range_control_basis.h"
 
 
-static inline void sol_gui_range_control_alter_value(struct sol_gui_range_control* range_control, struct sol_gui_theme* theme, s16_rect current_rect, s16_vec2 mouse_location, struct sol_range_control_distribution distribution)
+static inline void sol_gui_range_control_alter_value_mouse(struct sol_gui_range_control* range_control, struct sol_gui_theme* theme, s16_vec2 mouse_location, bool final_update)
 {
 	s16_extent selection_extent;
+	s16_rect current_rect;
+	struct sol_range_control_distribution distribution;
 	int16_t n, d;
+
+	current_rect = sol_gui_object_absolute_rect(&range_control->base);
+	range_control->packet.get_distribution(range_control->packet.data, &distribution);
 
 	selection_extent = theme->range_control_selection(theme, range_control->base.flags, range_control->orientation, current_rect, distribution);
 
@@ -50,10 +55,10 @@ static inline void sol_gui_range_control_alter_value(struct sol_gui_range_contro
 	n = n - selection_extent.start - range_control->interior_selection_offset;
 	n = SOL_CLAMP(n, 0, d);
 
-	range_control->update_action(range_control->data, n, d);
+	range_control->packet.apply_distribution_update(range_control->packet.data, n, d, final_update);
 }
 
-bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
+bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
 {
 	struct sol_gui_range_control* range_control = (struct sol_gui_range_control*)obj;
 	struct sol_gui_context* context = obj->context;
@@ -61,6 +66,7 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 
 	struct sol_range_control_distribution distribution;
 	s16_vec2 mouse_location;
+	bool is_under_mouse;
 	
 	s16_rect current_rect;
 	bool hit_interior;
@@ -71,56 +77,58 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		sol_gui_context_change_focused_object(context, obj);
-		mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
-		current_rect = sol_gui_object_absolute_rect(obj);
-		range_control->get_distribution(range_control->data, &distribution);
-
-		hit_interior = theme->range_control_interior(theme, obj->flags, range_control->orientation, current_rect, mouse_location, distribution, &range_control->interior_selection_offset);
-
-		if(!hit_interior)
+		if(metadata.is_mouse_over)
 		{
-			sol_gui_range_control_alter_value(range_control, theme, current_rect, mouse_location, distribution);
-		}
-		return true;
+			sol_gui_object_promote_first_ancestor(obj);
+			if(input->sdl_event.button.button == 1)
+			{
+				mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
+				sol_gui_context_set_focused_object(context, obj);
+				current_rect = sol_gui_object_absolute_rect(obj);
+				range_control->packet.get_distribution(range_control->packet.data, &distribution);
 
-	case SDL_EVENT_MOUSE_MOTION:
-		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
-		{
-			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
-			current_rect = sol_gui_object_absolute_rect(obj);
-			range_control->get_distribution(range_control->data, &distribution);
+				hit_interior = theme->range_control_interior(theme, obj->flags, range_control->orientation, current_rect, mouse_location, distribution, &range_control->interior_selection_offset);
 
-			sol_gui_range_control_alter_value(range_control, theme, current_rect, mouse_location, distribution);
-
+				if(!hit_interior)
+				{
+					sol_gui_range_control_alter_value_mouse(range_control, theme, mouse_location, false);
+				}
+			}
 			return true;
 		}
-		return false;
+		break;
+
+	case SDL_EVENT_MOUSE_MOTION:
+		if(metadata.is_focused)
+		{
+			sol_gui_object_promote_first_ancestor(obj);
+			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+			sol_gui_range_control_alter_value_mouse(range_control, theme, mouse_location, false);
+			return true;
+		}
+		break;
 
 	case SDL_EVENT_MOUSE_BUTTON_UP:
-		sol_gui_context_change_focused_object(context, NULL);
-		return false;
-
-	default:
-		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
+		if(metadata.is_focused && input->sdl_event.button.button == 1)
 		{
-			return true;// must consume input if focused? seems stupid
+			sol_gui_object_promote_first_ancestor(obj);
+			mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
+			sol_gui_range_control_alter_value_mouse(range_control, theme, mouse_location, true);
+			sol_gui_context_set_focused_object(context, NULL);
+			return true;
 		}
-		// handle non-standard (custom) events
-		// if(event_type == context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END)
-		// {
-		// 	//do nothing here...
-		// }
-		return false;
+		break;
 	}
+
+	return false;
 }
 
 void sol_gui_range_control_destroy(struct sol_gui_object* obj)
 {
 	struct sol_gui_range_control* range_control = (struct sol_gui_range_control*)obj;
-	if(range_control->destroy_action)
+	if(range_control->packet.on_destruction)
 	{
-		range_control->destroy_action(range_control->data);
+		range_control->packet.on_destruction(range_control->packet.data);
 	}
 }
 
@@ -137,7 +145,7 @@ static void sol_gui_range_control_render(struct sol_gui_object* obj, s16_rect po
 	struct sol_gui_theme* theme = obj->context->theme;
 	struct sol_range_control_distribution distribution;
 
-	range_control->get_distribution(range_control->data, &distribution);
+	range_control->packet.get_distribution(range_control->packet.data, &distribution);
 
 	theme->range_control_render(theme, obj->flags, range_control->orientation, position, batch, SOL_OVERLAY_COLOUR_DEFAULT, SOL_OVERLAY_COLOUR_STANDARD_TEXT, distribution);
 }
@@ -177,28 +185,25 @@ static const struct sol_gui_object_structure_functions sol_gui_text_range_contro
 	.destroy    = &sol_gui_range_control_destroy,
 };
 
-void sol_gui_range_control_construct(struct sol_gui_range_control* range_control, struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data)
+void sol_gui_range_control_construct(struct sol_gui_range_control* range_control, struct sol_gui_context* context, struct sol_gui_range_control_packet packet, enum sol_overlay_orientation orientation)
 {
 	sol_gui_object_construct(&range_control->base, context);
 
 	range_control->base.input_action = &sol_gui_range_control_default_input_action;
-	range_control->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
+	range_control->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED | SOL_GUI_OBJECT_PROPERTY_FLAG_CLICKABLE;
 	range_control->base.structure_functions = &sol_gui_text_range_control_structure_functions;
 
-	range_control->get_distribution = get_distribution;
-	range_control->update_action = update_action;
-	range_control->destroy_action = destroy_action;
-	range_control->data = data;
+	range_control->packet = packet;
 	range_control->orientation = orientation;
 	range_control->min_gradations = 64;
 }
 
 // cannot construct these as they have flexible buffers
-struct sol_gui_range_control_handle sol_gui_range_control_create(struct sol_gui_context* context, enum sol_overlay_orientation orientation, void(*get_distribution)(const void*, struct sol_range_control_distribution*), void(*update_action)(void*, int16_t, int16_t), void(*destroy_action)(void*), void* data)
+struct sol_gui_range_control_handle sol_gui_range_control_create(struct sol_gui_context* context, struct sol_gui_range_control_packet packet, enum sol_overlay_orientation orientation)
 {
 	struct sol_gui_range_control* range_control = malloc(sizeof(struct sol_gui_range_control));
 
-	sol_gui_range_control_construct(range_control, context, orientation, get_distribution, update_action, destroy_action, data);
+	sol_gui_range_control_construct(range_control, context, packet, orientation);
 
 	return (struct sol_gui_range_control_handle)
 	{

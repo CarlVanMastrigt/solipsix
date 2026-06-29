@@ -24,12 +24,17 @@ struct sol_gui_object;
 
 struct sol_gui_button_packet
 {
-	void(*action )(void*);
-	void(*destroy)(void*);
+	/** the user provided data passed to the action function when its clicked **/
 	void* data;
+
+	/** action to take when button is clicked/activated **/
+	void(*on_activation)(void*);
+
+	/** data may need cleanup (can be null) **/
+	void(*on_destruction)(void*);
 };
 
-#define SOL_GUI_BUTTON_PACKET_NULL ((struct sol_gui_button_packet){.action = NULL, .destroy = NULL, .data = NULL})
+#define SOL_GUI_BUTTON_PACKET_NULL ((struct sol_gui_button_packet){.on_activation = NULL, .on_destruction = NULL, .data = NULL})
 
 struct sol_gui_button_handle
 {

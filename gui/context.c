@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025, 2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -54,7 +54,7 @@ static inline void sol_gui_context_set_highlight(struct sol_gui_context* context
 			.type = context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN,
 			.timestamp = SDL_GetTicks(),
 		};
-		obj->input_action(obj, &highlight_event);
+		obj->input_action(obj, &highlight_event, (struct sol_gui_input_metadata){});
 
 		sol_gui_object_retain(obj);
 	}
@@ -82,7 +82,7 @@ static inline void sol_gui_context_clear_highlight(struct sol_gui_context* conte
 			.type = context->SOL_GUI_EVENT_OBJECT_HIGHLIGHT_END,
 			.timestamp = SDL_GetTicks(),
 		};
-		obj->input_action(obj, &highlight_event);
+		obj->input_action(obj, &highlight_event, (struct sol_gui_input_metadata){});
 
 		if (context->previous_highlighted_object)
 		{
@@ -117,7 +117,7 @@ static inline void sol_gui_context_set_focus(struct sol_gui_context* context, st
 			.type = context->SOL_GUI_EVENT_OBJECT_FOCUS_BEGIN,
 			.timestamp = SDL_GetTicks(),
 		};
-		obj->input_action(obj, &focus_event);
+		obj->input_action(obj, &focus_event, (struct sol_gui_input_metadata){});
 
 		sol_gui_object_retain(obj);
 	}
@@ -127,7 +127,7 @@ static inline void sol_gui_context_clear_focus(struct sol_gui_context* context, 
 {
 	struct sol_input focus_event;
 
-	assert(context->focused_object == obj);// must have been focused object
+	assert(context->focused_object == obj);/** must have been focused object to defocus */
 
 	context->focused_object = NULL;
 
@@ -145,7 +145,7 @@ static inline void sol_gui_context_clear_focus(struct sol_gui_context* context, 
 			.type = context->SOL_GUI_EVENT_OBJECT_FOCUS_END,
 			.timestamp = SDL_GetTicks(),
 		};
-		obj->input_action(obj, &focus_event);
+		obj->input_action(obj, &focus_event, (struct sol_gui_input_metadata){});
 
 		sol_gui_object_release(obj);
 	}
@@ -157,7 +157,7 @@ static inline void sol_gui_context_clear_focus(struct sol_gui_context* context, 
 
 struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size)
 {
-	struct sol_gui_object* root_container;
+	struct sol_gui_container_handle root_container;
 	uint32_t SOL_GUI_EVENT_BASE = SDL_RegisterEvents(4);
 	*context = (struct sol_gui_context)
 	{
@@ -180,13 +180,13 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 		.SOL_GUI_EVENT_OBJECT_FOCUS_END       = SOL_GUI_EVENT_BASE + 3,
 	};
 
-	root_container = sol_gui_container_create(context).object;
-	sol_gui_object_retain(root_container);
+	root_container = sol_gui_container_create(context);
+	sol_gui_object_retain(root_container.object);
 
 	context->root_container = root_container;
-	root_container->flags |= SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT;
+	root_container.object->flags |= SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT;
 
-	return root_container;
+	return root_container.object;
 }
 
 void sol_gui_context_terminate(struct sol_gui_context* context)
@@ -207,8 +207,8 @@ void sol_gui_context_terminate(struct sol_gui_context* context)
 	}
 
 	/** this will effectively recursively release the objects in the heirarchy */
-	sol_gui_object_recursive_release_refernces(context->root_container);
-	root_widget_destroyed = sol_gui_object_release(context->root_container);
+	sol_gui_object_recursive_release_refernces(context->root_container.object);
+	root_widget_destroyed = sol_gui_object_release(context->root_container.object);
 	assert(root_widget_destroyed);
 
 	// printf("gui context registered object count: %u\n", context->registered_object_count);
@@ -225,7 +225,7 @@ void sol_gui_context_terminate(struct sol_gui_context* context)
 
 #warning may need to scan up to find highlightable widget?
 // chosen? elected? highlighted? focused?
-void sol_gui_context_change_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool removable)
+void sol_gui_context_set_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool removable)
 {
 
 	struct sol_gui_object* old_highlighted = context->highlighted_object;
@@ -245,7 +245,7 @@ void sol_gui_context_change_highlighted_object(struct sol_gui_context* context, 
 	}
 }
 
-void sol_gui_context_change_focused_object(struct sol_gui_context* context, struct sol_gui_object* obj)
+void sol_gui_context_set_focused_object(struct sol_gui_context* context, struct sol_gui_object* obj)
 {
 	struct sol_input focus_event;
 	struct sol_gui_object* old_focused = context->focused_object;
@@ -283,15 +283,15 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 {
 	s16_extent extent;
 
-	sol_gui_object_set_position_flags(context->root_container, SOL_GUI_OBJECT_POSITION_FLAGS_ALL);
+	sol_gui_object_set_position_flags(context->root_container.object, SOL_GUI_OBJECT_POSITION_FLAGS_ALL);
 
-	context->window_min_size.x = sol_gui_object_min_size_x(context->root_container);
+	context->window_min_size.x = sol_gui_object_min_size_x(context->root_container.object);
 	extent = s16_extent_set(0, SOL_MAX(context->window_min_size.x, context->window_size.x));
-	sol_gui_object_set_extent_x(context->root_container, extent);
+	sol_gui_object_set_extent_x(context->root_container.object, extent);
 
-	context->window_min_size.y = sol_gui_object_min_size_y(context->root_container);
+	context->window_min_size.y = sol_gui_object_min_size_y(context->root_container.object);
 	extent = s16_extent_set(0, SOL_MAX(context->window_min_size.y, context->window_size.y));
-	sol_gui_object_set_extent_y(context->root_container, extent);
+	sol_gui_object_set_extent_y(context->root_container.object, extent);
 
 	context->content_fit = m16_vec2_all(s16_vec2_cmp_lte(context->window_min_size, context->window_size));
 	return context->content_fit;
@@ -299,66 +299,123 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context)
 
 void sol_gui_context_render(struct sol_gui_context* context, struct sol_overlay_render_batch* batch)
 {
-	struct sol_gui_object* root_container = context->root_container;
+	struct sol_gui_object* root_object = context->root_container.object;
 
-	if(root_container->rect.x.start != 0 || root_container->rect.y.start)
+	if(root_object->rect.x.start != 0 || root_object->rect.y.start)
     {
         fprintf(stderr, "GUI rendering expects the root widget to start at 0,0\n");
     }
 
-	sol_gui_object_render(root_container, s16_vec2_set(0, 0), batch);
+	sol_gui_object_render(root_object, s16_vec2_set(0, 0), batch);
 }
 
 struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context, const s16_vec2 location)
 {
-	struct sol_gui_object* root_container = context->root_container;
+	struct sol_gui_object* root_object = context->root_container.object;
 
-	if(root_container->rect.x.start != 0 || root_container->rect.y.start)
+	if(root_object->rect.x.start != 0 || root_object->rect.y.start)
     {
         fprintf(stderr, "GUI hit scan expects the root widget to start at 0,0\n");
     }
 
-	return sol_gui_object_hit_scan(root_container, s16_vec2_set(0, 0), location);
+	return sol_gui_object_hit_scan(root_object, s16_vec2_set(0, 0), location);
+}
+
+static inline bool sol_gui_object_handle_input(struct sol_gui_object* object, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+{
+	#warning this should traverse the parental tree searching for anything to use the input ?? -- no that (probably) wants to be conditional
+
+	const SDL_Event* sdl_event = &input->sdl_event;
+
+	if(object && object->input_action && object->input_action(object, input, metadata))
+	{
+		return true;
+	}
+	else if (object->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_CLICKABLE)
+	{
+		switch (sdl_event->type) 
+		{
+			/** all these inputs should be consumed by a clicakable object */
+	    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+	    case SDL_EVENT_MOUSE_BUTTON_UP:
+	    	
+	    	sol_gui_object_promote_first_ancestor(object);
+	    	return true;
+	    }
+	}
+
+	/** must consume input if object was focused */
+	return metadata.is_focused;
 }
 
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input)
 {
 	struct sol_gui_object* object;
-	bool result;
+	struct sol_gui_object* object_under_mouse;
 	s16_vec2 mouse_location;
+	struct sol_gui_input_metadata metadata;
 
 	const SDL_Event* sdl_event = &input->sdl_event;
-	const SDL_EventType sdl_type = sdl_event->type;
 
-	// handle focused object
-	if(context->focused_object)
+	switch (sdl_event->type) 
 	{
-		// if something is focused may/will consume input
-		object = context->focused_object;
-
-		result = object->input_action(object, input);
-		if(result)
-		{
-			// note: can consume input without still being the focused object (e.g. click away to de-focus)
-			return true;
-		}
-
-		assert(object != context->focused_object);
-		// pretty sure if the focused object didn't consume input, then it should no longer be focused
-		// this may warrant review though
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+    	mouse_location = s16_vec2_set(sdl_event->button.x, sdl_event->button.y);
+    	object_under_mouse = sol_gui_context_hit_scan(context, mouse_location);
+    	break;
+    case SDL_EVENT_MOUSE_WHEEL:
+    	mouse_location = s16_vec2_set(sdl_event->wheel.x, sdl_event->wheel.y);
+    	object_under_mouse = sol_gui_context_hit_scan(context, mouse_location);
+    	break;
+    case SDL_EVENT_MOUSE_MOTION:
+    	// printf("mouse_id: %u\n", sdl_event->motion.which);
+    	mouse_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);
+    	object_under_mouse = sol_gui_context_hit_scan(context, mouse_location);
+    	break;
+    default:
+		/** nothing required in present scheme */
+    	object_under_mouse = NULL;
+    	break;
 	}
 
-	if(sdl_type == SDL_EVENT_MOUSE_MOTION)
-	{
-		// could also be touch screen hover or similar
-		mouse_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);
-		#warning also do this if widgets have been reorganised? (would need to record latest mouse pos for this, or query it from SDL) -- how to spook SDL event though??
-		object = sol_gui_context_hit_scan(context, mouse_location);
+	#warning have extra state associated with input?? - determine if focused/highlighted here?
+	#warning have return type from input to make further decisions (make focused &c)
 
-		// search up the heirarchy
+	/** handle focused object 
+	 * if something is focused may/will consume input */
+	if(context->focused_object)
+	{
+		object = context->focused_object;
+
+		metadata = (struct sol_gui_input_metadata)
+		{
+			.is_focused = true,
+			.is_highlighted = object == context->highlighted_object,
+			.is_mouse_over = object == object_under_mouse,
+		};
+
+		if(sol_gui_object_handle_input(object, input, metadata))
+		{
+			/** note: can consume input without still being the focused object (e.g. click away to de-focus) */
+			return true;
+		}
+	}
+
+	assert(context->focused_object == NULL);
+	/** at present; if the focused object didn't consume input, then it should no longer be focused, and as such NOTHING should be focused
+	 * note: this may warrant review */
+
+	if(sdl_event->type == SDL_EVENT_MOUSE_MOTION)
+	{
+		/** could also be touch screen hover or similar */
+		#warning also do this if widgets have been reorganised? (would need to record latest mouse pos for this, or query it from SDL) -- spoof SDL event on resize ?? -- also needs to ONLY be done if most recent reason for highlight was mouse motion
+		object = object_under_mouse;
+
+		/** search up the heirarchy for a highlightable object */
 		while(object)
 		{
-			// only alter highlighted object when moving cursor over an object that is highlightable
+			/** only alter highlighted object when moving cursor over an object that is highlightable */
 			if(object->flags & SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE)
 			{
 				break;
@@ -366,19 +423,45 @@ bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct 
 			object = object->parent;
 		}
 
-		sol_gui_context_change_highlighted_object(context, object, true);
+		/** note: object may be NULL here */
+		sol_gui_context_set_highlighted_object(context, object, true);
 	}
 
-	// handle highlighted object, this can be set via mouse motion
+
+	/** handle highlighted object, 
+	 * at present: this can be set via mouse motion (above) */
 	if(context->highlighted_object)
 	{
 		object = context->highlighted_object;
-		result = object->input_action(object, input);
-		if(result)
+
+		metadata = (struct sol_gui_input_metadata)
+		{
+			.is_focused = false,
+			.is_highlighted = true,
+			.is_mouse_over = object == object_under_mouse,
+		};
+
+		if(sol_gui_object_handle_input(object, input, metadata))
 		{
 			return true;
 		}
 		#warning add default navigation for highlighted objects (arrow keys/joystick)
+		#warning review; should anything else be allowed to attempt to use input if highlighted object didn't ?
+		return false;
+	}
+
+	/** handle mouse based inputs */
+	if(object_under_mouse)
+	{
+		/** can only return like this because its the last fallback */
+		metadata = (struct sol_gui_input_metadata)
+		{
+			.is_focused = false,
+			.is_highlighted = object_under_mouse == context->highlighted_object,
+			.is_mouse_over = true,
+		};
+
+		return sol_gui_object_handle_input(object_under_mouse, input, metadata);
 	}
 
 	return false;

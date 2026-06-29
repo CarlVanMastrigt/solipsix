@@ -129,3 +129,18 @@ static inline s16_extent sol_range_control_distribution_interior_extent_with_min
 	return result_extent;
 }
 
+static inline bool sol_range_control_distribution_compare_equal(struct sol_range_control_distribution lhs, struct sol_range_control_distribution rhs)
+{
+	if(lhs.type != rhs.type)
+	{
+		return false;
+	}
+
+	switch (lhs.type) 
+	{
+		case SOL_VARIABLE_BAR_DISTRIBUTION_UINT32:
+			return lhs.uint32.before == rhs.uint32.before && lhs.uint32.inner == rhs.uint32.inner && lhs.uint32.after == rhs.uint32.after;
+		case SOL_VARIABLE_BAR_DISTRIBUTION_FLOAT32:
+			return lhs.float32.before == rhs.float32.before && lhs.float32.inner == rhs.float32.inner && lhs.float32.after == rhs.float32.after;
+	}
+}

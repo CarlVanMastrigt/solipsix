@@ -44,6 +44,7 @@ enum sol_overlay_orientation
 
 // used for things like text, specifically avoiding left/right because alignment may be relative to horizontal OR vertical directions
 // also difficuly because we could need horizontal AND vertical alignment
+/** move this to text if possible */
 enum sol_overlay_alignment
 {
     SOL_OVERLAY_ALIGNMENT_START,

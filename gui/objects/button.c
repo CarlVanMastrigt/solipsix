@@ -23,10 +23,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include "solipsix/sol_input.h"
+#include "solipsix/sol_font.h"
+
 #include "solipsix/overlay/enums.h"
 #include "solipsix/gui/objects/button.h"
 
-#include "solipsix/sol_font.h"
 #include "solipsix/gui/objects/button_basis.h"
 
 
@@ -34,77 +35,83 @@ void sol_gui_button_set_packet(struct sol_gui_button_handle button_handle, struc
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)button_handle.object;
 
-	assert(button->packet.action  == NULL);
-	assert(button->packet.destroy == NULL);
-	assert(button->packet.data    == NULL);
+	/** button packet should not already exist */
+	assert(button->packet.on_activation  == NULL);
+	assert(button->packet.on_destruction == NULL);
+	assert(button->packet.data           == NULL);
 
 	button->packet = packet;
 }
 
 
-bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input)
+bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_context* context = obj->context;
-	s16_vec2 mouse_location;
 
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		if(button->packet.action)
+		if(metadata.is_mouse_over)
 		{
-			button->packet.action(button->packet.data);
-		}
-		return true;
-
-	default:
-		return false;
-	}
-}
-bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input)
-{
-	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	struct sol_gui_context* context = obj->context;
-	s16_vec2 mouse_location;
-
-	switch(input->sdl_event.type)
-	{
-	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		//button->select_action(button->data);
-		sol_gui_context_change_focused_object(context, obj);
-		return true;
-
-	case SDL_EVENT_MOUSE_BUTTON_UP:
-		sol_gui_context_change_focused_object(context, NULL);
-		mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
-		if(obj == sol_gui_context_hit_scan(context, mouse_location))
-		{
-			if(button->packet.action)
+			sol_gui_object_promote_first_ancestor(obj);
+			if(button->packet.on_activation && input->sdl_event.button.button == 1)
 			{
-				button->packet.action(button->packet.data);
+				button->packet.on_activation(button->packet.data);
 			}
 			return true;
 		}
-		else
-		{
-			return false;
-		}
-
-	default:
-		if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED)
-		{
-			return true;// must consume input if focused? seems stupid
-		}
-		return false;
+		break;
 	}
+
+	return false;
+}
+
+bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+{
+	struct sol_gui_button* button = (struct sol_gui_button*)obj;
+	struct sol_gui_context* context = obj->context;
+
+	switch(input->sdl_event.type)
+	{
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		/** need to check we are in face under the cursor of this mouse, 
+		 * the focused object can be set with another input (keyboard) 
+		 * and if so this button would recieve mouse button inputs */
+		if(metadata.is_mouse_over && input->sdl_event.button.button == 1)
+		{
+			sol_gui_object_promote_first_ancestor(obj);
+			sol_gui_context_set_focused_object(context, obj);
+			return true;
+		}
+		break;
+
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+		if(metadata.is_focused && input->sdl_event.button.button == 1)
+		{
+			if(metadata.is_mouse_over)
+			{
+				sol_gui_object_promote_first_ancestor(obj);
+				if(button->packet.on_activation)
+				{
+					button->packet.on_activation(button->packet.data);
+				}
+			}
+			sol_gui_context_set_focused_object(context, NULL);
+			return true;
+		}
+		break;
+	}
+
+	return false;
 }
 
 void sol_gui_button_destroy(struct sol_gui_object* obj)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
-	if(button->packet.destroy)
+	if(button->packet.on_destruction)
 	{
-		button->packet.destroy(button->packet.data);
+		button->packet.on_destruction(button->packet.data);
 	}
 }
 
@@ -113,15 +120,16 @@ void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_
 {
 	sol_gui_object_construct(&button->base, context);
 
+	button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_CLICKABLE;
+
 	if(action_on_release)
 	{
 		button->base.input_action = &sol_gui_button_default_input_action_on_button_up;
-		button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE;
+		button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE;
 	}
 	else
 	{
 		button->base.input_action = &sol_gui_button_default_input_action_on_button_down;
-		button->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE;
 	}
 
 	button->packet = packet;

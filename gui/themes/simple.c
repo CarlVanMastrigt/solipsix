@@ -561,51 +561,35 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 	struct sol_gui_theme_simple_data* simple_theme_data = malloc(sizeof(struct sol_gui_theme_simple_data));
 	int16_t font_size;
 
-	switch(size)
+	// font_size = 976;
+	// font_size = 1024;
+	// font_size = 13 * 64;
+	font_size = size * 64;
+	// font_size = 1024;
+	// font_size = 13 * 64 + 32;
+
+	// struct sol_font* text_font = sol_font_create(font_library, "solipsix/resources/NotoSansSymbols-Medium.ttf", font_size, false, "Latn", "eng", "ltr");
+	// struct sol_font* icon_font = sol_font_create(font_library, "solipsix/resources/NotoSansSymbols-Medium.ttf", font_size, false, "Latn", "eng", "ltr");
+	struct sol_font* text_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr");
+	struct sol_font* icon_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr");
+
+	s16_vec2 max_glyph_size = s16_vec2_max(sol_font_glyph_size(text_font, SOL_FONT_SIZING_EM), sol_font_glyph_size(icon_font, SOL_FONT_SIZING_EM));
+
+
+
+
+	*simple_theme_data = (struct sol_gui_theme_simple_data)
 	{
-		case 0: // small
-			font_size = 13;
-			*simple_theme_data = (struct sol_gui_theme_simple_data)
-			{
-				.base_unit_size        = s16_vec2_set(16, 16),// min size
-				.normal_border         = s16_vec2_set(1, 1),
-				.box_content_border    = s16_vec2_set(2, 2),
-				.box_text_border       = s16_vec2_set(6, 2),
-				.panel_content_border  = s16_vec2_set(3, 3),
-				.panel_border          = s16_vec2_set(1, 1),
-			};
-			break;
-		default:
-		case 1: // normal
-			// font_size = 976;
-			// font_size = 1024;
-			// font_size = 13 * 64;
-			// font_size = 864;
-			font_size = 1024;
-			// font_size = 13 * 64 + 32;
-			*simple_theme_data = (struct sol_gui_theme_simple_data)
-			{
-				.base_unit_size        = s16_vec2_set(20, 20),// min size// test button A
-				.normal_border         = s16_vec2_set(1, 1),
-				.box_content_border = s16_vec2_set(2, 2),
-				.box_text_border    = s16_vec2_set(8, 2),
-				.panel_content_border  = s16_vec2_set(4, 4),
-				.panel_border          = s16_vec2_set(1, 1),
-			};
-			break;
-		case 2: // large
-			font_size = 24;
-			*simple_theme_data = (struct sol_gui_theme_simple_data)
-			{
-				.base_unit_size        = s16_vec2_set(30, 30),// min size
-				.normal_border         = s16_vec2_set(2, 2),
-				.box_content_border = s16_vec2_set(3, 3),
-				.box_text_border    = s16_vec2_set(12, 3),
-				.panel_content_border  = s16_vec2_set(6, 6),
-				.panel_border          = s16_vec2_set(2, 2),
-			};
-			break;//
-	}
+		// .base_unit_size        = s16_vec2_set(20, 20),// min size// test button A
+		.normal_border         = s16_vec2_set(1, 1),
+		.box_content_border    = s16_vec2_set(2, 2),
+		.box_text_border       = s16_vec2_set(8, 2),
+		.panel_content_border  = s16_vec2_set(4, 4),
+		.panel_border          = s16_vec2_set(1, 1),
+	};
+
+	/** content border on either size */
+	simple_theme_data->base_unit_size = s16_vec2_add(max_glyph_size, s16_vec2_mul_scalar(simple_theme_data->box_content_border, 2));
 
 	simple_theme_data->test_checkerboard_id_set = false;
 	#warning instead making this fixed sounds much preferable
@@ -613,17 +597,8 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 
 	*theme = (struct sol_gui_theme)
 	{
-		//HB_SCRIPT_MATH			= HB_TAG ('Z','m','t','h'),
-		#warning font should take subpixel rendering as a parameter (usually seems like its bad...)
-		// .text_font = sol_font_create(font_library, "resources/verdana.ttf", font_size, true, "Latn", "eng", "ltr"),
-		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", font_size, true, "latn", "eng", "ltr"),
-		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", font_size, false, "latn", "eng", "ltr"),//file:///usr/share/fonts/noto/NotoSansImperialAramaic-Regular.ttf
-		// .text_font = sol_font_create(font_library, "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf", font_size, false, "arab", "ARA", "rtl"),
-		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, true, "Latn", "eng", "ltr"),
-		// .text_font = sol_font_create(font_library, "resources/Comfortaa-Regular.ttf", font_size, false, "Latn", "eng", "ltr"),
-		// .text_font = sol_font_create(font_library, "resources/NotoColorEmoji-Regular.ttf", font_size, "Latn", "eng", "ltr"),
-		.text_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
-		.icon_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr"),
+		.text_font = text_font,
+		.icon_font = icon_font,
 		.other_data = simple_theme_data,
 
 		.generic_size_x           = &sol_gui_theme_simple_generic_size_x,

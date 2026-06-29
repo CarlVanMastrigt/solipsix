@@ -40,7 +40,7 @@ static void sol_gui_panel_render(struct sol_gui_object* obj, s16_rect position, 
 
 	theme->panel_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		sol_gui_object_render(child, s16_rect_start(position), batch);
 	}
@@ -53,9 +53,9 @@ static struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj,
 	struct sol_gui_object* child = panel->child;
 	struct sol_gui_object* result;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
-		// child location is relative to parent
+		/** child location is relative to parent */
 		result = sol_gui_object_hit_scan(child, s16_rect_start(position), location);
 		if(result)
 		{
@@ -65,7 +65,7 @@ static struct sol_gui_object* sol_gui_panel_hit_scan(struct sol_gui_object* obj,
 
 	if(theme->panel_select(theme, obj->flags, position, location))
 	{
-		//panel is selectable
+		/** panel is selectable, this allows changes to prominence */
 		return obj;
 	}
 
@@ -76,7 +76,7 @@ static void sol_gui_panel_distribute_position_flags(struct sol_gui_object* obj, 
 	struct sol_gui_panel* panel = (struct sol_gui_panel*)obj;
 	struct sol_gui_object* child = panel->child;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		#warning might be good to have panels apply implicit spacing to their children based on flags ?
 		sol_gui_object_set_position_flags(child, position_flags);
@@ -89,7 +89,7 @@ static int16_t sol_gui_panel_min_size_x(struct sol_gui_object* obj)
 	struct sol_gui_object* child = panel->child;
 	int16_t content_min_size;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		content_min_size = sol_gui_object_min_size_x(child);
 	}
@@ -107,7 +107,7 @@ static int16_t sol_gui_panel_min_size_y(struct sol_gui_object* obj)
 	struct sol_gui_object* child = panel->child;
 	int16_t content_min_size;
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		content_min_size = sol_gui_object_min_size_y(child);
 	}
@@ -128,7 +128,7 @@ static void sol_gui_panel_set_extent_x(struct sol_gui_object* obj, s16_extent ex
 	/** make extent relative */
 	content_extent = s16_extent_from_start(extent);
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		content_extent = theme->panel_contents_extent_x(theme, obj->flags, content_extent);
 		sol_gui_object_set_extent_x(child, content_extent);
@@ -144,7 +144,7 @@ static void sol_gui_panel_set_extent_y(struct sol_gui_object* obj, s16_extent ex
 	/** make extent relative */
 	content_extent = s16_extent_from_start(extent);
 
-	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+	if(child && child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 	{
 		content_extent = theme->panel_contents_extent_y(theme, obj->flags, content_extent);
 		sol_gui_object_set_extent_y(child, content_extent);
@@ -209,6 +209,7 @@ static inline void sol_gui_panel_construct(struct sol_gui_panel* panel, struct s
 	sol_gui_object_construct(base, context);
 
 	base->structure_functions = &sol_gui_panel_functions;
+	base->input_action = &sol_gui_object_input_action_generic_clickable;
 
 	if(clear_bordered)
 	{

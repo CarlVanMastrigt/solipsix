@@ -39,14 +39,19 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 void sol_font_destroy(struct sol_font* font);
 
 
+enum sol_font_sizing
+{
+	SOL_FONT_SIZING_EM, /** nominal */
+	SOL_FONT_SIZING_BOUNDS,/** maximal */
+};
 
+s16_vec2 sol_font_glyph_size(const struct sol_font* font, enum sol_font_sizing sizing);
 
 struct sol_overlay_render_batch;
 
 /* will need a better version for "composed" text segments eventually */
 /** this just renders the text in a line with the default properties of the font library */
 void sol_font_render_text_simple(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch);
-s16_vec2 sol_font_size_text_simple(const char* text, struct sol_font* font);
 int16_t sol_font_size_text_x_simple(const char* text, struct sol_font* font);
 int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font);
 
@@ -54,5 +59,4 @@ int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font);
 /** variants that function for single glyphs, the first found in the string, it will be extremely wasteful to provide a string that converts to more than 1 glyph
  * NOTE: this will function in a standardised way; centring the glyph and providing a uniform (per font, rather than a per glyph) size */
 void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch);
-s16_vec2 sol_font_size_glyph_simple(const char* utf8_glyph, struct sol_font* font);
 

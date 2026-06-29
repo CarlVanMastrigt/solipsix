@@ -48,7 +48,7 @@ static void sol_gui_sequence_distribute_position_flags_horizontal(struct sol_gui
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			if(prev_enabled_child)
 			{
@@ -79,7 +79,7 @@ static void sol_gui_sequence_distribute_position_flags_vertical(struct sol_gui_o
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			if(prev_enabled_child)
 			{
@@ -107,7 +107,7 @@ static int16_t sol_gui_sequence_min_size_x_horizontal(struct sol_gui_object* obj
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_min_size_x = sol_gui_object_min_size_x(child);
 			min_size_x += child_min_size_x;
@@ -127,7 +127,7 @@ static int16_t sol_gui_sequence_min_size_y_vertical(struct sol_gui_object* obj)
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_min_size_y = sol_gui_object_min_size_y(child);
 			min_size_y += child_min_size_y;
@@ -148,7 +148,7 @@ static int16_t sol_gui_sequence_min_size_x_horizontal_uniform(struct sol_gui_obj
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_min_size_x = sol_gui_object_min_size_x(child);
 			largest_min_size_x = SOL_MAX(largest_min_size_x, child_min_size_x);
@@ -170,7 +170,7 @@ static int16_t sol_gui_sequence_min_size_y_vertical_uniform(struct sol_gui_objec
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_min_size_y = sol_gui_object_min_size_y(child);
 			largest_min_size_y = SOL_MAX(largest_min_size_y, child_min_size_y);
@@ -195,7 +195,7 @@ static void sol_gui_sequence_set_extent_x_horizontal_start(struct sol_gui_object
 
 	for(child = container->last_child; child; child = child->prev)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.start -= child->min_size.x;
 			sol_gui_object_set_extent_x(child, child_extent);
@@ -218,7 +218,7 @@ static void sol_gui_sequence_set_extent_y_vertical_start(struct sol_gui_object* 
 
 	for(child = container->last_child; child; child = child->prev)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.start -= child->min_size.y;
 			sol_gui_object_set_extent_y(child, child_extent);
@@ -241,7 +241,7 @@ static void sol_gui_sequence_set_extent_x_horizontal_end(struct sol_gui_object* 
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.end += child->min_size.x;
 			sol_gui_object_set_extent_x(child, child_extent);
@@ -264,7 +264,7 @@ static void sol_gui_sequence_set_extent_y_vertical_end(struct sol_gui_object* ob
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.end += child->min_size.y;
 			sol_gui_object_set_extent_y(child, child_extent);
@@ -288,7 +288,7 @@ static void sol_gui_sequence_set_extent_x_horizontal_first(struct sol_gui_object
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.end += child->min_size.x;
 			sol_gui_object_set_extent_x(child, child_extent);
@@ -312,7 +312,7 @@ static void sol_gui_sequence_set_extent_y_vertical_first(struct sol_gui_object* 
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.end += child->min_size.y;
 			sol_gui_object_set_extent_y(child, child_extent);
@@ -332,11 +332,11 @@ static void sol_gui_sequence_set_extent_x_horizontal_last(struct sol_gui_object*
 
 	extent_size = s16_extent_size(extent);
 	assert(extent_size >= obj->min_size.x);
-	child_extent = s16_extent_set(extent_size - obj->min_size.x, extent_size);
+	child_extent = s16_extent_set(obj->min_size.x, extent_size);
 
 	for(child = container->last_child; child; child = child->prev)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.start -= child->min_size.x;
 			sol_gui_object_set_extent_x(child, child_extent);
@@ -356,11 +356,11 @@ static void sol_gui_sequence_set_extent_y_vertical_last(struct sol_gui_object* o
 
 	extent_size = s16_extent_size(extent);
 	assert(extent_size >= obj->min_size.y);
-	child_extent = s16_extent_set(extent_size - obj->min_size.y, extent_size);
+	child_extent = s16_extent_set(obj->min_size.y, extent_size);
 
 	for(child = container->last_child; child; child = child->prev)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.start -= child->min_size.y;
 			sol_gui_object_set_extent_y(child, child_extent);
@@ -388,7 +388,7 @@ static void sol_gui_sequence_set_extent_x_horizontal_uniform(struct sol_gui_obje
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.end += (child_index < remainder) ? child_size + 1 : child_size;
 			sol_gui_object_set_extent_x(child, child_extent);
@@ -417,7 +417,7 @@ static void sol_gui_sequence_set_extent_y_vertical_uniform(struct sol_gui_object
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_extent.end += (child_index < remainder) ? child_size_y + 1 : child_size_y;
 			sol_gui_object_set_extent_y(child, child_extent);

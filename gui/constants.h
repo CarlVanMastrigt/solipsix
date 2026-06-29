@@ -27,7 +27,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // how space in a container will be shared/distributed
 enum sol_gui_distribution
 {
-	// dont use the remaining space, leave it empty at the start of the container, without uniform sizing is the same as first with an empty widget added to the start, added for conveneince
+	/** dont use the remaining space, instead have padding to "consume" that space at the start (left|top) of the container
+     * is the same as first with an empty widget added to the start of the container */
     SOL_GUI_SPACE_DISTRIBUTION_START,
     // dont use the remaining space, leave it empty at the end of the container, without uniform sizing is the same as last with an empty widget added to the end, added for conveneince
     SOL_GUI_SPACE_DISTRIBUTION_END,
@@ -63,10 +64,11 @@ enum sol_gui_relative_placement
 
 #define SOL_GUI_OBJECT_FLAGS_BIT_COUNT 24
 #define SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED    0x000001 /** used for freshly constructed surfaces, this is the state objects are created in before being retained by anything else (e.g. their parent container) */
-#define SOL_GUI_OBJECT_STATUS_FLAG_ENABLED         0x000002 /* inactive objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
+#define SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE         0x000002 /* hidden (not-shown) objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
 #define SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT         0x000004 /** mostly used for validation in various places*/
 #define SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED         0x000008
 #define SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED     0x000010
+#warning ^ these might need to change, focused/highlighted should be queried against as set as needed... (if its desirable to support multi-input highlight)
 /** note: 0x20 - 0x80 inclusive available */
 
 /* these placement flags used to communicate which edge of the screen (if any) a gui object is touching */
@@ -83,3 +85,4 @@ enum sol_gui_relative_placement
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE 0x008000
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_CONTRACT_X    0x010000 /** the object should have the minimum size applicable in the x dimension */
 #define SOL_GUI_OBJECT_PROPERTY_FLAG_CONTRACT_Y    0x020000 /** the object should have the minimum size applicable in the x dimension */
+#define SOL_GUI_OBJECT_PROPERTY_FLAG_CLICKABLE     0x040000 /** will mouse clicks or appropriate gamepad inputs on this object be consumed by default */

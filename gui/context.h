@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2025, 2026 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -22,11 +22,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stddef.h>
 
-#include "math/s16_vec2.h"
+#include "solipsix/math/s16_vec2.h"
+#include "solipsix/gui/objects/container.h"
 
 struct sol_input;
 struct sol_gui_object;
 struct sol_overlay_render_batch;
+
 
 /** context
  * outside ofgui setup/creation usually want to pass around context for rendering, input management &c.
@@ -66,7 +68,7 @@ struct sol_gui_context
     struct sol_gui_object* previously_clicked_object;
     uint32_t previously_clicked_time;
 
-    struct sol_gui_object* root_container;// this should not change
+    struct sol_gui_container_handle root_container;// this should not change
 
     // scratch used by any part of the GUI when space is needed (specifically possible because a GUI context is single threaded)
     void* scratch_buffer;
@@ -84,8 +86,8 @@ struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* contex
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
 // actually not sure how to handle these, they WILL retain objects though
-void sol_gui_context_change_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool removable);
-void sol_gui_context_change_focused_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
+void sol_gui_context_set_highlighted_object(struct sol_gui_context* context, struct sol_gui_object* obj, bool removable);
+void sol_gui_context_set_focused_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
 
 
 /**
@@ -101,4 +103,16 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
 void sol_gui_context_render(struct sol_gui_context* context, struct sol_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context, const s16_vec2 location);
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input);
+
+struct sol_gui_input_metadata
+{
+    /** is the input a mouse cursor action performed over (e.g. the cursor would hit) this object */
+    uint8_t is_mouse_over : 1;
+
+    /** is the object focused for this particular input, e.g. in multi-gamepad environment many objects may be focused */
+    uint8_t is_focused : 1;
+
+    /** is the object highlighted for this particular input, e.g. in multi-gamepad environment many objects may be highlighted */
+    uint8_t is_highlighted : 1;
+};
 

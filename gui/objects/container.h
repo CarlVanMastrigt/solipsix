@@ -35,5 +35,8 @@ struct sol_gui_container_handle sol_gui_container_create(struct sol_gui_context*
  * if placement is start/end sibling will be ignored (may be NULL)
  * if sibling is NULL before/after will move child relative to present sibling in the spot before/after itself (basically before becomes; move backwards and after; move forwards)
  * NOTE: placement is with respect to ALL objects in the container; not just active ones (could pass in ignore inactive but this raises too may questions IMO) */
-void sol_gui_container_move_child(struct sol_gui_container_handle container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement);
+void sol_gui_container_move_child(struct sol_gui_container_handle container, struct sol_gui_object* child, struct sol_gui_object* reference_sibling, enum sol_gui_placement placement);
+
+/** make this child first */
+void sol_gui_container_promote_child(struct sol_gui_container_handle container, struct sol_gui_object* child);
 

@@ -90,8 +90,9 @@ struct sol_gui_object
 
 	const struct sol_gui_object_structure_functions* structure_functions;
 
-	/** may need enumerator for return type? **/
-	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input);
+	/** returns whether the input was "consumed" (used) by the object
+     * may need enumerator for return type? **/
+	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata);
 
     /** note: active state of object should NOT be determined dynamically (with a function pointer here) as changes to activity reqire laying out the structure again */
 
@@ -144,16 +145,16 @@ s16_vec2 sol_gui_object_relative_offset(const struct sol_gui_object* obj, const 
 s16_rect sol_gui_object_absolute_rect(const struct sol_gui_object* obj);
 s16_rect sol_gui_object_relative_rect(const struct sol_gui_object* obj, const struct sol_gui_object* ancestor);
 
-static inline bool sol_gui_object_is_enabled(struct sol_gui_object* obj)
+static inline bool sol_gui_object_is_visible(struct sol_gui_object* obj)
 {
-    return obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED;
+    return obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE;
 }
 
 /** returns whether the object is active AFTER this function has run 
  * will lay out its toplevel ancestors contents again after toggling */
-bool sol_gui_object_toggle_enabled_status(struct sol_gui_object* obj);
+bool sol_gui_object_toggle_visibility(struct sol_gui_object* obj);
 
-void sol_gui_object_disable(struct sol_gui_object* obj);
+void sol_gui_object_hide(struct sol_gui_object* obj);
 
 /** find the top of the tree this widget is a part of, 
  * this excludes the root object in the context as it's children cannot affect each other (i.e.they are effectively separate trees) */
@@ -168,3 +169,11 @@ bool sol_gui_object_has_ancestor(const struct sol_gui_object* obj, const struct 
 #warning this technically has different behaviour to the context root container, it wont force siblings at the root to share an invalid (larger than the window) size -- change the context or object layout function to respect this!
 void sol_gui_object_reorganise_first_ancestor(struct sol_gui_object* obj);
 
+/** move the first ancestor (subtree this object is in) to the front
+ * such that it is rendered last (on top of everything else) and tested first for inputs */
+void sol_gui_object_promote_first_ancestor(struct sol_gui_object* obj);
+
+
+
+
+bool sol_gui_object_input_action_generic_clickable(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata);

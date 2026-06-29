@@ -19,10 +19,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include "gui/object.h"
-
-#include <stdio.h>
+#include "solipsix/sol_input.h"
 
 
 void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context* context)
@@ -33,11 +33,13 @@ void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context
 	*obj = (struct sol_gui_object)
 	{
 		.context = context,
-		// .structure_functions = NULL,
-		// .input_action = NULL,
+		.structure_functions = NULL,
+		.input_action = NULL,
 		.reference_count = 0,
-		.flags = SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED | SOL_GUI_OBJECT_STATUS_FLAG_ENABLED,
-		// .property_flags = 0,
+		.flags = SOL_GUI_OBJECT_STATUS_FLAG_UNREFERENCED | SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE,
+		.prev = NULL,
+		.next = NULL,
+		.parent = NULL,
 	};
 
 	context->unreferenced_object_count++;
@@ -304,7 +306,7 @@ struct sol_gui_object* sol_gui_object_find_first_ancestor(struct sol_gui_object*
 			if(obj->parent->flags & SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT)
 			{
 				/** if something is the root of a context-connected subtree its parent should be the root container of that context */
-				assert(obj->parent == obj->context->root_container);
+				assert(obj->parent == obj->context->root_container.object);
 				return obj;
 			}
 			obj = obj->parent;
@@ -337,32 +339,31 @@ bool sol_gui_object_has_ancestor(const struct sol_gui_object* obj, const struct 
 }
 
 
-void sol_gui_object_disable(struct sol_gui_object* obj)
+void sol_gui_object_hide(struct sol_gui_object* obj)
 {
-	obj->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_ENABLED;
+	obj->flags &= ~SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE;
 
 	#warning instead of `obj->reference_count` could set a "dirty" flag and as objects are created dirty then this would be redundant (also multi-change actions)
 	#warning could also set this "need to lay out" on the first ancestors and run it as a step in/before rendering
 	/** only need to lay out first ancestor if this object is not yet referenced or is a first widget */
-	if(obj->reference_count && obj->parent != obj->context->root_container)
+	if(obj->reference_count && obj->parent != obj->context->root_container.object)
 	{
 		sol_gui_object_reorganise_first_ancestor(obj);
 	}
 }
 
-bool sol_gui_object_toggle_enabled_status(struct sol_gui_object* obj)
+bool sol_gui_object_toggle_visibility(struct sol_gui_object* obj)
 {
-	obj->flags ^= SOL_GUI_OBJECT_STATUS_FLAG_ENABLED;
+	obj->flags ^= SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE;
 	
 	/** dont need to lay out widgets at the top of the tree that been disabled
 	 * (those widgets always have a fixed size and have nothing adjacent to affect) */ 
-	if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED || obj->parent != obj->context->root_container)
+	if(obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE || obj->parent != obj->context->root_container.object)
 	{
-		puts("reorganise");
 		sol_gui_object_reorganise_first_ancestor(obj);
 	}
 
-	return sol_gui_object_is_enabled(obj);
+	return sol_gui_object_is_visible(obj);
 }
 
 void sol_gui_object_reorganise_first_ancestor(struct sol_gui_object* obj)
@@ -378,7 +379,7 @@ void sol_gui_object_reorganise_first_ancestor(struct sol_gui_object* obj)
 
 	if(obj->parent)
 	{
-		assert(obj->parent == context->root_container);
+		assert(obj->parent == context->root_container.object);
 		assert(obj->parent->flags & SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT);
 		rect = s16_rect_at_origin_with_size(context->window_size);
 	}
@@ -408,5 +409,44 @@ void sol_gui_object_reorganise_first_ancestor(struct sol_gui_object* obj)
 	#warning if in context tree, need to set context requiremnts/ mark as invalid if too big
 }
 
+void sol_gui_object_promote_first_ancestor(struct sol_gui_object* obj)
+{
+	const struct sol_gui_context* context = obj->context;
+	uint32_t position_flags;
+	s16_rect rect;
+	s16_vec2 min_size;
+
+	assert(obj);
+
+	obj = sol_gui_object_find_first_ancestor(obj);
+
+	if(obj && obj->parent && obj->parent->flags & SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT)
+	{
+		sol_gui_container_promote_child(context->root_container, obj);
+	}
+	else
+	{
+		fprintf(stderr, "attempted to promote a GUI object not in root connected subtree");
+	}
+}
 
 
+
+
+
+bool sol_gui_object_input_action_generic_clickable(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+{
+	switch(input->sdl_event.type)
+	{
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+		/** consume input in this case */
+		if(metadata.is_mouse_over)
+		{
+			sol_gui_object_promote_first_ancestor(obj);
+			return true;
+		}
+	default:
+		return false;
+	}
+}

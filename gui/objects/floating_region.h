@@ -33,14 +33,14 @@ struct sol_gui_floating_region_handle
 	struct sol_gui_object* object;
 };
 
-struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context, uint32_t position_flags_to_preserve);
+struct sol_gui_floating_region_handle sol_gui_floating_region_create(struct sol_gui_context* context);
 
 #warning should be possible to abstract (some of?) the following functions, calculate placement devoid of reference objects, then apply using a standardised offset function
 
 /** start of contained content (will usually be a panel) with respect to the floating region */ 
-void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating_region_handle floating_region, s16_vec2 offset);
+void sol_gui_floating_region_set_content_relative_offset(struct sol_gui_floating_region_handle floating_region, s16_vec2 offset, bool allow_snapping);
 /** start of contained content (will usually be a panel) with respect to the base context space (which is usually the screen) */ 
-void sol_gui_floating_region_set_content_absolute_offset(struct sol_gui_floating_region_handle floating_region, s16_vec2 offset);
+void sol_gui_floating_region_set_content_absolute_offset(struct sol_gui_floating_region_handle floating_region, s16_vec2 offset, bool allow_snapping);
 
 /** get the (sole) child of the floating region, which will be NULL if none has been asigned */
 struct sol_gui_object* sol_gui_floating_region_get_content(struct sol_gui_floating_region_handle floating_region);

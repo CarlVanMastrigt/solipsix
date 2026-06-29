@@ -38,7 +38,7 @@ void sol_gui_container_render(struct sol_gui_object* obj, s16_rect position, str
 	// iterate back to front for when children can stack (first is on top)
 	for(child = container->last_child; child; child = child->prev)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			sol_gui_object_render(child, s16_rect_start(position), batch);
 		}
@@ -53,7 +53,7 @@ struct sol_gui_object* sol_gui_container_hit_scan(struct sol_gui_object* obj, s1
 	// iterate(search) front to back for when children can stack (first is on top)
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			result = sol_gui_object_hit_scan(child, s16_rect_start(position), location);
 			if(result)
@@ -72,7 +72,7 @@ void sol_gui_container_distribute_position_flags(struct sol_gui_object* obj, uin
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			sol_gui_object_set_position_flags(child, position_flags);
 		}
@@ -89,7 +89,7 @@ int16_t sol_gui_container_min_size_x(struct sol_gui_object* obj)
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_min_size_x = sol_gui_object_min_size_x(child);
 			min_size_x = SOL_MAX(min_size_x, child_min_size_x);
@@ -109,7 +109,7 @@ int16_t sol_gui_container_min_size_y(struct sol_gui_object* obj)
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			child_min_size_y = sol_gui_object_min_size_y(child);
 			min_size_y = SOL_MAX(min_size_y, child_min_size_y);
@@ -129,7 +129,7 @@ void sol_gui_container_set_extent_x(struct sol_gui_object* obj, s16_extent exten
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			sol_gui_object_set_extent_x(child, child_extent);
 		}
@@ -146,7 +146,7 @@ void sol_gui_container_set_extent_y(struct sol_gui_object* obj, s16_extent exten
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			sol_gui_object_set_extent_y(child, child_extent);
 		}
@@ -265,101 +265,103 @@ struct sol_gui_container_handle sol_gui_container_create(struct sol_gui_context*
 
 
 
-// void sol_gui_container_move_child(struct sol_gui_container* container, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement)
-// {
-// 	struct sol_gui_object* container_obj = sol_gui_container_as_object(container);
+void sol_gui_container_move_child(struct sol_gui_container_handle container_handle, struct sol_gui_object* child, struct sol_gui_object* sibling, enum sol_gui_placement placement)
+{
+	struct sol_gui_container* container = (struct sol_gui_container*)container_handle.object;
 
-// 	assert(container);
-// 	assert(child);
-// 	assert(child->parent == container_obj);
-// 	assert(sibling == NULL || sibling->parent == container_obj);
+	assert(container);
+	assert(child);
+	assert(child->parent == container_handle.object);
+	assert(sibling == NULL || sibling->parent == container_handle.object);
 
-// 	switch (placement) {
-// 		case SOL_GUI_PLACEMENT_START:
-// 			sibling = container->first_child;
-// 			placement = SOL_GUI_PLACEMENT_BEFORE;
-// 			break;
-// 		case SOL_GUI_PLACEMENT_END:
-// 			sibling = container->last_child;
-// 			placement = SOL_GUI_PLACEMENT_AFTER;
-// 			break;
-// 		case SOL_GUI_PLACEMENT_AFTER:
-// 			if(sibling == NULL)
-// 			{
-// 				sibling = child->next;
-// 			}
-// 			break;
-// 		case SOL_GUI_PLACEMENT_BEFORE:
-// 			if(sibling == NULL)
-// 			{
-// 				sibling = child->prev;
-// 			}
-// 			break;
-// 	}
+	switch (placement) {
+		case SOL_GUI_PLACEMENT_START:
+			sibling = container->first_child;
+			placement = SOL_GUI_PLACEMENT_BEFORE;
+			break;
+		case SOL_GUI_PLACEMENT_END:
+			sibling = container->last_child;
+			placement = SOL_GUI_PLACEMENT_AFTER;
+			break;
+		case SOL_GUI_PLACEMENT_AFTER:
+			if(sibling == NULL)
+			{
+				sibling = child->next;
+			}
+			break;
+		case SOL_GUI_PLACEMENT_BEFORE:
+			if(sibling == NULL)
+			{
+				sibling = child->prev;
+			}
+			break;
+	}
 
-// 	if(sibling && sibling != child)//these values can be brought about by above, and are no-ops
-// 	{
-// 		// remove child from present location
-// 		if(child->prev)
-// 		{
-// 			child->prev->next = child->next;
-// 		}
-// 		else
-// 		{
-// 			assert(child == container->first_child);
-// 			container->first_child = child->next;
-// 		}
+	if(sibling && sibling != child)//these values can be brought about by above, and are no-ops
+	{
+		// remove child from present location
+		if(child->prev)
+		{
+			child->prev->next = child->next;
+		}
+		else
+		{
+			assert(child == container->first_child);
+			container->first_child = child->next;
+		}
 
-// 		if(child->next)
-// 		{
-// 			child->next->prev = child->prev;
-// 		}
-// 		else
-// 		{
-// 			assert(child == container->last_child);
-// 			container->last_child = child->prev;
-// 		}
+		if(child->next)
+		{
+			child->next->prev = child->prev;
+		}
+		else
+		{
+			assert(child == container->last_child);
+			container->last_child = child->prev;
+		}
 
-// 		// put child in the desired location
-// 		switch (placement) {
-// 		case SOL_GUI_PLACEMENT_AFTER:
-// 			if(sibling->next)
-// 			{
-// 				sibling->next->prev = child;
-// 				child->next = sibling->next;
-// 			}
-// 			else
-// 			{
-// 				assert(container->last_child = sibling);
-// 				container->last_child = child;
-// 				child->next = NULL;
-// 			}
-// 			sibling->next = child;
-// 			child->prev = sibling;
-// 			break;
-// 		case SOL_GUI_PLACEMENT_BEFORE:
-// 			if(sibling->prev)
-// 			{
-// 				sibling->prev->next = child;
-// 				child->prev = sibling->prev;
-// 			}
-// 			else
-// 			{
-// 				assert(container->first_child = sibling);
-// 				container->first_child = child;
-// 				child->prev = NULL;
-// 			}
-// 			sibling->prev = child;
-// 			child->next = sibling;
-// 			break;
-// 		default:
-// 			assert(false);// should be cut out by above switch
-// 		}
+		// put child in the desired location
+		switch (placement) {
+		case SOL_GUI_PLACEMENT_AFTER:
+			if(sibling->next)
+			{
+				sibling->next->prev = child;
+				child->next = sibling->next;
+			}
+			else
+			{
+				assert(container->last_child = sibling);
+				container->last_child = child;
+				child->next = NULL;
+			}
+			sibling->next = child;
+			child->prev = sibling;
+			break;
+		case SOL_GUI_PLACEMENT_BEFORE:
+			if(sibling->prev)
+			{
+				sibling->prev->next = child;
+				child->prev = sibling->prev;
+			}
+			else
+			{
+				assert(container->first_child = sibling);
+				container->first_child = child;
+				child->prev = NULL;
+			}
+			sibling->prev = child;
+			child->next = sibling;
+			break;
+		default:
+			assert(false);/** all other cases should be avoided by earlier switch */
+		}
 
-// 		// contents have (potentially) changed position (though not size) so need to reposition the containers contents
-// 		sol_gui_object_reposition_contents(container_obj);
-// 	}
-// }
+#warning this could/should instead flag the tree as dirty
+		/** contents have (potentially) changed position (though not size) so need to reposition the containers contents 
+		 * as this could be the first container use child rather than the container */
+		sol_gui_object_reorganise_first_ancestor(child);
+	}
+}
 
 int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* container)
 {
@@ -368,11 +370,48 @@ int16_t sol_gui_container_enabled_child_count(const struct sol_gui_container* co
 
 	for(child = container->first_child; child; child = child->next)
 	{
-		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_ENABLED)
+		if(child->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE)
 		{
 			enabled_child_count++;
 		}
 	}
 
 	return enabled_child_count;
+}
+
+
+void sol_gui_container_promote_child(struct sol_gui_container_handle container_handle, struct sol_gui_object* child)
+{
+	struct sol_gui_container* container = (struct sol_gui_container*)container_handle.object;
+	struct sol_gui_object* prev_sibling;
+	struct sol_gui_object* next_sibling;
+
+
+	assert(child->parent == container_handle.object);
+
+	if(container->first_child != child)
+	{
+		prev_sibling = child->prev;
+		next_sibling = child->next;
+		assert(prev_sibling != NULL);/** should have prev sibling if not the first child already */
+
+		prev_sibling->next = next_sibling;
+
+		if(next_sibling)
+		{
+			next_sibling->prev = prev_sibling;
+		}
+		else
+		{
+			assert(container->last_child == child);
+			container->last_child = prev_sibling;
+		}
+
+
+		next_sibling = container->first_child;
+		next_sibling->prev = child;
+		child->next = next_sibling;
+		child->prev = NULL;
+		container->first_child = child;
+	}
 }

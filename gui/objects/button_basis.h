@@ -38,5 +38,5 @@ void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_
 void sol_gui_button_destroy(struct sol_gui_object* obj);
 
 
-bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input);
-bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input);
+bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata);
+bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata);
