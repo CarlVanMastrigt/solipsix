@@ -464,7 +464,7 @@ static bool sol_gui_theme_simple_range_control_interior(struct sol_gui_theme* th
 	}
 }
 
-static s16_extent sol_gui_theme_simple_range_control_selection_extent(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution)
+static s16_extent sol_gui_theme_simple_range_control_extent(struct sol_gui_theme* theme, uint32_t flags, enum sol_overlay_orientation orientation, s16_rect current_rect, struct sol_range_control_distribution distribution)
 {
 	struct sol_gui_theme_simple_data* simple_theme_data = theme->other_data;
 	s16_extent functional_extent, interior_extent;
@@ -625,7 +625,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 		.range_control_interior   = &sol_gui_theme_simple_range_control_interior,
 		.range_control_size_x     = &sol_gui_theme_simple_range_control_size_x,
 		.range_control_size_y     = &sol_gui_theme_simple_range_control_size_y,
-		.range_control_selection  = &sol_gui_theme_simple_range_control_selection_extent,
+		.range_control_extent     = &sol_gui_theme_simple_range_control_extent,
 
 		.horizontal_placement_spacing = (simple_theme_data->panel_content_border.x + simple_theme_data->panel_border.x) * 2,
 		.vertical_placement_spacing   = (simple_theme_data->panel_content_border.y + simple_theme_data->panel_border.y) * 2,

@@ -18,8 +18,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 
+#include "math/s16_extent.h"
 #include "solipsix/sol_utils.h"
 #include "solipsix/sol_input.h"
 
@@ -31,13 +33,11 @@ static inline void sol_gui_range_control_alter_value_mouse(struct sol_gui_range_
 {
 	s16_extent selection_extent;
 	s16_rect current_rect;
-	struct sol_range_control_distribution distribution;
 	int16_t n, d;
 
 	current_rect = sol_gui_object_absolute_rect(&range_control->base);
-	range_control->packet.get_distribution(range_control->packet.data, &distribution);
 
-	selection_extent = theme->range_control_selection(theme, range_control->base.flags, range_control->orientation, current_rect, distribution);
+	selection_extent = range_control->relative_selection_extent;
 
 	switch(range_control->orientation)
 	{
@@ -52,7 +52,7 @@ static inline void sol_gui_range_control_alter_value_mouse(struct sol_gui_range_
 	d = s16_extent_size(selection_extent) - 1;
 	d = SOL_MAX(d, 1);
 
-	n = n - selection_extent.start - range_control->interior_selection_offset;
+	n = n - selection_extent.start;
 	n = SOL_CLAMP(n, 0, d);
 
 	range_control->packet.apply_distribution_update(range_control->packet.data, n, d, final_update);
@@ -66,10 +66,10 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 
 	struct sol_range_control_distribution distribution;
 	s16_vec2 mouse_location;
-	bool is_under_mouse;
 	
 	s16_rect current_rect;
 	bool hit_interior;
+	int16_t interior_selection_offset;
 
 	// should activate only on release?
 	// dynamic case handling?
@@ -77,23 +77,30 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		if(metadata.is_mouse_over)
+		if(metadata.is_mouse_over && input->sdl_event.button.button == 1)
 		{
 			sol_gui_object_promote_first_ancestor(obj);
-			if(input->sdl_event.button.button == 1)
+			sol_gui_context_set_focused_object(context, obj);
+
+			range_control->packet.get_distribution(range_control->packet.data, &distribution);
+
+			current_rect = sol_gui_object_absolute_rect(obj);
+
+			range_control->relative_selection_extent = theme->range_control_extent(theme, range_control->base.flags, range_control->orientation, current_rect, distribution);
+
+			mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
+
+			hit_interior = theme->range_control_interior(theme, obj->flags, range_control->orientation, current_rect, mouse_location, distribution, &interior_selection_offset);
+
+			if(!hit_interior)
 			{
-				mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
-				sol_gui_context_set_focused_object(context, obj);
-				current_rect = sol_gui_object_absolute_rect(obj);
-				range_control->packet.get_distribution(range_control->packet.data, &distribution);
-
-				hit_interior = theme->range_control_interior(theme, obj->flags, range_control->orientation, current_rect, mouse_location, distribution, &range_control->interior_selection_offset);
-
-				if(!hit_interior)
-				{
-					sol_gui_range_control_alter_value_mouse(range_control, theme, mouse_location, false);
-				}
+				sol_gui_range_control_alter_value_mouse(range_control, theme, mouse_location, false);
 			}
+			else
+			{
+				range_control->relative_selection_extent = s16_extent_add_offset(range_control->relative_selection_extent, interior_selection_offset);
+			}
+
 			return true;
 		}
 		break;
@@ -195,6 +202,7 @@ void sol_gui_range_control_construct(struct sol_gui_range_control* range_control
 
 	range_control->packet = packet;
 	range_control->orientation = orientation;
+	range_control->max_discrete_gradations = 16;
 	range_control->min_gradations = 64;
 }
 

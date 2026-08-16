@@ -16,10 +16,32 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
+/**
+Copyright 2021,2022,2025 Carl van Mastrigt
+
+This file is part of solipsix.
+
+solipsix is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+solipsix is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #version 450
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int16 : enable
+// #define u16vec4 uvec4
+// #define u16vec2 uvec2
+// #define i16vec3 ivec3
+// #define uint16_t uint
 
 /// array, [0] = alpha image, [1] = colour image
 layout(set=0,binding=0) uniform sampler2DArray images[3];
@@ -49,7 +71,7 @@ void main()
     uint16_t colour_index = d1.x >> 4;
 
     uint16_t array_layer = d1.y & uint16_t(0x00FFu);
-    i16vec3 atlas_coords = i16vec3(gl_FragCoord.xy - rect.xy + d1.zw, array_layer);
+    i16vec3 atlas_coords = i16vec3(i16vec2(gl_FragCoord.xy) - rect.xz + d1.zw, array_layer);
 
 
     switch(int(render_type))

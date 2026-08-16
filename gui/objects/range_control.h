@@ -39,7 +39,11 @@ struct sol_gui_range_control_packet
 	/** update the range, range control operates on some number of pixels out of a possible range, 
 	 * this provides the distilled information to an update function in its raw form;
 	 * the user selected value in the range = `numerator/denominator` 
-	 * finalised will be true if the value is no longer expected to be updated after this */
+	 * finalised will be true if the value is no longer expected to be updated after this 
+	 * 
+	 * if you wish to only apply the change on release; 
+	 * final update should be used along with an externally managed unapplied range used for rendering purposes 
+	 * this enables updates to the distribution by external systems  to be handled correctly */
 	void (*apply_distribution_update)(void* data, int16_t numerator, int16_t denominator, bool final_update);
 
 	/** data may need cleanup (can be null) */

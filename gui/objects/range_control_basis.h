@@ -21,12 +21,14 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
+#include "math/s16_extent.h"
 #include "solipsix/gui/object.h"
 #include "solipsix/gui/objects/range_control.h"
 #include "solipsix/overlay/enums.h"
 
 
-/** range control structure exposed in interface as is a reasonable basis for custom gui objects */
+/** range control structure exposed in interface because it's a reasonable basis for custom gui objects */
+
 struct sol_gui_range_control
 {
 	struct sol_gui_object base;
@@ -35,9 +37,22 @@ struct sol_gui_range_control
 
 	enum sol_overlay_orientation orientation;
 
-	int16_t min_gradations;/** will default to 16 if not provided */
+	/** used by the theme to determine the minimum size of the bar to render;
+	 * usually corresponding to visually distinct render states, or pixel offsets of the sliding bar 
+	 * will default to 64 if not provided or set explicitly */
+	int16_t min_gradations;
 
-	int16_t interior_selection_offset;/** preserved internal state */
+	/** when using non-mouse inputs this is the maximum number of times to change a value to cover the whole range, 
+	 * adjustment will round to one of these gradations and will be at least one in the case of an integer range,
+	 * will default to 64 if not provided or set explicitly */
+	int16_t max_discrete_gradations;
+
+	/** based on the initial click point; what is the range on screen that 
+	 * may be offset from actual selection range if inside a special selection bar 
+	 * is in the axis (x|y) corresponding to the range controls orientation (horizontal|vertical) 
+	 * this is stored in an attempt to handle UI being changed while a selection bar is actively being changed
+	 * TODO: could store absolute *display* position to handle window reposition as well */
+	s16_extent relative_selection_extent;
 };
 
 void sol_gui_range_control_construct(struct sol_gui_range_control* range_control, struct sol_gui_context* context, struct sol_gui_range_control_packet packet, enum sol_overlay_orientation orientation);

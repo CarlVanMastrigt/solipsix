@@ -94,8 +94,9 @@ struct sol_gui_theme
      * the selected_offset is an axis applicable offset to apply to the cursor when determining the current position of the cursor withing the selection_extent */
     bool       (*range_control_select)    (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, s16_vec2 location);
     bool       (*range_control_interior)  (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, s16_vec2 location, struct sol_range_control_distribution, int16_t* range_offset);
-    /** this returns the extent (in the appropriate axis) over which  */ 
-    s16_extent (*range_control_selection) (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, struct sol_range_control_distribution);
+    /** this returns the extent (in the appropriate axis, relative to the current rect) over which the controlled value can vary
+     * basically extent of pixels that are acceptable/differentiated "selected" values */ 
+    s16_extent (*range_control_extent)    (struct sol_gui_theme*, uint32_t flags, enum sol_overlay_orientation, s16_rect current_rect, struct sol_range_control_distribution);
 
     /** the size of a variable box widget; should be used INSTEAD of the box size functions (despite also rendering the box being suggested) 
      * the number of gradations may be inaccurate if a nonzero interior region is provided in the distribution used to render */

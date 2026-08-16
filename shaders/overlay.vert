@@ -20,6 +20,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #version 450
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int16 : enable
+// #define u16vec4 uvec4
+// #define u16vec2 uvec2
 
 layout (location=0) in u16vec4 rect;/** note: u16 */
 layout (location=1) in u16vec4 data1;/** note: u16 */

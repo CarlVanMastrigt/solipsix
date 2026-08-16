@@ -24,19 +24,24 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-// how space in a container will be shared/distributed
+/** how space in a container will be shared/distributed */
 enum sol_gui_distribution
 {
-	/** dont use the remaining space, instead have padding to "consume" that space at the start (left|top) of the container
+	/** don't use the remaining space, instead have padding to "consume" that space at the start (left|top) of the container
      * is the same as first with an empty widget added to the start of the container */
     SOL_GUI_SPACE_DISTRIBUTION_START,
-    // dont use the remaining space, leave it empty at the end of the container, without uniform sizing is the same as last with an empty widget added to the end, added for conveneince
+
+    /** don't use the remaining space, instead have padding to "consume" that space at the end (right|bottom) of the container
+     * is the same as last with an empty widget added to the start of the container */
     SOL_GUI_SPACE_DISTRIBUTION_END,
-	// first object in container gets all remaining space
+
+	/** first object in container gets all remaining space */
     SOL_GUI_SPACE_DISTRIBUTION_FIRST,
-    // last object in container gets all remaining space
+
+    /** last object in container gets all remaining space */
     SOL_GUI_SPACE_DISTRIBUTION_LAST,
-    // distribute remaining space evenly amongst all objects and ensure all contained objects are (as close to as possible) the same size
+
+    /** distribute remaining space evenly amongst all objects and ensure all contained objects are (as close to as possible) the same size */
     SOL_GUI_SPACE_DISTRIBUTION_UNIFORM,
 };
 
