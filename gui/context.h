@@ -31,7 +31,10 @@ struct sol_overlay_render_batch;
 
 
 /** context
- * outside ofgui setup/creation usually want to pass around context for rendering, input management &c.
+ * outside of gui setup/creation usually want to pass around context for rendering, input management &c.
+ * read and write access to this whole struct should be single threaded and only done via the overlay/gui thread and functions
+ * TODO: consider splitting this such that the root GUI object (and other relevant parts of the context) are per window 
+ *      ^ highlighted/selected objects might be shared between windows?
 */
 
 struct sol_gui_context
@@ -61,6 +64,10 @@ struct sol_gui_context
     struct sol_gui_object* highlighted_object;// highlighted when using directional (arrows/joystick) navigation, can/should probably change with mouse motion?
     struct sol_gui_object* focused_object;// limit interaction to only this object and its children, click away/cancel called when defocused?
 
+    /** object under the mouse cursor */
+    s16_vec2 mouse_cursor_location;
+    struct sol_gui_object* cursored_object;
+
     bool highlight_removable;// instead of just replacable (highlight always replacable) if new highlight is non-null
     struct sol_gui_object* previous_highlighted_object;// necessary/useful for re-entering highlight via keyboard actions
 
@@ -70,9 +77,11 @@ struct sol_gui_context
 
     struct sol_gui_container_handle root_container;// this should not change
 
-    // scratch used by any part of the GUI when space is needed (specifically possible because a GUI context is single threaded)
+    /** scratch used by any part of the GUI when space is needed (specifically possible because a GUI context is single threaded) 
+     * useful to avoid calling malloc, use of scratch should not escape function calls, should operate like a stack */
     void* scratch_buffer;
-    size_t scratch_space;
+    size_t total_scratch_space;
+    size_t used_scratch_space;
 
     // event used for interoperability with SDL and usage in gui object input
     uint32_t SOL_GUI_EVENT_OBJECT_HIGHLIGHT_BEGIN;
@@ -81,7 +90,7 @@ struct sol_gui_context
     uint32_t SOL_GUI_EVENT_OBJECT_FOCUS_END;
 };
 
-// also creates and returns the root object
+/** also creates and returns the root object */
 struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, struct sol_gui_theme* theme, s16_vec2 window_offset, s16_vec2 window_size);
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
@@ -103,16 +112,4 @@ bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
 void sol_gui_context_render(struct sol_gui_context* context, struct sol_overlay_render_batch* batch);
 struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context, const s16_vec2 location);
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input);
-
-struct sol_gui_input_metadata
-{
-    /** is the input a mouse cursor action performed over (e.g. the cursor would hit) this object */
-    uint8_t is_mouse_over : 1;
-
-    /** is the object focused for this particular input, e.g. in multi-gamepad environment many objects may be focused */
-    uint8_t is_focused : 1;
-
-    /** is the object highlighted for this particular input, e.g. in multi-gamepad environment many objects may be highlighted */
-    uint8_t is_highlighted : 1;
-};
 

@@ -17,7 +17,11 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <SDL3/SDL_clipboard.h>
+#include <SDL3/SDL_events.h>
 #include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "solipsix/sol_input.h"
@@ -26,7 +30,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "solipsix/gui/object.h"
 #include "solipsix/gui/objects/enterbox.h"
 
-
+/** internal flags start from the top bit */
 
 struct sol_gui_enterbox
 {
@@ -35,15 +39,148 @@ struct sol_gui_enterbox
 	struct sol_gui_enterbox_packet packet;
 
 	/** string space allocated after enterbox */
-	uint32_t max_characters;
+	uint16_t max_strlen;
+
+	/** max glyps to display, different to space to handle UTF-8 encoding */
+	uint16_t max_glyphs;
+
+	/** SOL_GUI_ENTERBOX_TEXT_FLAG_<flag> 
+	 * flags passed back when getting text from external systems */
+	uint16_t text_flags;
+
+	/** SOL_GUI_ENTERBOX_STATUS_FLAG_<flag> 
+	 * local/internal flags, mostly used for error tracking */
+	uint16_t status_flags;
+
+	/** start is inclusive, end is exclusive */
+	uint16_t selection_start;
+	uint16_t selection_end;
 };
 
 
-bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+
+/** being edited, should be same as having focus, determines whether to render caret, grab updates, &c. */
+#define SOL_GUI_ENTERBOX_STATUS_FLAG_EDITING 0x0001
+/** is a selection actively in progress, */
+#define SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING 0x0002
+
+
+
+static inline void sol_gui_enterbox_validate_text(const char* text, uint16_t max_strlen)
+{
+	bool enterbox_null_term_found = false;
+	uint16_t i;
+
+	/** `max_strlen` does not include space for extra null term character */
+	for(i = 0; i <= max_strlen; i++)
+	{
+		if(text[i] == '\0')
+		{
+			return;
+		}
+	}
+
+	assert(enterbox_null_term_found);
+}
+
+static inline char* sol_gui_enterbox_get_text_buffer(struct sol_gui_enterbox* enterbox)
+{
+	return (char*)(enterbox+1);
+}
+
+static inline void sol_gui_enterbox_handle_changed_text(struct sol_gui_enterbox* enterbox)
+{
+	/** nothing to do at present */
+}
+
+
+/** will attempt to update the text buffer if relevant */
+static inline char* sol_gui_enterbox_get_updated_text_buffer(struct sol_gui_object* obj)
+{
+	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
+	struct sol_gui_context* context = obj->context;
+	char* text_buffer = sol_gui_enterbox_get_text_buffer(enterbox);
+	
+	const bool updates_locked = enterbox->status_flags & SOL_GUI_ENTERBOX_STATUS_FLAG_EDITING;
+	const bool is_focued = context->focused_object == &enterbox->base;
+	
+	/** if focused dont change the text buffers contents */
+	assert(is_focued == updates_locked);
+	
+	if(!updates_locked)
+	{
+		enterbox->text_flags = enterbox->packet.get_string(enterbox->packet.data, text_buffer, enterbox->max_glyphs, enterbox->max_strlen);
+
+		/** make sure there is a null terminating string */
+		text_buffer[enterbox->max_strlen] = '\0';
+
+		if(enterbox->text_flags & SOL_GUI_ENTERBOX_TEXT_FLAG_CHANGED)
+		{
+			sol_gui_enterbox_handle_changed_text(enterbox);
+			enterbox->text_flags &= ~SOL_GUI_ENTERBOX_TEXT_FLAG_CHANGED;
+		}
+	}
+
+#ifndef NDEBUG
+	/** validate the buffer whenever its acquired */
+	sol_gui_enterbox_validate_text(text_buffer, enterbox->max_strlen);
+#endif
+
+	return text_buffer; 
+}
+
+
+/** start is inclusive, end is exclusive */
+#warning generify this? or copy for relevant objects?
+void sol_gui_enterbox_update_selection(struct sol_gui_object* obj, uint16_t start, uint16_t end)
+{
+	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
+	char* text_buffer = sol_gui_enterbox_get_text_buffer(enterbox);
+	char swapped_char;
+	bool success;
+	uint16_t min, max;/** ORDERED range of bytes (max-exclusive) for the range selected */ 
+
+	/** range must be inside buffer */
+	assert(start <= enterbox->max_strlen && end <= enterbox->max_strlen);
+
+	if(start < end)
+	{
+		min = start;
+		max = end;
+	}
+	else
+	{
+		min = end;
+		max = start;
+	}
+
+	if(max <= enterbox->max_strlen /*&& start < end */)
+	{
+		swapped_char = text_buffer[max];
+		text_buffer[max] = '\0';
+		success = SDL_SetPrimarySelectionText(text_buffer + min);
+		if(!success)
+		{
+			fprintf(stderr, "failed to update selection with text:%s\n",text_buffer);
+		}
+		text_buffer[max] = swapped_char;
+	}
+}
+
+#warning SDL_GetPrimarySelectionText
+#warning SDL_HasPrimarySelectionText
+
+bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
 	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
+
+	char* text = sol_gui_enterbox_get_updated_text_buffer(obj);
+
+	/** should have no status flags unless focused */
+	// printf("%u %u\n",metadata.is_focused, enterbox->status_flags);
+	assert(sol_gui_object_is_focused(obj) || enterbox->status_flags == 0);
 
 	s16_vec2 mouse_location;
 	
@@ -52,14 +189,76 @@ bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const str
 
 	switch(input->sdl_event.type)
 	{
-	// case SDL_EVENT_MOUSE_BUTTON_DOWN:
-	// 	return true;
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		if(sol_gui_object_is_under_mouse_cursor(obj))
+		{
+			sol_gui_object_promote_first_ancestor(obj);
 
-	// case SDL_EVENT_MOUSE_MOTION:
-	// 	return false;
+			#warning make which button a switch statement
+			if(input->sdl_event.button.button == SDL_BUTTON_LEFT)
+			{
+				enterbox->status_flags |= SOL_GUI_ENTERBOX_STATUS_FLAG_EDITING | SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING;
+				sol_gui_context_set_focused_object(context, obj);
+				if(enterbox->text_flags & SOL_GUI_ENTERBOX_TEXT_FLAG_PLACEHOLDER)
+				{
+					/** empty the string to remove the placeholder */
+					text[0] = '\0';
+				}
+	
+				#warning get location in extant text and/or select all
 
-	// case SDL_EVENT_MOUSE_BUTTON_UP:
-	// 	return false;
+				enterbox->selection_start = 0;
+				enterbox->selection_end = 0;
+			}
+			if(input->sdl_event.button.button == SDL_BUTTON_RIGHT)
+			{
+				#warning copy paste context menu
+			}
+			if(input->sdl_event.button.button == SDL_BUTTON_MIDDLE)
+			{
+				#warning auto paste selection if present
+				#warning need a way to provide selection from currently(previously) focused object? selected text interface if extant
+			}
+			return true;
+		}
+		else if(sol_gui_object_is_focused(obj))
+		{
+			/** break focus */
+			#warning need click away behaviour settings
+		}
+		///how?
+		break;
+
+	case SDL_EVENT_MOUSE_MOTION:
+		#warning should also check button 1 is still pressed, and if not deselect
+		if(sol_gui_object_is_focused(obj))
+		{
+			if(enterbox->status_flags & SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING)
+			{
+				/** should still be holding mouse down */
+				assert(input->sdl_event.motion.state & SDL_BUTTON_LMASK);
+				#warning update selection_end
+			}
+			return true;
+		}
+		break;
+
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+		if(sol_gui_object_is_focused(obj))
+		{
+			if(input->sdl_event.button.button == SDL_BUTTON_LEFT)
+			{
+				/** note: may have already ended selecting status (e.g. by keyboard input) */
+				enterbox->status_flags &= ~SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING;
+			}
+			return true;
+		}
+		break;
+
+	case SDL_EVENT_TEXT_EDITING:
+		#warning implement
+	case SDL_EVENT_TEXT_INPUT:
+		#warning implement
 	}
 
 	return false;
@@ -72,10 +271,12 @@ void sol_gui_enterbox_destroy(struct sol_gui_object* obj)
 static void sol_gui_enterbox_render(struct sol_gui_object* obj, s16_rect position, struct sol_overlay_render_batch* batch)
 {
 	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
-	struct sol_gui_theme* theme = obj->context->theme;
-	const char* text = "ENTERBOX TEST";
-	#warning set above
+	struct sol_gui_context* context = obj->context;
+	struct sol_gui_theme* theme = context->theme;
 	s16_rect text_rect;
+	enum sol_overlay_colour text_colour;
+
+	const char* text = sol_gui_enterbox_get_updated_text_buffer(obj);
 
 	theme->box_render(theme, obj->flags, position, batch, SOL_OVERLAY_COLOUR_DEFAULT);
 
@@ -83,7 +284,16 @@ static void sol_gui_enterbox_render(struct sol_gui_object* obj, s16_rect positio
 	text_rect.x = theme->box_content_extent_x(theme, obj->flags, position.x);
 	text_rect.y = theme->box_content_extent_y(theme, obj->flags, position.y);
 
-	sol_font_render_text_simple(text, theme->text_font, SOL_OVERLAY_COLOUR_STANDARD_TEXT, text_rect, batch);
+	if (enterbox->text_flags & SOL_GUI_ENTERBOX_TEXT_FLAG_PLACEHOLDER)
+	{
+		text_colour = SOL_OVERLAY_COLOUR_PLACEHOLDER_TEXT;
+	}
+	else
+	{
+		text_colour = SOL_OVERLAY_COLOUR_STANDARD_TEXT;
+	}
+
+	sol_font_render_text_simple(text, theme->text_font, text_colour, text_rect, batch);
 }
 static struct sol_gui_object* sol_gui_enterbox_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
 {
@@ -100,25 +310,20 @@ static int16_t sol_gui_enterbox_min_size_x(struct sol_gui_object* obj)
 {
 	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
-	// const char* text = sol_gui_button_get_buffer_const(button);
-	int16_t text_size_x;
+	int16_t glyph_size_x;
 
-	// text_size_x = sol_font_size_text_x_simple(text, theme->text_font);
-	text_size_x = 0;
+	glyph_size_x = sol_font_glyph_size(theme->text_font, SOL_FONT_SIZING_BOUNDS).x;
 	#warning need function for nominal character size for font (em square based?)
 
-	return theme->box_size_x(theme, obj->flags, text_size_x);
+	return theme->box_size_x(theme, obj->flags, glyph_size_x * enterbox->max_glyphs);
 }
 static int16_t sol_gui_enterbox_min_size_y(struct sol_gui_object* obj)
 {
 	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
 	struct sol_gui_theme* theme = obj->context->theme;
-	// const char* text = sol_gui_button_get_buffer_const(button);
 	int16_t text_size_y;
 
-	// text_size_y = sol_font_size_text_y_simple(text, theme->text_font);
-	text_size_y = 0;
-	#warning need function for nominal character size for font (em square based?)
+	text_size_y = sol_font_glyph_size(theme->text_font, SOL_FONT_SIZING_BOUNDS).y;
 
 	return theme->box_size_y(theme, obj->flags, text_size_y);
 }
@@ -132,23 +337,33 @@ static const struct sol_gui_object_structure_functions sol_gui_text_enterbox_str
 	.destroy    = &sol_gui_enterbox_destroy,
 };
 
-void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gui_context* context, uint32_t max_characters, struct sol_gui_enterbox_packet packet)
+void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet)
 {
 	sol_gui_object_construct(&enterbox->base, context);
+	char* text = (char*)(enterbox+1);
+	text[0] = '\0';
+	text[max_strlen] = '\0';
+
+	/** each glyph takes at least one byte */
+	assert(max_strlen >= max_glyphs);
 
 	enterbox->base.input_action = &sol_gui_enterbox_default_input_action;
 	enterbox->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
 	enterbox->base.structure_functions = &sol_gui_text_enterbox_structure_functions;
 
-	enterbox->max_characters = max_characters;
 	enterbox->packet = packet;
+
+	enterbox->max_glyphs = max_glyphs;
+	enterbox->max_strlen = max_strlen;
+	enterbox->text_flags = 0;
+	enterbox->status_flags = 0;
 }
 
-struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint32_t max_characters, struct sol_gui_enterbox_packet packet)
+struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet)
 {
-	struct sol_gui_enterbox* enterbox = malloc(sizeof(struct sol_gui_enterbox));
+	struct sol_gui_enterbox* enterbox = malloc(sizeof(struct sol_gui_enterbox) + max_strlen + 1);
 
-	sol_gui_enterbox_construct(enterbox, context, max_characters, packet);
+	sol_gui_enterbox_construct(enterbox, context, max_glyphs, max_strlen, packet);
 
 	return (struct sol_gui_enterbox_handle)
 	{

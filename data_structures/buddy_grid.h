@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#pragma once
+
 /** note derived/extracted from image atlas algorithm */
 #include <inttypes.h>
 #include "math/u16_vec2.h"

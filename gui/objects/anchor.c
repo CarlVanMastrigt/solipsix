@@ -51,7 +51,7 @@ static inline bool sol_gui_anchor_has_floating_region_ancestor(const struct sol_
 }
 
 
-bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_anchor* anchor = (struct sol_gui_anchor*)obj;
 	struct sol_gui_context* context = obj->context;
@@ -67,7 +67,7 @@ bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_in
 		/** need to check we are in face under the cursor of this mouse, 
 		 * the focused object can be set with another input (keyboard) 
 		 * and if so this button would recieve mouse button inputs */
-		if(metadata.is_mouse_over && input->sdl_event.button.button == 1)
+		if(sol_gui_object_is_under_mouse_cursor(obj) && input->sdl_event.button.button == SDL_BUTTON_LEFT)
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			sol_gui_context_set_focused_object(context, obj);
@@ -76,10 +76,11 @@ bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_in
 			anchor->select_point_offset = s16_vec2_sub(mouse_location, anchor_absolute_offset);
 			return true;
 		}
+		/** should probably have context menu on right click */
 		break;
 
 	case SDL_EVENT_MOUSE_MOTION:
-		if(metadata.is_focused)
+		if(sol_gui_object_is_focused(obj))
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			base_floating_object = sol_gui_floating_region_get_content(anchor->floating_region);
@@ -95,7 +96,7 @@ bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_in
 		break;
 
 	case SDL_EVENT_MOUSE_BUTTON_UP:
-		if(metadata.is_focused && input->sdl_event.button.button == 1)
+		if(sol_gui_object_is_focused(obj) && input->sdl_event.button.button == SDL_BUTTON_LEFT)
 		{
 			sol_gui_context_set_focused_object(context, NULL);
 			return true;
@@ -103,7 +104,7 @@ bool sol_gui_anchor_input_action(struct sol_gui_object* obj, const struct sol_in
 		break;
 	}
 
-	return false;
+	return sol_gui_object_is_focused(obj);
 }
 
 void sol_gui_anchor_construct(struct sol_gui_anchor* anchor, struct sol_gui_context* context, struct sol_gui_floating_region_handle floating_region)

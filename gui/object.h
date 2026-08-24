@@ -21,6 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stddef.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include "math/s16_vec2.h"
 #include "math/s16_rect.h"
@@ -92,7 +93,7 @@ struct sol_gui_object
 
 	/** returns whether the input was "consumed" (used) by the object
      * may need enumerator for return type? **/
-	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata);
+	bool (*input_action)(struct sol_gui_object* obj, const struct sol_input* input);
 
     /** note: active state of object should NOT be determined dynamically (with a function pointer here) as changes to activity reqire laying out the structure again */
 
@@ -150,6 +151,27 @@ static inline bool sol_gui_object_is_visible(struct sol_gui_object* obj)
     return obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_VISIBLE;
 }
 
+static inline bool sol_gui_object_is_focused(struct sol_gui_object* obj)
+{
+    const bool is_focused = obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED;
+    assert(is_focused == (obj == obj->context->focused_object));
+    return is_focused;
+}
+
+static inline bool sol_gui_object_is_highlighted(struct sol_gui_object* obj)
+{
+    const bool is_highlighted = obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED;
+    assert(is_highlighted == (obj == obj->context->highlighted_object));
+    return is_highlighted;
+}
+
+static inline bool sol_gui_object_is_under_mouse_cursor(struct sol_gui_object* obj)
+{
+    const bool is_under_mouse = obj->flags & SOL_GUI_OBJECT_STATUS_FLAG_IS_UNDER_MOUSE;
+    assert(is_under_mouse == (obj == obj->context->cursored_object));
+    return is_under_mouse;
+}
+
 /** returns whether the object is active AFTER this function has run 
  * will lay out its toplevel ancestors contents again after toggling */
 bool sol_gui_object_toggle_visibility(struct sol_gui_object* obj);
@@ -176,4 +198,4 @@ void sol_gui_object_promote_first_ancestor(struct sol_gui_object* obj);
 
 
 
-bool sol_gui_object_input_action_generic_clickable(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata);
+bool sol_gui_object_input_action_generic_clickable(struct sol_gui_object* obj, const struct sol_input* input);

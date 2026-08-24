@@ -31,6 +31,7 @@ enum sol_overlay_colour
     SOL_OVERLAY_COLOUR_FOCUSED,
     SOL_OVERLAY_COLOUR_STANDARD_TEXT,
     SOL_OVERLAY_COLOUR_COMPOSITION_TEXT,
+    SOL_OVERLAY_COLOUR_PLACEHOLDER_TEXT, /** usually greyed out, us used when text is expected to change */
     SOL_OVERLAY_COLOUR_TEXT_SELECTION,
     SOL_OVERLAY_COLOUR_COUNT,
 };

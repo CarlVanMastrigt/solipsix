@@ -42,7 +42,7 @@ void sol_font_destroy(struct sol_font* font);
 enum sol_font_sizing
 {
 	SOL_FONT_SIZING_EM, /** nominal */
-	SOL_FONT_SIZING_BOUNDS,/** maximal */
+	SOL_FONT_SIZING_BOUNDS,/** preferred; ascender - descender */
 };
 
 s16_vec2 sol_font_glyph_size(const struct sol_font* font, enum sol_font_sizing sizing);

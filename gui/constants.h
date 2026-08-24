@@ -73,6 +73,7 @@ enum sol_gui_relative_placement
 #define SOL_GUI_OBJECT_STATUS_FLAG_IS_ROOT         0x000004 /** mostly used for validation in various places*/
 #define SOL_GUI_OBJECT_STATUS_FLAG_FOCUSED         0x000008
 #define SOL_GUI_OBJECT_STATUS_FLAG_HIGHLIGHTED     0x000010
+#define SOL_GUI_OBJECT_STATUS_FLAG_IS_UNDER_MOUSE  0x000020
 #warning ^ these might need to change, focused/highlighted should be queried against as set as needed... (if its desirable to support multi-input highlight)
 /** note: 0x20 - 0x80 inclusive available */
 

@@ -21,6 +21,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "gui/object.h"
 #include "math/s16_extent.h"
 #include "solipsix/sol_utils.h"
 #include "solipsix/sol_input.h"
@@ -32,10 +33,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 static inline void sol_gui_range_control_alter_value_mouse(struct sol_gui_range_control* range_control, struct sol_gui_theme* theme, s16_vec2 mouse_location, bool final_update)
 {
 	s16_extent selection_extent;
-	s16_rect current_rect;
 	int16_t n, d;
-
-	current_rect = sol_gui_object_absolute_rect(&range_control->base);
 
 	selection_extent = range_control->relative_selection_extent;
 
@@ -58,7 +56,7 @@ static inline void sol_gui_range_control_alter_value_mouse(struct sol_gui_range_
 	range_control->packet.apply_distribution_update(range_control->packet.data, n, d, final_update);
 }
 
-bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_range_control* range_control = (struct sol_gui_range_control*)obj;
 	struct sol_gui_context* context = obj->context;
@@ -77,7 +75,7 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		if(metadata.is_mouse_over && input->sdl_event.button.button == 1)
+		if(sol_gui_object_is_under_mouse_cursor(obj) && input->sdl_event.button.button == SDL_BUTTON_LEFT)
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			sol_gui_context_set_focused_object(context, obj);
@@ -106,7 +104,7 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 		break;
 
 	case SDL_EVENT_MOUSE_MOTION:
-		if(metadata.is_focused)
+		if(sol_gui_object_is_focused(obj))
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
@@ -116,7 +114,7 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 		break;
 
 	case SDL_EVENT_MOUSE_BUTTON_UP:
-		if(metadata.is_focused && input->sdl_event.button.button == 1)
+		if(sol_gui_object_is_focused(obj) && input->sdl_event.button.button == SDL_BUTTON_LEFT)
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
@@ -127,7 +125,7 @@ bool sol_gui_range_control_default_input_action(struct sol_gui_object* obj, cons
 		break;
 	}
 
-	return false;
+	return sol_gui_object_is_focused(obj);
 }
 
 void sol_gui_range_control_destroy(struct sol_gui_object* obj)

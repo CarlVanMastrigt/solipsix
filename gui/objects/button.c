@@ -22,6 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <assert.h>
 
+#include "gui/object.h"
 #include "solipsix/sol_input.h"
 #include "solipsix/sol_font.h"
 
@@ -44,7 +45,7 @@ void sol_gui_button_set_packet(struct sol_gui_button_handle button_handle, struc
 }
 
 
-bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_context* context = obj->context;
@@ -52,7 +53,7 @@ bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* o
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		if(metadata.is_mouse_over)
+		if(sol_gui_object_is_under_mouse_cursor(obj))
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			if(button->packet.on_activation && input->sdl_event.button.button == 1)
@@ -67,7 +68,7 @@ bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* o
 	return false;
 }
 
-bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
+bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	struct sol_gui_context* context = obj->context;
@@ -78,18 +79,21 @@ bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj
 		/** need to check we are in face under the cursor of this mouse, 
 		 * the focused object can be set with another input (keyboard) 
 		 * and if so this button would recieve mouse button inputs */
-		if(metadata.is_mouse_over && input->sdl_event.button.button == 1)
+		if(sol_gui_object_is_under_mouse_cursor(obj))
 		{
 			sol_gui_object_promote_first_ancestor(obj);
-			sol_gui_context_set_focused_object(context, obj);
+			if(input->sdl_event.button.button == SDL_BUTTON_LEFT)
+			{
+				sol_gui_context_set_focused_object(context, obj);
+			}
 			return true;
 		}
 		break;
 
 	case SDL_EVENT_MOUSE_BUTTON_UP:
-		if(metadata.is_focused && input->sdl_event.button.button == 1)
+		if(sol_gui_object_is_focused(obj))
 		{
-			if(metadata.is_mouse_over)
+			if(sol_gui_object_is_under_mouse_cursor(obj) && input->sdl_event.button.button == SDL_BUTTON_LEFT)
 			{
 				sol_gui_object_promote_first_ancestor(obj);
 				if(button->packet.on_activation)
@@ -145,8 +149,11 @@ void sol_gui_button_construct_default(struct sol_gui_button* button, struct sol_
 
 
 /** get the buffer malloc'd after the button,
-actually preferable here NOT to have pointer as it communicates that its not an allocated buffer and should NOT be freed */
+ * very intentional to NOT have pointer inside the button struct and require these accessor functions instead
+ * this is to communicate that text is NOT an allocated buffer and should NOT be freed */
 
+
+/** this should only be called on startup */
 static inline void* sol_gui_button_get_buffer(struct sol_gui_button* button)
 {
 	return (button+1);

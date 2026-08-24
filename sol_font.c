@@ -17,10 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "tests/test_utils.h"
+// #include "tests/test_utils.h"
+#include "math/s16_extent.h"
+#include "math/u16_vec2.h"
 
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <threads.h>
 
@@ -209,7 +212,7 @@ struct sol_font
     int16_t max_advance; 
 
     int16_t y_ppem;
-    int16_t y_range;
+    int16_t y_range;/** ascender - descender ; the vertical size of the font (generally) */
     int16_t y_range_baseline;
     int16_t y_em_baseline;/** at present this is a guess, a mechanism should be exposed to permit this to be provided by the user */
 
@@ -408,10 +411,6 @@ struct sol_font* sol_font_create(struct sol_font_library* font_library, const ch
 	font->x_ppem = font->ft.face->size->metrics.x_ppem;
     font->x_range     = font->ft.face->size->metrics.max_advance >> 6; /** imperfect but otherwise would need to scan bboxes ? */
     font->max_advance = font->ft.face->size->metrics.max_advance >> 6;
-
-	printf("height %d : %d : %d %d\n", font->y_range, font->y_ppem ,font->ft.face->height >> 6, ascender>>6);
-	printf("width %d : %d\n", font->x_range, font->x_ppem);
-	// printf("line spacing %d\n", font->line_spacing );
 
 	struct sol_hash_map_descriptor map_descriptor =
 	{
@@ -850,25 +849,19 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 
 	sol_font_shape_text_kb(text, font, false);
 
-	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle */
-
-	#warning this needs alignment to be as adaptable as desired
-	/** note: << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
+	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle
+	 * note: << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
 	x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(position.x.end) << 6) : ((int32_t)(position.x.start) << 6);
 	switch(vertical_sizing)
 	{
 	case SOL_FONT_SIZING_EM:
-		// printf("%d %d %d -> %d\n",position.y.start, position.y.end, font->y_ppem);
 		y_base = ((int32_t)(position.y.end + position.y.start - font->y_ppem) << 5) + ((int32_t)(font->y_em_baseline) << 6);
 		// y_base = ((int32_t)(position.y.end + position.y.start + font->y_ppem) << 5);
 		break;
 	case SOL_FONT_SIZING_BOUNDS:
 		y_base = ((int32_t)(position.y.end + position.y.start - font->y_range) << 5) + ((int32_t)(font->y_range_baseline) << 6);
 		break;
-	default: assert(false);/** unhandled */
-		y_base = 0;
 	}
-
 
 	cursor = kbts_Cursor(font->kb.direction);
 	for(i = 0; i < font->kb.glyph_count; i++)
@@ -881,6 +874,16 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 
 		sol_font_render_overlay_glyph(font->kb.glyphs[i].Id, x_base+cursor_x, y_base+cursor_y, font, colour, render_batch);
 	}
+}
+
+void sol_font_render_text_simple(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+{
+	/** get these from theme ? */
+	enum sol_overlay_alignment alignment = SOL_OVERLAY_ALIGNMENT_START;
+	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
+	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_BOUNDS;
+	// sol_font_render_text_simple_hb(text, font, colour, position, alignment, orientation, render_batch);
+	sol_font_render_text_simple_kb(text, font, colour, position, alignment, orientation, vertical_sizing, render_batch);
 }
 
 static inline int16_t sol_font_size_text_x_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_orientation orientation)
@@ -908,18 +911,6 @@ static inline int16_t sol_font_size_text_x_simple_kb(const char* text, struct so
 	return (int16_t)(cursor_x >> 6);/** cursor_x in 26.6 format, need in pixels */
 }
 
-
-void sol_font_render_text_simple(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
-{
-	/** get these from theme ? */
-	enum sol_overlay_alignment alignment = SOL_OVERLAY_ALIGNMENT_START;
-	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
-	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_EM;
-	// sol_font_render_text_simple_hb(text, font, colour, position, alignment, orientation, render_batch);
-	sol_font_render_text_simple_kb(text, font, colour, position, alignment, orientation, vertical_sizing, render_batch);
-}
-
-
 int16_t sol_font_size_text_x_simple(const char* text, struct sol_font* font)
 {
 	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
@@ -929,7 +920,7 @@ int16_t sol_font_size_text_x_simple(const char* text, struct sol_font* font)
 int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font)
 {
 	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
-	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_EM;
+	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_BOUNDS;
 	return font->y_ppem;
 	// switch(sizing)
 	// {
@@ -940,6 +931,55 @@ int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font)
 	// default: assert(false);/** unhandled */
 	// 	return 0;
 	// }
+}
+
+static inline uint16_t sol_font_find_caret_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, s16_rect rect, s16_vec2 location)
+{
+	int32_t cursor_x, cursor_y, x_base, y_base;
+	int16_t offset;
+	uint32_t i;
+	kbts_cursor cursor;
+
+	sol_font_shape_text_kb(text, font, false);
+
+
+
+	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle
+	 * note: << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
+	// x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(rect.x.end) << 6) : ((int32_t)(rect.x.start) << 6);
+	// switch(vertical_sizing)
+	// {
+	// case SOL_FONT_SIZING_EM:
+	// 	y_base = ((int32_t)(rect.y.end + rect.y.start - font->y_ppem) << 5) + ((int32_t)(font->y_em_baseline) << 6);
+	// 	// y_base = ((int32_t)(position.y.end + position.y.start + font->y_ppem) << 5);
+
+	// 	break;
+	// case SOL_FONT_SIZING_BOUNDS:
+	// 	y_base = ((int32_t)(rect.y.end + rect.y.start - font->y_range) << 5) + ((int32_t)(font->y_range_baseline) << 6);
+	// 	break;
+	// }
+	// rect.y = s16_extent_add_offset(rect.y, offset);
+
+	// #error need actual rect relevant to text
+
+	cursor = kbts_Cursor(font->kb.direction);
+	for(i = 0; i < font->kb.glyph_count; i++)
+	{
+		kbts_PositionGlyph(&cursor, &font->kb.glyphs[i], &cursor_x, &cursor_y);
+
+		/** convert font units (that KB works in) into 26.6 units which freetype and rendering works in, this requires expanding the range to ensure values over 32px dont overflow... */
+		cursor_x = (int32_t)(((int64_t)cursor_x * font->ft.x_scale) >> 16);
+		cursor_y = (int32_t)(((int64_t)cursor_y * font->ft.y_scale) >> 16);
+
+		// sol_font_render_overlay_glyph(font->kb.glyphs[i].Id, x_base+cursor_x, y_base+cursor_y, font, colour, render_batch);
+	}
+}
+
+uint16_t sol_font_find_caret_x_simple(const char* text, struct sol_font* font, s16_rect rect, s16_vec2 location)
+{
+	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
+	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_BOUNDS;
+	return sol_font_find_caret_simple_kb(text, font, orientation, vertical_sizing, rect, location);
 }
 
 

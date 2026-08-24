@@ -17,10 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
-#include "stdio.h"
-#warning remove above
-
 #include <assert.h>
 
 #include "data_structures/buddy_grid.h"

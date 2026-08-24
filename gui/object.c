@@ -433,15 +433,15 @@ void sol_gui_object_promote_first_ancestor(struct sol_gui_object* obj)
 
 
 
+bool sol_gui_object_input_action_generic_clickable(struct sol_gui_object* obj, const struct sol_input* input)
 
-bool sol_gui_object_input_action_generic_clickable(struct sol_gui_object* obj, const struct sol_input* input, const struct sol_gui_input_metadata metadata)
 {
 	switch(input->sdl_event.type)
 	{
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 	case SDL_EVENT_MOUSE_BUTTON_UP:
 		/** consume input in this case */
-		if(metadata.is_mouse_over)
+		if(sol_gui_object_is_under_mouse_cursor(obj))
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 			return true;
