@@ -573,6 +573,7 @@ void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, struct sol_fon
 	struct sol_font* text_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr");
 	struct sol_font* icon_font = sol_font_create(font_library, "solipsix/resources/cvm_font_1.ttf", font_size, false, "Latn", "eng", "ltr");
 
+	// s16_vec2 max_glyph_size = sol_font_glyph_size(text_font, SOL_FONT_SIZING_BOUNDS);
 	s16_vec2 max_glyph_size = sol_font_glyph_size(text_font, SOL_FONT_SIZING_EM);
 
 

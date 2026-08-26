@@ -65,7 +65,7 @@ bool sol_gui_button_default_input_action_on_button_down(struct sol_gui_object* o
 		break;
 	}
 
-	return false;
+	return sol_gui_object_is_focused(obj);
 }
 
 bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj, const struct sol_input* input)
@@ -107,7 +107,7 @@ bool sol_gui_button_default_input_action_on_button_up(struct sol_gui_object* obj
 		break;
 	}
 
-	return false;
+	return sol_gui_object_is_focused(obj);
 }
 
 void sol_gui_button_destroy(struct sol_gui_object* obj)

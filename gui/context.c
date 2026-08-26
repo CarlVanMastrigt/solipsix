@@ -459,18 +459,16 @@ struct sol_gui_object* sol_gui_context_hit_scan(struct sol_gui_context* context,
 static inline bool sol_gui_context_update_mouse_location_from_event(struct sol_gui_context* context, const struct sol_input* input)
 {
 	struct sol_gui_object* object;
-	const SDL_Event* sdl_event = &input->sdl_event;
 	s16_vec2 mouse_cursor_location;
 
-	switch (sdl_event->type) 
+	switch(input->sdl_event.type) 
 	{
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
-    	mouse_cursor_location = s16_vec2_set(sdl_event->button.x, sdl_event->button.y);
+    	mouse_cursor_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
     	break;
     case SDL_EVENT_MOUSE_MOTION:
-    	// printf("mouse_id: %u\n", sdl_event->motion.which);
-    	mouse_cursor_location = s16_vec2_set(sdl_event->motion.x, sdl_event->motion.y);
+    	mouse_cursor_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
     	break;
     default:
 		return false;
@@ -504,13 +502,27 @@ static inline bool sol_gui_context_update_mouse_location_from_event(struct sol_g
 	return true;
 }
 
+static inline bool sol_gui_context_filter_commands(struct sol_gui_context* context, const struct sol_input* input)
+{
+	switch (input->sdl_event.type)
+	{
+	case SDL_EVENT_QUIT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_input* input)
 {
 	struct sol_gui_object* object;
-	
-	
-	const SDL_Event* sdl_event = &input->sdl_event;
 
+	/** certain commands should go unused by ui, mainly exit app commands*/
+	if(sol_gui_context_filter_commands(context, input))
+	{
+		return false;
+	}
+	
 	sol_gui_context_update_mouse_location_from_event(context, input);
 
 	/** handle focused object 

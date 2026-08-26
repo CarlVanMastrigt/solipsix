@@ -43,6 +43,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "overlay/render.h"
 #include "overlay/enums.h"
+#include "solipsix.h"
 
 
 
@@ -198,6 +199,7 @@ struct sol_font
 		kbts_shape_config config;
 		kbts_direction direction;
 
+		/** workspace buffer, which makes font struct single threaded */
 		kbts_glyph* glyphs;
 		uint32_t glyph_space;
 		uint32_t glyph_count;
@@ -214,6 +216,8 @@ struct sol_font
     int16_t y_ppem;
     int16_t y_range;/** ascender - descender ; the vertical size of the font (generally) */
     int16_t y_range_baseline;
+
+    /** this is taken from 26.6 format, put into pixels then put back in 26.6, should be kept in 26.6 format! */ 
     int16_t y_em_baseline;/** at present this is a guess, a mechanism should be exposed to permit this to be provided by the user */
 
 
@@ -651,7 +655,7 @@ static inline void sol_font_render_overlay_glyph(uint32_t glyph_codepoint, int32
 
 
 
-	/** this is segment that assumes LTR font */
+	#warning  this is segment that assumes LTR font 
 	{
 		/** -7 to 8 is "subpixel offset" of 0 and this increases with each 16 point step (4 total, 0-3), must multiply this by 16 when rendering*/
 		assert(cursor_x >= 0);
@@ -669,6 +673,7 @@ static inline void sol_font_render_overlay_glyph(uint32_t glyph_codepoint, int32
 			offset_x = rounded_cursor_x >> 6;
 		}
 
+		/** TODO: might be good to respect half pixel offset in y */
 		offset_y = cursor_y >> 6;
 	}
 
@@ -841,11 +846,16 @@ static inline void sol_font_shape_text_kb(const char* text, struct sol_font* fon
 	}
 }
 
-static inline void sol_font_render_text_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, struct sol_overlay_render_batch* render_batch)
+static inline void sol_font_render_text_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, 
+	enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, 
+	struct sol_overlay_render_batch* render_batch)
 {
 	int32_t cursor_x, cursor_y, x_base, y_base;
 	uint32_t i;
 	kbts_cursor cursor;
+
+	assert(alignment == SOL_OVERLAY_ALIGNMENT_START);
+	assert(orientation == SOL_OVERLAY_ORIENTATION_HORIZONTAL);
 
 	sol_font_shape_text_kb(text, font, false);
 
@@ -872,6 +882,7 @@ static inline void sol_font_render_text_simple_kb(const char* text, struct sol_f
 		cursor_x = (int32_t)(((int64_t)cursor_x * font->ft.x_scale) >> 16);
 		cursor_y = (int32_t)(((int64_t)cursor_y * font->ft.y_scale) >> 16);
 
+		#warning need to pass in bounding rect!
 		sol_font_render_overlay_glyph(font->kb.glyphs[i].Id, x_base+cursor_x, y_base+cursor_y, font, colour, render_batch);
 	}
 }
@@ -922,64 +933,153 @@ int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font)
 	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
 	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_BOUNDS;
 	return font->y_ppem;
-	// switch(sizing)
-	// {
-	// case SOL_FONT_SIZING_EM:
-	// 	return font->y_ppem;
-	// case SOL_FONT_SIZING_BOUNDS:
-	// 	return font->y_range;
-	// default: assert(false);/** unhandled */
-	// 	return 0;
-	// }
 }
 
-static inline uint16_t sol_font_find_caret_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, s16_rect rect, s16_vec2 location)
+static inline uint16_t sol_font_find_caret_simple_kb(const char* text, struct sol_font* font, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, s16_rect position, s16_vec2 location)
 {
-	int32_t cursor_x, cursor_y, x_base, y_base;
+	kbts_s32 cursor_kb_x, cursor_kb_y;
+	int32_t cursor_26_6, cursor_px, cursor_px_prev, x_base, y_base, location_px_relative;
 	int16_t offset;
 	uint32_t i;
 	kbts_cursor cursor;
+	s16_rect text_rect;
 
-	sol_font_shape_text_kb(text, font, false);
+	/** need trailing space to find the end of the last glyph */
+	sol_font_shape_text_kb(text, font, true);
 
+	if(font->kb.glyph_count < 1)
+	{
+		return 0;
+	}
 
+	/** dont have correct/complete handling of these cases yet */
+	assert(font->kb.direction == KBTS_DIRECTION_LTR);
+	assert(vertical_sizing == SOL_FONT_SIZING_BOUNDS);
+	assert(alignment == SOL_OVERLAY_ALIGNMENT_START);
+	assert(orientation == SOL_OVERLAY_ORIENTATION_HORIZONTAL);
 
 	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle
 	 * note: << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
-	// x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(rect.x.end) << 6) : ((int32_t)(rect.x.start) << 6);
-	// switch(vertical_sizing)
-	// {
-	// case SOL_FONT_SIZING_EM:
-	// 	y_base = ((int32_t)(rect.y.end + rect.y.start - font->y_ppem) << 5) + ((int32_t)(font->y_em_baseline) << 6);
-	// 	// y_base = ((int32_t)(position.y.end + position.y.start + font->y_ppem) << 5);
+	x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(position.x.end) << 6) : ((int32_t)(position.x.start) << 6);
 
-	// 	break;
-	// case SOL_FONT_SIZING_BOUNDS:
-	// 	y_base = ((int32_t)(rect.y.end + rect.y.start - font->y_range) << 5) + ((int32_t)(font->y_range_baseline) << 6);
-	// 	break;
-	// }
-	// rect.y = s16_extent_add_offset(rect.y, offset);
+	switch(vertical_sizing)
+	{
+	case SOL_FONT_SIZING_EM:
+		y_base = ((int32_t)(position.y.end + position.y.start - font->y_ppem) << 5) + ((int32_t)(font->y_em_baseline) << 6);
+		text_rect.y.start = (y_base >> 6) - font->y_em_baseline;
+		text_rect.y.end = text_rect.y.start + font->y_ppem;
+		text_rect.x = position.x;
+		break;
+	case SOL_FONT_SIZING_BOUNDS:
+		y_base = ((int32_t)(position.y.end + position.y.start - font->y_range) << 5) + ((int32_t)(font->y_range_baseline) << 6);
+		text_rect.y.start = (y_base >> 6) - font->y_range_baseline;
+		text_rect.y.end = text_rect.y.start + font->y_range;
+		text_rect.x = position.x;
+		break;
+	}
+	/** above will derive what should be a tight fitting rectangle around text */
 
-	// #error need actual rect relevant to text
+	/** order here is important */
+	if(location.y < text_rect.y.start) return 0;
+	if(location.y > text_rect.y.end) return strlen(text);
+	if(location.x < text_rect.x.start) return 0;
+	if(location.x > text_rect.x.end) return strlen(text);
 
 	cursor = kbts_Cursor(font->kb.direction);
+	cursor_px_prev = 0;
+	location_px_relative = location.x - text_rect.x.start;
+
 	for(i = 0; i < font->kb.glyph_count; i++)
 	{
-		kbts_PositionGlyph(&cursor, &font->kb.glyphs[i], &cursor_x, &cursor_y);
+		kbts_PositionGlyph(&cursor, &font->kb.glyphs[i], &cursor_kb_x, &cursor_kb_y);
 
 		/** convert font units (that KB works in) into 26.6 units which freetype and rendering works in, this requires expanding the range to ensure values over 32px dont overflow... */
-		cursor_x = (int32_t)(((int64_t)cursor_x * font->ft.x_scale) >> 16);
-		cursor_y = (int32_t)(((int64_t)cursor_y * font->ft.y_scale) >> 16);
+		cursor_26_6 = (int32_t)(((int64_t)cursor_kb_x * font->ft.x_scale) >> 16);
+		cursor_px = cursor_26_6 >> 6;
 
-		// sol_font_render_overlay_glyph(font->kb.glyphs[i].Id, x_base+cursor_x, y_base+cursor_y, font, colour, render_batch);
+		/** if location is before the MIDPOINT (rounded to nearest) of this glyphs end and the prior glyphs end, then put the caret at the start of this glyph */
+		if(i >= 1 && location_px_relative < ((cursor_px + cursor_px_prev + 1)>>1) )
+		{
+			break;
+		}
+		cursor_px_prev = cursor_px;
 	}
+	return i-1; /** font->kb.glyph_count if didnt break, indicating its past the end of the last glyph */
 }
 
 uint16_t sol_font_find_caret_x_simple(const char* text, struct sol_font* font, s16_rect rect, s16_vec2 location)
 {
+	enum sol_overlay_alignment alignment = SOL_OVERLAY_ALIGNMENT_START;
 	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
 	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_BOUNDS;
-	return sol_font_find_caret_simple_kb(text, font, orientation, vertical_sizing, rect, location);
+	return sol_font_find_caret_simple_kb(text, font, alignment, orientation, vertical_sizing, rect, location);
+}
+
+static inline void sol_font_render_selection_simple_kb(const char* text, struct sol_font* font, uint16_t start, uint16_t end, 
+	enum sol_overlay_colour colour, s16_rect position, enum sol_overlay_alignment alignment, enum sol_overlay_orientation orientation, enum sol_font_sizing vertical_sizing, 
+	struct sol_overlay_render_batch* render_batch)
+{
+	kbts_s32 cursor_kb_x, cursor_kb_y;
+	int32_t cursor_26_6, cursor_px, x_base, y_base;
+	int16_t offset;
+	uint32_t i;
+	kbts_cursor cursor;
+	s16_rect text_rect;
+
+	/** need trailing space to find the end of the last glyph */
+	sol_font_shape_text_kb(text, font, true);
+
+	/** dont have correct/complete handling of these cases yet */
+	assert(font->kb.direction == KBTS_DIRECTION_LTR);
+	assert(vertical_sizing == SOL_FONT_SIZING_BOUNDS);
+	assert(alignment == SOL_OVERLAY_ALIGNMENT_START);
+	assert(orientation == SOL_OVERLAY_ORIENTATION_HORIZONTAL);
+
+	/** get cursor position, in subpixels, of the font baseline centred vertically and at the start horizontally, of the provided rectangle
+	 * note: << 5 here is basically division by 2 -- as this is working in subpixel offsets (64ths of a pixel) this allows font to be offset by half a pixel vertically */
+	x_base =  (font->kb.direction == KBTS_DIRECTION_RTL) ? ((int32_t)(position.x.end) << 6) : ((int32_t)(position.x.start) << 6);
+
+	switch(vertical_sizing)
+	{
+	case SOL_FONT_SIZING_EM:
+		y_base = ((int32_t)(position.y.end + position.y.start - font->y_ppem) << 5) + ((int32_t)(font->y_em_baseline) << 6);
+		text_rect.y.start = (y_base >> 6) - font->y_em_baseline;
+		text_rect.y.end = text_rect.y.start + font->y_ppem;
+		text_rect.x = position.x;
+		break;
+	case SOL_FONT_SIZING_BOUNDS:
+		y_base = ((int32_t)(position.y.end + position.y.start - font->y_range) << 5) + ((int32_t)(font->y_range_baseline) << 6);
+		text_rect.y.start = (y_base >> 6) - font->y_range_baseline;
+		text_rect.y.end = text_rect.y.start + font->y_range;
+		text_rect.x = position.x;
+		break;
+	}
+	/** above will derive what should be a tight fitting rectangle around text */
+
+	// cursor = kbts_Cursor(font->kb.direction);
+	// for(i = 0; i < font->kb.glyph_count; i++)
+	// {
+	// 	kbts_PositionGlyph(&cursor, &font->kb.glyphs[i], &cursor_kb_x, &cursor_kb_y);
+
+	// 	/** convert font units (that KB works in) into 26.6 units which freetype and rendering works in, this requires expanding the range to ensure values over 32px dont overflow... */
+	// 	cursor_26_6 = (int32_t)(((int64_t)cursor_kb_x * font->ft.x_scale) >> 16);
+	// 	cursor_px = cursor_26_6 >> 6;
+
+	// 	/** if location is before the MIDPOINT (rounded to nearest) of this glyphs end and the prior glyphs end, then put the caret at the start of this glyph */
+	// 	if(i >= 1 && location_px_relative < ((cursor_px + cursor_px_prev + 1)>>1) )
+	// 	{
+	// 		break;
+	// 	}
+	// 	cursor_px_prev = cursor_px;
+	// }
+	// return i-1; /** font->kb.glyph_count if didnt break, indicating its past the end of the last glyph */
+}
+
+void sol_font_render_selection_simple(const char* text, struct sol_font* font, uint16_t start, uint16_t end, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch)
+{
+	enum sol_overlay_alignment alignment = SOL_OVERLAY_ALIGNMENT_START;
+	enum sol_overlay_orientation orientation = SOL_OVERLAY_ORIENTATION_HORIZONTAL;
+	enum sol_font_sizing vertical_sizing = SOL_FONT_SIZING_BOUNDS;
 }
 
 

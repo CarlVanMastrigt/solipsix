@@ -60,3 +60,4 @@ int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font);
  * NOTE: this will function in a standardised way; centring the glyph and providing a uniform (per font, rather than a per glyph) size */
 void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch);
 
+uint16_t sol_font_find_caret_x_simple(const char* text, struct sol_font* font, s16_rect rect, s16_vec2 location);

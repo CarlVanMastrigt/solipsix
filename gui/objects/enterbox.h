@@ -46,8 +46,10 @@ struct sol_gui_enterbox_packet
 	/** will constantly be used to try to fetch the string
 	 * space is the size of the string buffer provided, including terminating zero
 	 * should return set of flags appropriate to the changed text
-	 * string should be null terminated either way but will be enforced to not read OOB by injecting one after this is called */
-	uint16_t (*get_string)(void* data, char* string_buffer, uint16_t max_glyphs, uint16_t max_strlen);
+	 * string should be null terminated either way but will be enforced to not read OOB by injecting one after this is called 
+	 * if `invalidate` is true; external update tracking of validity of extant contents (e.g. delta count associated with get and update to lazily update) 
+	 * 	should be ignored because the string_buffer has been invalidated */
+	uint16_t (*get_string)(void* data, char* string_buffer, uint16_t max_glyphs, uint16_t max_strlen, bool invalidate);
 
 	/** apply the changes of the current string, will be null terminated
 	 * if `get_string` uses the update count for determining if the value has changed then this should as well 
@@ -58,6 +60,18 @@ struct sol_gui_enterbox_packet
 	void (*on_destruction)(void* data);
 };
 
+enum sol_gui_enterbox_defocus_action
+{
+	/** calls `apply_string_update` */
+	SOL_GUI_ENTERBOX_DEFOCUS_ACTION_APPLY,
+
+	/** clears the string buffers contents and then calls `apply_string_update` */
+	SOL_GUI_ENTERBOX_DEFOCUS_ACTION_CLEAR,
+
+	/** clear the buffer and call `get_string` with `invalidate` true */
+	SOL_GUI_ENTERBOX_DEFOCUS_ACTION_INVALIDATE,
+};
+
 /** `max_strlen` is max text buffer size; max bytes; and does not include null termination 
- * `initial_text` may be null, to indicate an empty string */
-struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet);
+ * `apply_changes_on_defocus` whether to apply the changes to the string buffer */
+struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet, enum sol_gui_enterbox_defocus_action defocus_action);

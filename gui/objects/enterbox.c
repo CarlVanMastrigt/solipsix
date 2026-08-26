@@ -24,6 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "math/s16_vec2.h"
 #include "solipsix/sol_input.h"
 #include "solipsix/sol_font.h"
 
@@ -55,6 +56,8 @@ struct sol_gui_enterbox
 	/** start is inclusive, end is exclusive */
 	uint16_t selection_start;
 	uint16_t selection_end;
+
+	enum sol_gui_enterbox_defocus_action defocus_action;
 };
 
 
@@ -62,7 +65,7 @@ struct sol_gui_enterbox
 /** being edited, should be same as having focus, determines whether to render caret, grab updates, &c. */
 #define SOL_GUI_ENTERBOX_STATUS_FLAG_EDITING 0x0001
 /** is a selection actively in progress, */
-#define SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING 0x0002
+#define SOL_GUI_ENTERBOX_STATUS_FLAG_MOUSE_SELECTING 0x0002
 
 
 
@@ -109,7 +112,7 @@ static inline char* sol_gui_enterbox_get_updated_text_buffer(struct sol_gui_obje
 	
 	if(!updates_locked)
 	{
-		enterbox->text_flags = enterbox->packet.get_string(enterbox->packet.data, text_buffer, enterbox->max_glyphs, enterbox->max_strlen);
+		enterbox->text_flags = enterbox->packet.get_string(enterbox->packet.data, text_buffer, enterbox->max_glyphs, enterbox->max_strlen, false);
 
 		/** make sure there is a null terminating string */
 		text_buffer[enterbox->max_strlen] = '\0';
@@ -135,7 +138,7 @@ static inline char* sol_gui_enterbox_get_updated_text_buffer(struct sol_gui_obje
 void sol_gui_enterbox_update_selection(struct sol_gui_object* obj, uint16_t start, uint16_t end)
 {
 	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
-	char* text_buffer = sol_gui_enterbox_get_text_buffer(enterbox);
+	char* string_buffer = sol_gui_enterbox_get_text_buffer(enterbox);
 	char swapped_char;
 	bool success;
 	uint16_t min, max;/** ORDERED range of bytes (max-exclusive) for the range selected */ 
@@ -156,15 +159,41 @@ void sol_gui_enterbox_update_selection(struct sol_gui_object* obj, uint16_t star
 
 	if(max <= enterbox->max_strlen /*&& start < end */)
 	{
-		swapped_char = text_buffer[max];
-		text_buffer[max] = '\0';
-		success = SDL_SetPrimarySelectionText(text_buffer + min);
+		swapped_char = string_buffer[max];
+		string_buffer[max] = '\0';
+		success = SDL_SetPrimarySelectionText(string_buffer + min);
 		if(!success)
 		{
-			fprintf(stderr, "failed to update selection with text:%s\n",text_buffer);
+			fprintf(stderr, "failed to update selection with text:%s\n",string_buffer);
 		}
-		text_buffer[max] = swapped_char;
+		string_buffer[max] = swapped_char;
+
+		enterbox->selection_start = start;
+		enterbox->selection_end   = end;
 	}
+}
+
+static inline void sol_gui_enterbox_defocus(struct sol_gui_context* context, struct sol_gui_enterbox* enterbox, char* string_buffer)
+{
+	switch(enterbox->defocus_action) 
+	{
+	case SOL_GUI_ENTERBOX_DEFOCUS_ACTION_APPLY:
+		/** check to avoid buffer overflow */
+		assert(string_buffer[enterbox->max_strlen] == '\0');
+		enterbox->packet.apply_string_update(enterbox->packet.data, string_buffer);
+		break;
+	case SOL_GUI_ENTERBOX_DEFOCUS_ACTION_CLEAR:
+		string_buffer[0] = '\0';
+		enterbox->packet.apply_string_update(enterbox->packet.data, string_buffer);
+		break;
+	case SOL_GUI_ENTERBOX_DEFOCUS_ACTION_INVALIDATE:
+		string_buffer[0] = '\0';
+		enterbox->packet.get_string(enterbox->packet.data, string_buffer, enterbox->max_glyphs, enterbox->max_strlen, true);
+		break;
+	}
+
+	enterbox->status_flags = 0;
+	sol_gui_context_set_focused_object(context, NULL);
 }
 
 #warning SDL_GetPrimarySelectionText
@@ -175,17 +204,24 @@ bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const str
 	struct sol_gui_enterbox* enterbox = (struct sol_gui_enterbox*)obj;
 	struct sol_gui_context* context = obj->context;
 	struct sol_gui_theme* theme = context->theme;
+	uint16_t selection_offset;
+	s16_vec2 mouse_location;
+	s16_rect current_rect;
+	s16_rect text_rect;
 
-	char* text = sol_gui_enterbox_get_updated_text_buffer(obj);
+	char* string_buffer = sol_gui_enterbox_get_updated_text_buffer(obj);
 
 	/** should have no status flags unless focused */
 	// printf("%u %u\n",metadata.is_focused, enterbox->status_flags);
 	assert(sol_gui_object_is_focused(obj) || enterbox->status_flags == 0);
 
-	s16_vec2 mouse_location;
 	
-	s16_rect current_rect;
-	bool hit_interior;
+
+	current_rect = sol_gui_object_absolute_rect(obj);
+	/** helper for this would be good */
+	text_rect.x = theme->box_content_extent_x(theme, obj->flags, current_rect.x);
+	text_rect.y = theme->box_content_extent_y(theme, obj->flags, current_rect.y);
+	
 
 	switch(input->sdl_event.type)
 	{
@@ -194,21 +230,24 @@ bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const str
 		{
 			sol_gui_object_promote_first_ancestor(obj);
 
+			mouse_location = s16_vec2_set(input->sdl_event.button.x, input->sdl_event.button.y);
+
 			#warning make which button a switch statement
 			if(input->sdl_event.button.button == SDL_BUTTON_LEFT)
 			{
-				enterbox->status_flags |= SOL_GUI_ENTERBOX_STATUS_FLAG_EDITING | SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING;
+				enterbox->status_flags |= SOL_GUI_ENTERBOX_STATUS_FLAG_EDITING | SOL_GUI_ENTERBOX_STATUS_FLAG_MOUSE_SELECTING;
 				sol_gui_context_set_focused_object(context, obj);
 				if(enterbox->text_flags & SOL_GUI_ENTERBOX_TEXT_FLAG_PLACEHOLDER)
 				{
 					/** empty the string to remove the placeholder */
-					text[0] = '\0';
+					string_buffer[0] = '\0';
 				}
-	
-				#warning get location in extant text and/or select all
 
-				enterbox->selection_start = 0;
-				enterbox->selection_end = 0;
+				selection_offset = sol_font_find_caret_x_simple(string_buffer, theme->text_font, text_rect, mouse_location);
+				printf("selection offset click: %u\n",selection_offset);
+
+				enterbox->selection_start = selection_offset;
+				enterbox->selection_end = selection_offset;
 			}
 			if(input->sdl_event.button.button == SDL_BUTTON_RIGHT)
 			{
@@ -223,21 +262,24 @@ bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const str
 		}
 		else if(sol_gui_object_is_focused(obj))
 		{
-			/** break focus */
-			#warning need click away behaviour settings
+			sol_gui_enterbox_defocus(context, enterbox, string_buffer);
+			return true;
 		}
-		///how?
 		break;
 
 	case SDL_EVENT_MOUSE_MOTION:
-		#warning should also check button 1 is still pressed, and if not deselect
 		if(sol_gui_object_is_focused(obj))
 		{
-			if(enterbox->status_flags & SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING)
+			if(enterbox->status_flags & SOL_GUI_ENTERBOX_STATUS_FLAG_MOUSE_SELECTING)
 			{
+				mouse_location = s16_vec2_set(input->sdl_event.motion.x, input->sdl_event.motion.y);
+
 				/** should still be holding mouse down */
 				assert(input->sdl_event.motion.state & SDL_BUTTON_LMASK);
-				#warning update selection_end
+				
+				selection_offset = sol_font_find_caret_x_simple(string_buffer, theme->text_font, text_rect, mouse_location);
+
+				enterbox->selection_end = selection_offset;
 			}
 			return true;
 		}
@@ -249,9 +291,20 @@ bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const str
 			if(input->sdl_event.button.button == SDL_BUTTON_LEFT)
 			{
 				/** note: may have already ended selecting status (e.g. by keyboard input) */
-				enterbox->status_flags &= ~SOL_GUI_ENTERBOX_STATUS_FLAG_SELECTING;
+				enterbox->status_flags &= ~SOL_GUI_ENTERBOX_STATUS_FLAG_MOUSE_SELECTING;
+				return true;
 			}
-			return true;
+		}
+		break;
+
+	case SDL_EVENT_KEY_DOWN:
+		if(sol_gui_object_is_focused(obj))
+		{
+			if(input->sdl_event.key.key == SDLK_ESCAPE)
+			{
+				sol_gui_enterbox_defocus(context, enterbox, string_buffer);
+				return true;
+			}
 		}
 		break;
 
@@ -259,9 +312,11 @@ bool sol_gui_enterbox_default_input_action(struct sol_gui_object* obj, const str
 		#warning implement
 	case SDL_EVENT_TEXT_INPUT:
 		#warning implement
+
+
 	}
 
-	return false;
+	return sol_gui_object_is_focused(obj);
 }
 
 void sol_gui_enterbox_destroy(struct sol_gui_object* obj)
@@ -337,7 +392,7 @@ static const struct sol_gui_object_structure_functions sol_gui_text_enterbox_str
 	.destroy    = &sol_gui_enterbox_destroy,
 };
 
-void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet)
+void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet, enum sol_gui_enterbox_defocus_action defocus_action)
 {
 	sol_gui_object_construct(&enterbox->base, context);
 	char* text = (char*)(enterbox+1);
@@ -357,13 +412,14 @@ void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gu
 	enterbox->max_strlen = max_strlen;
 	enterbox->text_flags = 0;
 	enterbox->status_flags = 0;
+	enterbox->defocus_action = defocus_action;
 }
 
-struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet)
+struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet, enum sol_gui_enterbox_defocus_action defocus_action)
 {
 	struct sol_gui_enterbox* enterbox = malloc(sizeof(struct sol_gui_enterbox) + max_strlen + 1);
 
-	sol_gui_enterbox_construct(enterbox, context, max_glyphs, max_strlen, packet);
+	sol_gui_enterbox_construct(enterbox, context, max_glyphs, max_strlen, packet, defocus_action);
 
 	return (struct sol_gui_enterbox_handle)
 	{
