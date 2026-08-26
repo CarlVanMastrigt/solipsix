@@ -523,6 +523,7 @@ struct sol_vk_timeline_semaphore_moment cvm_overlay_render_to_target(struct cvm_
         0.16,0.16,0.48,0.85,/// SOL_OVERLAY_COLOUR_FOCUSED
         0.4,0.6,0.9,0.8,/// SOL_OVERLAY_COLOUR_STANDARD_TEXT
         0.2,0.3,1.0,0.8,/// SOL_OVERLAY_COLOUR_COMPOSITION_TEXT
+        0.6,0.8,1.0,0.5,/// SOL_OVERLAY_COLOUR_PLACEHOLDER_TEXT
         0.4,0.6,0.9,0.3,/// SOL_OVERLAY_COLOUR_TEXT_SELECTION
     };
 

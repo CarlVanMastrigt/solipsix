@@ -49,7 +49,8 @@ layout(set=0,binding=0) uniform sampler2DArray images[3];
 
 layout(set=0,binding=1) uniform overlay_colours
 {
-    vec4 colours[8];
+    vec4 colours[9];
+    /** count/size must match SOL_OVERLAY_COLOUR_COUNT */
 };
 
 /** rect can be passed in as relative... */

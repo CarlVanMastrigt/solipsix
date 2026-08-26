@@ -23,6 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/object.h"
 #include "overlay/render.h"
+#include "overlay/enums.h"
 
 
 static VkResult sol_overlay_descriptor_pool_create(VkDescriptorPool* pool, struct cvm_vk_device * device, uint32_t active_render_count)
@@ -735,7 +736,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     #warning FUCK, would have to know required specialised alignment for textures that require non power of 2 pixel alignmenment!
 
     /* very ad-hoc use of staging (for now) */
-    upload_offset   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset  + sizeof(float) * 4 * OVERLAY_NUM_COLOURS);
+    upload_offset   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset  + sizeof(float) * 4 * SOL_OVERLAY_COLOUR_COUNT);
     elements_offset = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset   + sol_buffer_used_space(&batch->upload_buffer));
     staging_space   = sol_vk_staging_buffer_allocation_align_offset(staging_buffer, elements_offset + sol_overlay_render_element_list_size(&batch->elements));
 
@@ -750,7 +751,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
     batch->upload_offset  = staging_offset + upload_offset;
 
     /** copy uniforms */
-    memcpy(staging_mapping + uniform_offset, colour_array, sizeof(float) * 4 * OVERLAY_NUM_COLOURS);
+    memcpy(staging_mapping + uniform_offset, colour_array, sizeof(float) * 4 * SOL_OVERLAY_COLOUR_COUNT);
 
     /** copy upload buffer */
     sol_buffer_copy(&batch->upload_buffer, staging_mapping + upload_offset);
@@ -800,7 +801,7 @@ void sol_overlay_render_step_write_descriptors(struct sol_overlay_render_batch* 
                 {
                     .buffer = batch->staging_buffer_allocation.acquired_buffer,
                     .offset = batch->staging_buffer_allocation.acquired_offset + uniform_offset,
-                    .range = OVERLAY_NUM_COLOURS * 4 * sizeof(float),
+                    .range = SOL_OVERLAY_COLOUR_COUNT * 4 * sizeof(float),
                     #warning make above a struct maybe?
                 }
             },

@@ -348,6 +348,8 @@ static void sol_gui_enterbox_render(struct sol_gui_object* obj, s16_rect positio
 		text_colour = SOL_OVERLAY_COLOUR_STANDARD_TEXT;
 	}
 
+	sol_font_render_selection_simple(text, theme->text_font, enterbox->selection_start, enterbox->selection_end, SOL_OVERLAY_COLOUR_TEXT_SELECTION, text_rect, batch);
+
 	sol_font_render_text_simple(text, theme->text_font, text_colour, text_rect, batch);
 }
 static struct sol_gui_object* sol_gui_enterbox_hit_scan(struct sol_gui_object* obj, s16_rect position, const s16_vec2 location)
@@ -403,7 +405,7 @@ void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gu
 	assert(max_strlen >= max_glyphs);
 
 	enterbox->base.input_action = &sol_gui_enterbox_default_input_action;
-	enterbox->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED;
+	enterbox->base.flags |= SOL_GUI_OBJECT_PROPERTY_FLAG_HIGHLIGHTABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_FOCUSABLE | SOL_GUI_OBJECT_PROPERTY_FLAG_BORDERED | SOL_GUI_OBJECT_PROPERTY_FLAG_TEXT_CONTENT;
 	enterbox->base.structure_functions = &sol_gui_text_enterbox_structure_functions;
 
 	enterbox->packet = packet;
@@ -413,6 +415,10 @@ void sol_gui_enterbox_construct(struct sol_gui_enterbox* enterbox, struct sol_gu
 	enterbox->text_flags = 0;
 	enterbox->status_flags = 0;
 	enterbox->defocus_action = defocus_action;
+
+	/** shouldn't strictly be necessary */
+	enterbox->selection_start = 0;
+	enterbox->selection_end = 0;
 }
 
 struct sol_gui_enterbox_handle sol_gui_enterbox_create(struct sol_gui_context* context, uint16_t max_glyphs, uint16_t max_strlen, struct sol_gui_enterbox_packet packet, enum sol_gui_enterbox_defocus_action defocus_action)

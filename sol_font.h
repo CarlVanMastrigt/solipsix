@@ -61,3 +61,5 @@ int16_t sol_font_size_text_y_simple(const char* text, struct sol_font* font);
 void sol_font_render_glyph_simple(const char* utf8_glyph, struct sol_font* font, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch);
 
 uint16_t sol_font_find_caret_x_simple(const char* text, struct sol_font* font, s16_rect rect, s16_vec2 location);
+
+void sol_font_render_selection_simple(const char* text, struct sol_font* font, uint16_t start, uint16_t end, enum sol_overlay_colour colour, s16_rect position, struct sol_overlay_render_batch* render_batch);
